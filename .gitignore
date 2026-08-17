@@ -1,0 +1,48 @@
+# --- Secrets & environment -------------------------------------------------
+# Ignore all env files EXCEPT the committed template.
+.env
+.env.*
+!.env.example
+
+# Key material / certs that must never be committed
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_rsa.*
+
+# --- Dependencies ----------------------------------------------------------
+node_modules/
+.pnpm-store/
+
+# --- Build output ----------------------------------------------------------
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Vite
+apps/web/dist/
+.vite/
+
+# NestJS
+apps/api/dist/
+
+# Prisma generated client (regenerated on install)
+# Keep the schema and migrations tracked; ignore only generated artifacts.
+**/generated/
+
+# --- Logs & caches ---------------------------------------------------------
+*.log
+npm-debug.log*
+pnpm-debug.log*
+.eslintcache
+
+# --- OS / editor -----------------------------------------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json

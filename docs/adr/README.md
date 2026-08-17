@@ -16,3 +16,6 @@ Every structuring decision is recorded here as an ADR. Format: lightweight [MADR
 | [0010](0010-monorepo-pnpm-workspaces.md) | Monorepo with pnpm workspaces (Turborepo deferred) | Accepted |
 | [0011](0011-semester-enum-derived.md) | `Semester` as a Prisma/Postgres enum, derived from periods | Accepted |
 | [0012](0012-schoolyear-value-object.md) | `schoolYear` as a shared Zod value-object + DB `CHECK` | Accepted |
+| [0013](0013-open-source-security-git-hooks.md) | Open-source (MIT), secret-scanning, and Git hooks | Accepted |
+| [0014](0014-referent-assignment-key.md) | Referent assignment keyed on (student, schoolYear, semester, mandatory) | Accepted |
+| [0015](0015-conventional-commits-semver-changesets.md) | Conventional Commits + SemVer 2.0.0, releases via Changesets | Accepted |

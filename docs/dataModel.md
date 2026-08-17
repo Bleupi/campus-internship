@@ -120,6 +120,8 @@ model ReferentAssignment {
   id         String @id @default(uuid())
   schoolYear String                // "2024-2025"
   semester   Semester
+  mandatory  Boolean               // matches Stage.mandatory: a student may have a
+                                    // different referent for their mandatory vs. optional stage
 
   referent   ReferentProfile @relation(fields: [referentId], references: [id])
   referentId String
@@ -129,9 +131,17 @@ model ReferentAssignment {
 
   createdAt  DateTime @default(now())
 
-  @@unique([studentId, schoolYear, semester]) // one referent per student / year / semester
+  @@unique([studentId, schoolYear, semester, mandatory]) // one referent per student / year / semester / stage kind
 }
 ```
+
+Reassignment (e.g. a referent falls ill mid-year) is an **UPDATE** of the
+existing row (`referentId` A → B); the unique tuple
+`(studentId, schoolYear, semester, mandatory)` is unchanged, so no conflict
+arises. V1 overwrites in place and keeps **no history** of past referents; an
+auditable variant (soft-delete + partial unique index) is deferred to V2 (see
+ROADMAP_V2). Overwriting never touches already-frozen snapshots: a referent
+change only affects `DRAFT`/`PENDING` stages, which re-derive on the fly.
 
 ---
 
@@ -218,7 +228,7 @@ model Tutor {
 
 ## Stage
 
-Single table. While `DRAFT`/`PENDING`, the live FKs (`student`, `organism`, `tutor`, `periods`) are authoritative. The **referent is not a FK on `Stage`**: it is derived on the fly from `ReferentAssignment` (by `studentId` + `schoolYear` + `semester`) and is frozen into the `snapshot` only on validation/refusal. Once `VALIDATED`/`REFUSED`, the immutable `snapshot` (Zod-validated, versioned) becomes authoritative and the FKs are kept only for reporting (`onDelete: SetNull`). See ADR-0003.
+Single table. While `DRAFT`/`PENDING`, the live FKs (`student`, `organism`, `tutor`, `periods`) are authoritative. The **referent is not a FK on `Stage`**: it is derived on the fly from `ReferentAssignment` (by `studentId` + `schoolYear` + `semester` + `mandatory`, matching the stage's own `mandatory` flag) and is frozen into the `snapshot` only on validation/refusal. Once `VALIDATED`/`REFUSED`, the immutable `snapshot` (Zod-validated, versioned) becomes authoritative and the FKs are kept only for reporting (`onDelete: SetNull`). See ADR-0003.
 
 Concurrency is handled with **optimistic locking** (`version`), suitable for the
 1-2 admin scenario. Migration to pessimistic locking is documented in ADR-0007.
@@ -244,7 +254,7 @@ model Stage {
   id            String      @id @default(uuid())
   status        StageStatus @default(DRAFT)
   schoolYear    String                      // "2024-2025"
-  semester      semester    Semester        // derived, never entered (BR-04b)
+  semester      Semester                    // derived, never entered (BR-04b)
   mandatory     Boolean     @default(false)
 
   service       String?                     // text in V1; OrganismService in V2
@@ -328,3 +338,6 @@ Every structuring decision is recorded as an ADR under `docs/adr/`:
 - **ADR-0010** - Monorepo with pnpm workspaces (Turborepo deferred)
 - **ADR-0011** - `Semester` as a Prisma/Postgres enum, derived from periods
 - **ADR-0012** - `schoolYear` as a shared Zod value-object + DB `CHECK`
+- **ADR-0013** - Open-source (MIT), secret-scanning, and Git hooks
+- **ADR-0014** - `ReferentAssignment` unique on `(student, schoolYear, semester, mandatory)`; reassignment by in-place update, no history in V1
+- **ADR-0015** - Conventional Commits + SemVer 2.0.0, versions and changelog managed by Changesets

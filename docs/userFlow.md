@@ -76,10 +76,12 @@ When a stage request is submitted to me, I want to:
 - have the student notified; on refusal the email includes the reason
 
 Validation conditions:
-- the student must have a referent for the stage's school year and semester. If
-  none exists, I must be able to **assign** one before validating. Validation is
-  **impossible** without a referent (it is required by the snapshot and by
-  university administration). See BR-03.
+- the student must have a referent for the stage's school year, semester **and
+  `mandatory` flag** (a student may have a different referent for a mandatory vs.
+  an optional stage in the same semester). If none exists, I must be able to
+  **assign** one before validating. Validation is **impossible** without a
+  referent (it is required by the snapshot and by university administration).
+  See BR-03.
 
 Concurrency: stages use optimistic locking. If another admin saved a change
 first, I get a "this stage was modified, please reload" message.
@@ -96,7 +98,9 @@ As an admin I want to:
 - access the referent space and view all referents
 - add referents
 - archive referents
-- assign students to a referent for a given semester of a school year
+- assign students to a referent for a given semester of a school year, separately
+  for mandatory and optional stages (a student may have two referents in one
+  semester); reassigning simply overwrites the existing assignment
 
 Dashboard warning: a message is shown if there is **no referent assigned** to
 L2/L3 students with a valid profile for the current year and semester
@@ -115,7 +119,7 @@ As an admin I want to:
 ## Stage: live vs archived (summary)
 
 - A **validated or refused** stage contains all its information **independently** of other data (immutable snapshot).
-- A **pending or draft** stage keeps all its information **linked** to the other data, **except the referent**, which is not a FK on the stage: it is derived on the fly from `ReferentAssignment` (by student + school year + semester) and may be added/changed by the admin before validation/refusal.
+- A **pending or draft** stage keeps all its information **linked** to the other data, **except the referent**, which is not a FK on the stage: it is derived on the fly from `ReferentAssignment` (by student + school year + semester + mandatory) and may be added/changed by the admin before validation/refusal.
 
 See ADR-0003 for the snapshot mechanism.
 

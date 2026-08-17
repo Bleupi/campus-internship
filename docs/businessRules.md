@@ -47,16 +47,26 @@ profile status.
 - Students: at each login, verify the profile is up to date for the current
   school year; if not, force update of promotion, school year, insurance
   certificate (profile → `EXPIRED` / `INCOMPLETE` as appropriate).
-- Referents: assignments reset every year and every semester. In the admin
-  panel, show a warning when no referent is assigned to L2/L3 students with a
-  valid profile for the current year and semester.
+- Referents: assignments reset every year and every semester. Because
+  assignments are keyed on `(student, schoolYear, semester, mandatory)`, a
+  student may need up to two referents per semester (one for the mandatory
+  stage, one for the optional). In the admin panel, show a warning when a
+  referent is missing for any `(student, schoolYear, semester, mandatory)`
+  combination that corresponds to a real stage of an L2/L3 student with a valid
+  profile for the current year and semester (i.e. don't warn about a combination
+  the student has no stage for).
 
 ## Validation
 
 **BR-03 — Referent required for validation.**
 A stage cannot be validated without a referent assigned to the student for the
-stage's school year and semester. The admin must be able to assign one before
-validating. This referent is frozen into the snapshot at validation.
+stage's school year, semester **and `mandatory` flag** — the assignment is keyed
+on all four (`studentId`, `schoolYear`, `semester`, `mandatory`), so a student
+may have a distinct referent for their mandatory vs. optional stage in the same
+semester. The admin must be able to assign one before validating. This referent
+is frozen into the snapshot at validation. Reassigning a referent later (e.g. a
+professor falls ill) is an in-place update and never alters a stage already
+`VALIDATED`/`REFUSED`, whose referent is frozen in the snapshot (BR-08).
 
 **BR-07 — Notifications.**
 On submission, the admin is notified. On validation/refusal, the student is
