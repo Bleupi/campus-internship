@@ -1,0 +1,16 @@
+#!/usr/bin/env sh
+
+# Stricter checks, run less often than commits — a little slower is acceptable.
+
+# 1) Re-scan for secrets across the changes being pushed.
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks protect --redact --config .gitleaks.toml
+else
+  echo "⚠  gitleaks not found on PATH — secret scan skipped on push."
+  echo "   Install it: https://github.com/gitleaks/gitleaks#installing"
+fi
+
+# 2) Global type-check across the monorepo (catches cross-package contract
+#    breakage that per-file linting cannot see). tsc analyses whole projects,
+#    so it lives here rather than in pre-commit.
+pnpm -r exec tsc --noEmit

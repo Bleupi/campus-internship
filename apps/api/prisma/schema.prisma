@@ -1,0 +1,232 @@
+// Prisma schema — direct transcription of docs/dataModel.md.
+// docs/dataModel.md is the single source of truth; if this file and the doc
+// ever disagree, fix the doc first, then this file (see CONTRIBUTING.md).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- Auth & RBAC -----------------------------------------------------------
+
+enum Role {
+  STUDENT
+  ADMIN
+  REFERENT
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  roles        Role[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  studentProfile  StudentProfile?
+  referentProfile ReferentProfile?
+}
+
+// --- Profiles ----------------------------------------------------------------
+
+enum ProfileStatus {
+  INCOMPLETE
+  PENDING_VALIDATION
+  VALID
+  EXPIRED
+}
+
+enum Promotion {
+  L2
+  L3
+}
+
+model StudentProfile {
+  id     String @id @default(uuid())
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String @unique
+
+  phone         String?
+  personalEmail String?
+  promotion     Promotion
+  profileStatus ProfileStatus @default(INCOMPLETE)
+  profileYear   String?
+
+  files               FileObject[]
+  referentAssignments ReferentAssignment[]
+  stages              Stage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ReferentProfile {
+  id     String @id @default(uuid())
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String @unique
+
+  archived Boolean @default(false)
+
+  assignments ReferentAssignment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// --- Referent assignment ----------------------------------------------------
+// ADR-0014: keyed on the full (studentId, schoolYear, semester, mandatory)
+// tuple. Reassignment is an in-place UPDATE, never a second row.
+
+model ReferentAssignment {
+  id         String   @id @default(uuid())
+  schoolYear String
+  semester   Semester
+  mandatory  Boolean
+
+  referent   ReferentProfile @relation(fields: [referentId], references: [id])
+  referentId String
+
+  student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+
+  createdAt DateTime @default(now())
+
+  @@unique([studentId, schoolYear, semester, mandatory])
+}
+
+// --- Files -------------------------------------------------------------------
+
+enum FileType {
+  ID_PHOTO
+  INSURANCE_CERTIFICATE
+}
+
+model FileObject {
+  id         String    @id @default(uuid())
+  type       FileType
+  bucketKey  String    @unique
+  mimeType   String
+  sizeBytes  Int
+  expiresAt  DateTime?
+  uploadedAt DateTime  @default(now())
+
+  studentProfile   StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  studentProfileId String
+}
+
+// --- Host organism & tutor ----------------------------------------------------
+
+model HostOrganism {
+  id            String @id @default(uuid())
+  name          String
+  structureType String
+  city          String
+  postalCode    String
+  street        String
+
+  tutors Tutor[]
+  stages Stage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Tutor {
+  id                  String  @id @default(uuid())
+  firstName           String
+  lastName            String
+  email               String
+  jobTitle            String
+  phone               String?
+  acceptsPhoneContact Boolean @default(false)
+
+  organism   HostOrganism @relation(fields: [organismId], references: [id])
+  organismId String
+
+  stages Stage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// --- Stage ---------------------------------------------------------------------
+// ADR-0003: single table, immutable versioned snapshot once VALIDATED/REFUSED.
+// The referent is never a FK here — see ADR-0003, ADR-0014, BR-03.
+
+enum StageStatus {
+  DRAFT
+  PENDING
+  VALIDATED
+  REFUSED
+}
+
+enum Semester {
+  S1
+  S2
+}
+
+model Stage {
+  id         String      @id @default(uuid())
+  status     StageStatus @default(DRAFT)
+  schoolYear String
+  semester   Semester
+  mandatory  Boolean     @default(false)
+
+  service       String?
+  projectType   String?
+  motivation    String?
+  refusalReason String?
+
+  student   StudentProfile @relation(fields: [studentId], references: [id])
+  studentId String
+
+  organism   HostOrganism? @relation(fields: [organismId], references: [id], onDelete: SetNull)
+  organismId String?
+
+  tutor   Tutor?  @relation(fields: [tutorId], references: [id], onDelete: SetNull)
+  tutorId String?
+
+  periods StagePeriod[]
+
+  snapshot        Json?
+  snapshotVersion Int?
+
+  parentStage   Stage?  @relation("StageLineage", fields: [parentStageId], references: [id])
+  parentStageId String?
+  childStages   Stage[] @relation("StageLineage")
+
+  version Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([studentId])
+}
+
+model StagePeriod {
+  id        String   @id @default(uuid())
+  stage     Stage    @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  stageId   String
+  startDate DateTime
+  endDate   DateTime
+}
+
+// --- Admin-configurable settings ----------------------------------------------
+
+model OrganismStructureType {
+  id    String @id @default(uuid())
+  label String @unique
+}
+
+model AdminSetting {
+  id    String @id @default(uuid())
+  key   String @unique
+  value String
+}

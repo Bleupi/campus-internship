@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+
+# Enforce Conventional Commits (ADR-0015) on every local commit.
+pnpm exec commitlint --edit "$1"
