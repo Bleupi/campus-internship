@@ -10,7 +10,7 @@
   },
   "packageManager": "pnpm@11.5.1",
   "scripts": {
-    "dev": "pnpm --parallel --filter ./apps/* run dev",
+    "dev": "pnpm --parallel -r --if-present run dev",
     "build": "pnpm -r run build",
     "lint": "eslint . --max-warnings=0",
     "lint:fix": "eslint . --fix",
