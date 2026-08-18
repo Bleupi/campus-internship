@@ -177,12 +177,14 @@ Consumed via the workspace protocol (`workspace:*`), never via relative paths re
 | What | Convention | Example |
 | --- | --- | --- |
 | TS files | kebab-case | `create-stage.dto.ts` |
+| React component files (web) | PascalCase, matching the exported component | `App.tsx`, `StageForm.tsx` |
+| React hook files (web) | camelCase, matching the hook name | `useAuth.ts`, `useStageForm.ts` |
 | Classes / types / enums | PascalCase | `StageStatus`, `CreateStageDto` |
 | Variables / functions | camelCase | `computeSemester()` |
 | Nest DTO files | `*.dto.ts` | `create-stage.dto.ts` |
 | Nest guards/pipes/interceptors | `*.guard.ts`, `*.pipe.ts`, `*.interceptor.ts` | `roles.guard.ts` |
 | Jest specs (api) | `*.spec.ts`, colocated | `stages.service.spec.ts` |
-| Vitest specs (web) | `*.test.tsx`, colocated | `stage-form.test.tsx` |
+| Vitest specs (web) | `*.test.tsx`, colocated, matching the file under test's base name | `StageForm.test.tsx`, `api-client.test.ts` |
 | Prisma models | PascalCase | `HostOrganism` |
 | Prisma fields | camelCase | `profileYear` |
 | Zod schemas | camelCase, `xSchema` suffix | `createStageSchema` |
