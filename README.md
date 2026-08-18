@@ -5,6 +5,17 @@ Internship request & validation system for a university ("gestion des stages") �
 - **Stack**: NestJS (API) + React/Vite (web) + PostgreSQL + Prisma + Zod, TypeScript everywhere, pnpm workspaces monorepo.
 - **Design docs**: [`docs/dataModel.md`](docs/dataModel.md), [`docs/businessRules.md`](docs/businessRules.md), [`docs/userFlow.md`](docs/userFlow.md), and the decision log in [`docs/adr/`](docs/adr/) are the source of truth for behavior. See [`CLAUDE.md`](CLAUDE.md) for the full set of repository conventions.
 
+## Prerequisites
+
+- **Node** ≥ 24 (see `.nvmrc`)
+- **pnpm** 11.5.1 (see `packageManager` in `package.json`; enable via `corepack enable`)
+- **Docker** (for local Postgres + MinIO via `docker compose`)
+- **gitleaks** — native binary, not an npm dependency. Required for the pre-commit/pre-push secret-scanning hooks (ADR-0013) to actually scan instead of silently skipping.
+  ```bash
+  brew install gitleaks   # macOS
+  # other platforms: https://github.com/gitleaks/gitleaks#installing
+  ```
+
 ## Getting started
 
 ```bash
