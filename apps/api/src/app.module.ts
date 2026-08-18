@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { envSchema } from "./config/env.schema";
@@ -14,7 +15,10 @@ import { FilesModule } from "./modules/files/files.module";
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ["../../.env"],
+      // __dirname is apps/api/dist at runtime (nest build/start always run the
+      // compiled output) — resolved from there, not process.cwd(), so this
+      // doesn't depend on the launch path (Docker WORKDIR, IDE run config, ...).
+      envFilePath: [join(__dirname, "../../../.env")],
       validate: (config) => envSchema.parse(config),
     }),
     PrismaModule,
