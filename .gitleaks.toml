@@ -1,0 +1,43 @@
+# gitleaks configuration
+# Extends the maintained default ruleset (AWS keys, generic API keys, private
+# keys, JWTs, etc.) and adds project-specific guards.
+#
+# Run manually:  gitleaks protect --staged   (pre-commit)
+#                gitleaks detect              (full history / CI)
+
+title = "stages secret-scanning config"
+
+[extend]
+# Inherit gitleaks' built-in rules; we only add and allow-list below.
+useDefault = true
+
+# --- Additional rules ------------------------------------------------------
+
+[[rules]]
+id = "database-url-with-credentials"
+description = "PostgreSQL connection string containing inline credentials"
+regex = '''postgres(?:ql)?:\/\/[^:\/\s]+:[^@\/\s]+@'''
+tags = ["database", "credentials"]
+
+[[rules]]
+id = "jwt-secret-assignment"
+description = "Non-empty JWT_SECRET assignment committed in code or env"
+regex = '''(?i)JWT_SECRET\s*[:=]\s*['"]?[A-Za-z0-9+\/=_-]{16,}'''
+tags = ["jwt", "secret"]
+
+# --- Allow-list ------------------------------------------------------------
+
+[allowlist]
+description = "Files and patterns that are safe by construction"
+paths = [
+  # The template documents variable names with NO real values.
+  '''\.env\.example$''',
+  # Docs may show placeholder connection strings.
+  '''\.md$''',
+]
+regexes = [
+  # Obvious placeholders, not real secrets.
+  '''USER:PASSWORD@''',
+  '''<[A-Z _]+>''',
+  '''your[-_]?(secret|token|key)''',
+]

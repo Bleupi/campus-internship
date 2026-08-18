@@ -1,0 +1,16 @@
+#!/usr/bin/env sh
+
+# Fast checks on STAGED files only. Must stay quick — a slow pre-commit
+# trains people to use --no-verify, which defeats the purpose.
+
+# 1) Secret scan on staged changes (blocks on any finding).
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks protect --staged --redact --config .gitleaks.toml
+else
+  echo "⚠  gitleaks not found on PATH — secret scan skipped."
+  echo "   Install it: https://github.com/gitleaks/gitleaks#installing"
+  echo "   (Secrets are also re-scanned on pre-push.)"
+fi
+
+# 2) Lint + format on staged files, routed per-package by lint-staged.
+pnpm exec lint-staged
