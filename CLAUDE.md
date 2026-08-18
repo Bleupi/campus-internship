@@ -4,12 +4,6 @@ Instructions for Claude Code when working in this repository. Written in English
 
 This file is subordinate to the specs. If anything here conflicts with `docs/dataModel.md`, `docs/businessRules.md`, `docs/userFlow.md`, or an ADR, **the doc wins** — flag the conflict and ask rather than silently picking one.
 
-## 0. Current state
-
-The repo is pre-scaffold: `apps/api`, `apps/web`, and `packages/shared` do not exist yet. The first substantial task is initializing them to match the layout in ADR-0010 and the conventions below. Don't invent a different structure "to get started faster" — scaffold it right the first time.
-
----
-
 ## 1. Project identity
 
 A showcase project for a university internship management system (campus internship / "gestion des stages"). Students submit internship requests; one or two admins validate/refuse them and manage referents assigned to students; the admin can extract data (host organism list, CSV export).
