@@ -31,6 +31,34 @@ export default tseslint.config(
     },
   },
   {
+    files: ["packages/shared/**/*.ts"],
+    rules: {
+      // packages/shared must stay runtime-agnostic (CLAUDE.md §7): no
+      // @nestjs/*, no react, no anything else that isn't either zod or a
+      // relative import within the package. Deny-all-except-allowlist, not a
+      // denylist of specific bad packages, so a new non-agnostic dependency
+      // is caught automatically instead of needing its own entry.
+      //
+      // Uses `regex`, not `group` (gitignore-style patterns matched via the
+      // `ignore` package) — gitignore semantics can't reliably re-include a
+      // relative path once a broad `*` pattern excludes it, so a
+      // group: ["*", "!./*", ...] negation silently fails to allow relative
+      // imports (verified: `!./*` never un-ignores `./foo` here).
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              regex: "^(?!\\.{1,2}\\/)(?!zod(?:\\/.*)?$).+$",
+              message:
+                "packages/shared must stay runtime-agnostic — only zod and relative imports within the package are allowed (see CLAUDE.md §7).",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ["apps/web/**/*.{ts,tsx}"],
     languageOptions: {
       globals: globals.browser,
