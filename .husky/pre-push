@@ -12,5 +12,6 @@ fi
 
 # 2) Global type-check across the monorepo (catches cross-package contract
 #    breakage that per-file linting cannot see). tsc analyses whole projects,
-#    so it lives here rather than in pre-commit.
-pnpm -r exec tsc --noEmit
+#    so it lives here rather than in pre-commit. Delegates to each package's
+#    own typecheck script (apps/web needs `tsc -b`, not a bare `tsc --noEmit`).
+pnpm typecheck
