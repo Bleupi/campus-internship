@@ -8,9 +8,13 @@
     "build": "nest build",
     "start": "node dist/main.js",
     "lint": "eslint .",
+    "build:shared": "pnpm --filter shared build",
+    "pretypecheck": "pnpm run build:shared",
     "typecheck": "tsc --noEmit",
+    "pretest": "pnpm run build:shared",
     "test": "jest --passWithNoTests",
     "test:watch": "jest --watch",
+    "pretest:e2e": "pnpm run build:shared",
     "test:e2e": "jest --config ./test/jest-e2e.json --passWithNoTests"
   },
   "dependencies": {
