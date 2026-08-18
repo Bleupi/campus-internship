@@ -19,6 +19,10 @@ import { FilesModule } from "./modules/files/files.module";
       // compiled output) — resolved from there, not process.cwd(), so this
       // doesn't depend on the launch path (Docker WORKDIR, IDE run config, ...).
       envFilePath: [join(__dirname, "../../../.env")],
+      // .env uses ${POSTGRES_USER}-style references so DATABASE_URL/S3_* stay
+      // derived from the same POSTGRES_*/MINIO_* values docker-compose.yml
+      // reads — expand them here instead of duplicating literal values.
+      expandVariables: true,
       validate: (config) => envSchema.parse(config),
     }),
     PrismaModule,

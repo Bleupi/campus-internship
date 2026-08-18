@@ -19,7 +19,7 @@ Internship request & validation system for a university ("gestion des stages") â
 ## Getting started
 
 ```bash
-cp .env.example .env        # fill in local values
+cp .env.example .env        # only JWT_SECRET needs a real value, e.g. `openssl rand -base64 48`
 pnpm install                # also sets up git hooks (Husky)
 docker compose up -d        # local Postgres + MinIO
 pnpm --filter api exec prisma migrate dev
