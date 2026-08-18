@@ -3,7 +3,7 @@
 Every structuring decision is recorded here as an ADR. Format: lightweight [MADR](https://adr.github.io/madr/). Files are numbered and never rewritten once Accepted — a later decision that changes an earlier one is a new ADR that `Supersedes` it.
 
 | ADR | Title | Status |
-| --- | ----- | ------ |
+| --- | --- | --- |
 | [0001](0001-rbac-central-user.md) | RBAC with a central User and multiple roles | Accepted |
 | [0002](0002-no-admin-profile-v1.md) | No AdminProfile in V1 (YAGNI) | Accepted |
 | [0003](0003-stage-snapshot.md) | Single Stage table with immutable versioned snapshot | Accepted |

@@ -15,17 +15,15 @@ Three concerns are often conflated and should be kept distinct:
 2. **Versioning scheme** — how release numbers are chosen.
 3. **Release tooling** — what turns (1) and (2) into tags and a changelog.
 
-Semantic Versioning 2.0.0 addresses (2) only; it says nothing about commit messages. The convention designed to *feed* SemVer from commit history is Conventional Commits, which addresses (1). Tooling then bridges them.
+Semantic Versioning 2.0.0 addresses (2) only; it says nothing about commit messages. The convention designed to _feed_ SemVer from commit history is Conventional Commits, which addresses (1). Tooling then bridges them.
 
 ## Decision
 
 Adopt all three, explicitly separated:
 
-- **Conventional Commits 1.0.0** for every commit message. Allowed types and
-  their SemVer impact are documented in `CONTRIBUTING.md`. A `!` marker or a `BREAKING CHANGE:` footer forces a MAJOR bump.
+- **Conventional Commits 1.0.0** for every commit message. Allowed types and their SemVer impact are documented in `CONTRIBUTING.md`. A `!` marker or a `BREAKING CHANGE:` footer forces a MAJOR bump.
 - **Semantic Versioning 2.0.0** for package version numbers.
-- **Changesets** as the release tool. In a pnpm workspace monorepo (ADR-0010),
-  Changesets is the idiomatic choice: each behaviour-changing PR adds a changeset file declaring the bump level per affected package; on merge to `main`, a workflow consumes pending changesets, bumps versions, writes `CHANGELOG.md`, and tags the release.
+- **Changesets** as the release tool. In a pnpm workspace monorepo (ADR-0010), Changesets is the idiomatic choice: each behaviour-changing PR adds a changeset file declaring the bump level per affected package; on merge to `main`, a workflow consumes pending changesets, bumps versions, writes `CHANGELOG.md`, and tags the release.
 
 Enforcement reuses the existing Git-hook infrastructure (ADR-0013):
 
@@ -41,6 +39,6 @@ Enforcement reuses the existing Git-hook infrastructure (ADR-0013):
 
 ## Alternatives considered
 
-- **semantic-release.** Fully automates versioning from commit types. Rejected as the primary tool for a pnpm *monorepo*: per-package versioning and the changeset-per-PR review step are cleaner with Changesets. semantic-release is the stronger pick for a single publishable package.
+- **semantic-release.** Fully automates versioning from commit types. Rejected as the primary tool for a pnpm _monorepo_: per-package versioning and the changeset-per-PR review step are cleaner with Changesets. semantic-release is the stronger pick for a single publishable package.
 - **Plain SemVer with a hand-written changelog.** Rejected: manual changelogs drift and add release friction; the automation is cheap and is itself a portfolio signal.
 - **No commit convention.** Rejected: loses the machine-readability that makes automated changelog generation possible and weakens the portfolio value of the history.

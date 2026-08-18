@@ -1,8 +1,6 @@
 # Data Model
 
-> Language convention: **code and schema in English**, UI in French.
-> This document is the single source of truth for the database schema.
-> ORM: **Prisma** · Database: **PostgreSQL** · Runtime validation: **Zod**
+> Language convention: **code and schema in English**, UI in French. This document is the single source of truth for the database schema. ORM: **Prisma** · Database: **PostgreSQL** · Runtime validation: **Zod**
 
 ## Table of contents
 
@@ -19,12 +17,9 @@
 
 ## Auth & RBAC
 
-We use **Role-Based Access Control**: one authenticatable `User` entity carries
-one or more `Role`s. Permissions derive from roles. A single user can be both
-`ADMIN` and `REFERENT` (see ADR-0001).
+We use **Role-Based Access Control**: one authenticatable `User` entity carries one or more `Role`s. Permissions derive from roles. A single user can be both `ADMIN` and `REFERENT` (see ADR-0001).
 
-`firstName` / `lastName` live on `User` (single source of truth), so an
-admin-referent never has divergent names across profiles.
+`firstName` / `lastName` live on `User` (single source of truth), so an admin-referent never has divergent names across profiles.
 
 The **tutor never logs in** — it is plain data, not a `User`.
 
@@ -55,9 +50,7 @@ model User {
 
 ## Profiles
 
-Each role that carries its own data has a 1-1 profile. In V1 only
-`StudentProfile` and `ReferentProfile` exist. An admin is simply a `User` with
-the `ADMIN` role.
+Each role that carries its own data has a 1-1 profile. In V1 only `StudentProfile` and `ReferentProfile` exist. An admin is simply a `User` with the `ADMIN` role.
 
 The student profile has its own **state machine** (see ADR-0004):
 
@@ -111,9 +104,7 @@ model ReferentProfile {
 
 ## Referent assignment
 
-The referent of a stage is **not** a direct FK on `Stage`. It is derived on the
-fly from `ReferentAssignment` while the stage is live, then frozen into the
-snapshot on validation/refusal (see ADR-0003).
+The referent of a stage is **not** a direct FK on `Stage`. It is derived on the fly from `ReferentAssignment` while the stage is live, then frozen into the snapshot on validation/refusal (see ADR-0003).
 
 ```prisma
 model ReferentAssignment {
@@ -135,26 +126,15 @@ model ReferentAssignment {
 }
 ```
 
-Reassignment (e.g. a referent falls ill mid-year) is an **UPDATE** of the
-existing row (`referentId` A → B); the unique tuple
-`(studentId, schoolYear, semester, mandatory)` is unchanged, so no conflict
-arises. V1 overwrites in place and keeps **no history** of past referents; an
-auditable variant (soft-delete + partial unique index) is deferred to V2 (see
-ROADMAP_V2). Overwriting never touches already-frozen snapshots: a referent
-change only affects `DRAFT`/`PENDING` stages, which re-derive on the fly.
+Reassignment (e.g. a referent falls ill mid-year) is an **UPDATE** of the existing row (`referentId` A → B); the unique tuple `(studentId, schoolYear, semester, mandatory)` is unchanged, so no conflict arises. V1 overwrites in place and keeps **no history** of past referents; an auditable variant (soft-delete + partial unique index) is deferred to V2 (see ROADMAP_V2). Overwriting never touches already-frozen snapshots: a referent change only affects `DRAFT`/`PENDING` stages, which re-derive on the fly.
 
 ---
 
 ## Files
 
-Binary content lives in a **bucket** (S3 / MinIO), never in the database. The
-DB stores only metadata. `FileObject` carries `studentProfileId` + `type`
-(1-N relation), so adding a new file type is just a new enum value — no schema
-change (see ADR-0005).
+Binary content lives in a **bucket** (S3 / MinIO), never in the database. The DB stores only metadata. `FileObject` carries `studentProfileId` + `type` (1-N relation), so adding a new file type is just a new enum value — no schema change (see ADR-0005).
 
-The "exactly one valid insurance certificate" rule is enforced in application
-logic (take the most recent non-expired one), not by the schema. This also
-enables an insurance-certificate history later.
+The "exactly one valid insurance certificate" rule is enforced in application logic (take the most recent non-expired one), not by the schema. This also enables an insurance-certificate history later.
 
 ```prisma
 enum FileType {
@@ -177,6 +157,7 @@ model FileObject {
 ```
 
 Allowed MIME types (enforced in application/Zod layer):
+
 - `ID_PHOTO`: `image/jpeg`, `image/png`
 - `INSURANCE_CERTIFICATE`: `application/pdf`
 
@@ -184,10 +165,7 @@ Allowed MIME types (enforced in application/Zod layer):
 
 ## Host organism & tutor
 
-In V1 the **service is a text field on `Stage`**, not on the organism. The list
-of services actively hosting students is derived from the stages. An
-`OrganismService` table linking tutors to services is planned for V2
-(see ADR-0006 and ROADMAP_V2).
+In V1 the **service is a text field on `Stage`**, not on the organism. The list of services actively hosting students is derived from the stages. An `OrganismService` table linking tutors to services is planned for V2 (see ADR-0006 and ROADMAP_V2).
 
 ```prisma
 model HostOrganism {
@@ -230,8 +208,7 @@ model Tutor {
 
 Single table. While `DRAFT`/`PENDING`, the live FKs (`student`, `organism`, `tutor`, `periods`) are authoritative. The **referent is not a FK on `Stage`**: it is derived on the fly from `ReferentAssignment` (by `studentId` + `schoolYear` + `semester` + `mandatory`, matching the stage's own `mandatory` flag) and is frozen into the `snapshot` only on validation/refusal. Once `VALIDATED`/`REFUSED`, the immutable `snapshot` (Zod-validated, versioned) becomes authoritative and the FKs are kept only for reporting (`onDelete: SetNull`). See ADR-0003.
 
-Concurrency is handled with **optimistic locking** (`version`), suitable for the
-1-2 admin scenario. Migration to pessimistic locking is documented in ADR-0007.
+Concurrency is handled with **optimistic locking** (`version`), suitable for the 1-2 admin scenario. Migration to pessimistic locking is documented in ADR-0007.
 
 Multiple work periods are modeled by `StagePeriod` (see ADR-0008).
 

@@ -10,7 +10,7 @@ This is a demonstration project. Security fixes are applied to the `main` branch
 
 If you discover a vulnerability, please report it privately:
 
-- Preferred: use GitHub's **[Private vulnerability reporting](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability)** (the "Report a vulnerability" button under the repository's *Security* tab).
+- Preferred: use GitHub's **[Private vulnerability reporting](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability)** (the "Report a vulnerability" button under the repository's _Security_ tab).
 - Alternatively: email `<YOUR CONTACT EMAIL>` with a description, reproduction steps, and the impact you observed.
 
 Please allow a reasonable time for a fix before any public disclosure. As a solo-maintained demo, response is best-effort.
