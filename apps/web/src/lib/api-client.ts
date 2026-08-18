@@ -1,4 +1,11 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL as string;
+import { z } from "zod";
+import { readEnvVar } from "./env";
+
+const API_BASE_URL = readEnvVar(
+  import.meta.env.VITE_API_BASE_URL,
+  "VITE_API_BASE_URL",
+  z.string().url(),
+);
 
 export class ApiError extends Error {
   constructor(
