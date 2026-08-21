@@ -20,3 +20,4 @@ Every structuring decision is recorded here as an ADR. Format: lightweight [MADR
 | [0014](0014-referent-assignment-key.md) | Referent assignment keyed on (student, schoolYear, semester, mandatory) | Accepted |
 | [0015](0015-conventional-commits-semver-changesets.md) | Conventional Commits + SemVer 2.0.0, releases via Changesets | Accepted |
 | [0016](0016-shared-package-build-step.md) | `packages/shared` ships a compiled CommonJS build | Accepted |
+| [0017](0017-design-system-mui.md) | Design system: MUI, bordeaux/gold theme | Accepted |
