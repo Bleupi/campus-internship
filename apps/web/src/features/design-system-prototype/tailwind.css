@@ -1,0 +1,14 @@
+/* PROTOTYPE — only needed for the shadcn/ui + Radix variant of the design-
+   system comparison (issue #5). Not wired app-wide beyond this prototype. */
+@import "tailwindcss";
+
+/* Bordeaux inspired by Université Paris Cité's own brand color (#8A1538,
+   confirmed from u-paris.fr's stylesheet) + a dynamic gold accent. Reserved
+   for interactive elements (buttons, links, focus rings) — body text stays
+   on the neutral slate scale for contrast. */
+@theme {
+  --color-brand: #8a1538;
+  --color-brand-hover: #6f1029;
+  --color-accent: #f5a623;
+}
+
