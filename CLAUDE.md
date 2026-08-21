@@ -249,3 +249,15 @@ Full detail lives in `CONTRIBUTING.md` — read it before writing a commit messa
 ## 13. Teaching mode (NestJS)
 
 The user is experienced with backend/TypeScript in general but new to NestJS specifically. When introducing a Nest-specific idiom for the first time in a session (modules, providers/DI scopes, guards, pipes, interceptors, decorators, the request lifecycle) — give a short explanation (2-4 sentences) of _why this mechanism exists and why it fits here_, alongside the code, not instead of it. Skip explaining general TypeScript or backend concepts the user already knows; focus specifically on what's Nest-idiomatic and why. No need to re-explain a concept already covered earlier in the same session.
+
+---
+
+## 14. Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues for `Bleupi/campus-internship`, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Single-context — `docs/dataModel.md`, `docs/businessRules.md`, `docs/userFlow.md`, and `docs/adr/` at the repo root govern the whole system, not one context per pnpm package. See `docs/agents/domain.md`.
