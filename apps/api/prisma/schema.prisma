@@ -31,6 +31,21 @@ model User {
 
   studentProfile  StudentProfile?
   referentProfile ReferentProfile?
+  refreshTokens   RefreshToken[]
+}
+
+// Access+refresh JWT auth (ADR-0018). Only the SHA-256 hash of the raw
+// refresh token is stored; one row per login session (multi-device).
+model RefreshToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  @@index([userId])
 }
 
 // --- Profiles ----------------------------------------------------------------
@@ -54,7 +69,7 @@ model StudentProfile {
 
   phone         String?
   personalEmail String?
-  promotion     Promotion
+  promotion     Promotion?
   profileStatus ProfileStatus @default(INCOMPLETE)
   profileYear   String?
 

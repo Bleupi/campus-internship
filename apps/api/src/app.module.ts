@@ -1,7 +1,9 @@
 import { join } from "node:path";
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
+import { APP_GUARD } from "@nestjs/core";
 import { envSchema } from "./config/env.schema";
+import { JwtAuthGuard } from "./common/guards/jwt-auth.guard";
 import { PrismaModule } from "./prisma/prisma.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { StudentsModule } from "./modules/students/students.module";
@@ -34,5 +36,6 @@ import { FilesModule } from "./modules/files/files.module";
     AdminModule,
     FilesModule,
   ],
+  providers: [{ provide: APP_GUARD, useClass: JwtAuthGuard }],
 })
 export class AppModule {}
