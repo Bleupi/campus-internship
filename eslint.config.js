@@ -59,6 +59,26 @@ export default tseslint.config(
     },
   },
   {
+    // Test files are dev-only and never part of the compiled dist/ bundle
+    // (ADR-0016), so the runtime-agnostic constraint above doesn't apply to
+    // them — extend the allowlist with the test runner itself.
+    files: ["packages/shared/**/*.test.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              regex: "^(?!\\.{1,2}\\/)(?!zod(?:\\/.*)?$)(?!vitest$).+$",
+              message:
+                "packages/shared must stay runtime-agnostic — only zod, vitest (test-only), and relative imports within the package are allowed (see CLAUDE.md §7).",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ["apps/web/**/*.{ts,tsx}"],
     languageOptions: {
       globals: globals.browser,

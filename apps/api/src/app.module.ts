@@ -1,7 +1,10 @@
 import { join } from "node:path";
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
+import { APP_FILTER, APP_GUARD } from "@nestjs/core";
 import { envSchema } from "./config/env.schema";
+import { JwtAuthGuard } from "./common/guards/jwt-auth.guard";
+import { PrismaExceptionFilter } from "./common/filters/prisma-exception.filter";
 import { PrismaModule } from "./prisma/prisma.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { StudentsModule } from "./modules/students/students.module";
@@ -33,6 +36,10 @@ import { FilesModule } from "./modules/files/files.module";
     OrganismsModule,
     AdminModule,
     FilesModule,
+  ],
+  providers: [
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_FILTER, useClass: PrismaExceptionFilter },
   ],
 })
 export class AppModule {}

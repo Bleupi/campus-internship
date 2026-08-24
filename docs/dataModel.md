@@ -42,9 +42,28 @@ model User {
 
   studentProfile  StudentProfile?
   referentProfile ReferentProfile?
+  refreshTokens   RefreshToken[]
   // adminProfile intentionally omitted in V1 (see ROADMAP_V2 / ADR-0002)
 }
 ```
+
+Login issues a short-lived JWT access token plus a refresh token (see ADR-0018). The refresh token is a high-entropy random value, never a JWT itself — only its SHA-256 hash is persisted, so a leaked database dump doesn't hand out usable tokens. Sessions are **multi-device**: each login creates its own `RefreshToken` row, so a student staying logged in on a phone and a laptop at the same time has two independent, independently-revocable rows.
+
+```prisma
+model RefreshToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique          // SHA-256 hex digest of the raw token; the raw value never touches the DB
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  @@index([userId])
+}
+```
+
+Refresh is a **rotate-on-use** operation: presenting a valid, unexpired token deletes that row and creates a new one (and a new access token) in the same transaction. A stolen-then-reused token that's already been rotated away simply fails to match any row — a reasonable baseline without building full token-family reuse tracking. Logout deletes only the row matching the presented token, revoking that one session and leaving a student's other concurrent sessions untouched.
 
 ---
 
@@ -74,7 +93,7 @@ model StudentProfile {
 
   phone         String?
   personalEmail String?                     // mutable, unlike the login (u-paris) email
-  promotion     Promotion
+  promotion     Promotion?                  // null until profile completion (issue #9/#10); signup creates a bare login only
   profileStatus ProfileStatus @default(INCOMPLETE)
   profileYear   String?                     // school year the profile is up-to-date for, e.g. "2024-2025"
 

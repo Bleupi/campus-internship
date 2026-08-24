@@ -21,3 +21,5 @@ Every structuring decision is recorded here as an ADR. Format: lightweight [MADR
 | [0015](0015-conventional-commits-semver-changesets.md) | Conventional Commits + SemVer 2.0.0, releases via Changesets | Accepted |
 | [0016](0016-shared-package-build-step.md) | `packages/shared` ships a compiled CommonJS build | Accepted |
 | [0017](0017-design-system-mui.md) | Design system: MUI, bordeaux/gold theme | Accepted |
+| [0018](0018-jwt-auth-mechanism.md) | JWT auth: access + refresh via httpOnly cookies, global guard by default | Accepted |
+| [0019](0019-zod-validation-pipe.md) | Request validation via a hand-rolled Zod pipe, not `class-validator` | Accepted |

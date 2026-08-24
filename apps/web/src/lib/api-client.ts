@@ -16,7 +16,30 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+// Routes that must never trigger a refresh-and-retry themselves, or a 401
+// from /auth/login (bad credentials) would spin into an infinite refresh loop.
+const AUTH_ENDPOINTS_EXCLUDED_FROM_RETRY = ["/auth/login", "/auth/signup", "/auth/refresh"];
+
+// Concurrent 401s share one in-flight refresh call instead of each firing
+// their own (see ADR-0018) — module-level so every request() call sees it.
+let refreshPromise: Promise<boolean> | null = null;
+
+async function tryRefresh(): Promise<boolean> {
+  if (!refreshPromise) {
+    refreshPromise = fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: "POST",
+      credentials: "include",
+    })
+      .then((response) => response.ok)
+      .catch(() => false)
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+  return refreshPromise;
+}
+
+async function request<T>(path: string, init?: RequestInit, isRetry = false): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: {
@@ -25,6 +48,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     },
     credentials: "include",
   });
+
+  if (response.status === 401 && !isRetry && !AUTH_ENDPOINTS_EXCLUDED_FROM_RETRY.includes(path)) {
+    const refreshed = await tryRefresh();
+    if (refreshed) {
+      return request<T>(path, init, true);
+    }
+  }
 
   if (!response.ok) {
     throw new ApiError(response.status, await response.text());
