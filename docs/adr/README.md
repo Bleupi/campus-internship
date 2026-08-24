@@ -23,3 +23,4 @@ Every structuring decision is recorded here as an ADR. Format: lightweight [MADR
 | [0017](0017-design-system-mui.md) | Design system: MUI, bordeaux/gold theme | Accepted |
 | [0018](0018-jwt-auth-mechanism.md) | JWT auth: access + refresh via httpOnly cookies, global guard by default | Accepted |
 | [0019](0019-zod-validation-pipe.md) | Request validation via a hand-rolled Zod pipe, not `class-validator` | Accepted |
+| [0020](0020-s3-client-aws-sdk.md) | Object storage client: `@aws-sdk/client-s3` | Accepted |

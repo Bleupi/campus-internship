@@ -40,10 +40,14 @@ async function tryRefresh(): Promise<boolean> {
 }
 
 async function request<T>(path: string, init?: RequestInit, isRetry = false): Promise<T> {
+  // A FormData body (multipart file upload) must NOT get a manual
+  // Content-Type — the browser sets one itself with the correct boundary.
+  const isFormData = init?.body instanceof FormData;
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: {
-      "Content-Type": "application/json",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...init?.headers,
     },
     credentials: "include",
@@ -74,4 +78,6 @@ export const apiClient = {
   patch: <T>(path: string, body: unknown) =>
     request<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+  postForm: <T>(path: string, formData: FormData) =>
+    request<T>(path, { method: "POST", body: formData }),
 };
