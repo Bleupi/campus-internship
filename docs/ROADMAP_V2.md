@@ -30,3 +30,7 @@ Watch-out: textual services written inconsistently ("Cardiologie" vs "cardiologi
 ## Presigned upload URLs
 
 Let the front-end upload files directly to the bucket via presigned URLs; the backend only signs. Cleaner and more scalable than proxying uploads through the API. V1 can proxy uploads to keep things simple.
+
+## Student-facing document preview/download
+
+Let a student view or re-download their own previously uploaded `ID_PHOTO`/`INSURANCE_CERTIFICATE` from the profile screen. V1's `GET /students/me/profile` returns file metadata only (type, upload date, MIME type) — no content-retrieval endpoint on the student side. (The admin certificate-validation flow, issue #13, still needs its own `GetObject`-backed read path to review a submitted certificate; that's in scope there and unrelated to this deferral, which is specifically about the student re-viewing their own files.)
