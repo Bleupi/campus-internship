@@ -205,7 +205,7 @@ describe("Auth (e2e)", () => {
         "Cookie",
         cookieHeader({ refresh_token: requireCookie(deviceACookies, "refresh_token") }),
       )
-      .expect(200);
+      .expect(204);
 
     // Device A's session is now revoked.
     await request(app.getHttpServer())

@@ -64,9 +64,12 @@ export class AuthController {
     return { user: session.user };
   }
 
+  // 204: no response body, matching apiClient's empty-body handling on the
+  // frontend (apps/web/src/lib/api-client.ts) — a 200 with no JSON body
+  // makes response.json() throw there.
   @Public()
   @Post("logout")
-  @HttpCode(200)
+  @HttpCode(204)
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const rawToken = req.cookies?.[REFRESH_TOKEN_COOKIE];
     if (rawToken) {
