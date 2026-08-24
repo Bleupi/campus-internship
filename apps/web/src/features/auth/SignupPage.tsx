@@ -5,7 +5,7 @@ import { useNavigate, Link as RouterLink } from "react-router-dom";
 import { Alert, Box, Button, Container, Link, TextField, Typography } from "@mui/material";
 import { signupSchema, type SignupRequest } from "shared";
 import { ApiError } from "../../lib/api-client";
-import { useSignup } from "./hooks";
+import { useSignup } from "./useSignup";
 
 export function SignupPage() {
   const navigate = useNavigate();

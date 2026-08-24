@@ -1,8 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
-import { ConflictException, Injectable, UnauthorizedException } from "@nestjs/common";
+import { Injectable, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
-import { Prisma, type User } from "@prisma/client";
+import type { User } from "@prisma/client";
 import * as bcrypt from "bcrypt";
 import ms from "ms";
 import type { AuthUser } from "shared";
@@ -35,8 +35,9 @@ export interface IssuedSession {
   refreshToken: string;
 }
 
-// Minimal shape both PrismaService and a $transaction callback's `tx` satisfy.
-type Db = Pick<PrismaService, "user" | "refreshToken">;
+// Minimal Prisma surface needed to issue a session: either PrismaService
+// directly, or the `tx` client from a $transaction callback (see refresh()).
+type SessionDb = Pick<PrismaService, "user" | "refreshToken">;
 
 @Injectable()
 export class AuthService {
@@ -46,27 +47,21 @@ export class AuthService {
     private readonly configService: ConfigService<Env, true>,
   ) {}
 
+  // A duplicate email (P2002) is left to propagate — the global
+  // PrismaExceptionFilter (common/filters/) translates it into a 409.
   async signup(dto: SignupDto): Promise<IssuedSession> {
     const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
 
-    let user: User;
-    try {
-      user = await this.prisma.user.create({
-        data: {
-          email: dto.email,
-          passwordHash,
-          firstName: dto.firstName,
-          lastName: dto.lastName,
-          roles: ["STUDENT"],
-          studentProfile: { create: { profileStatus: "INCOMPLETE" } },
-        },
-      });
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-        throw new ConflictException("Un compte existe déjà avec cette adresse email");
-      }
-      throw error;
-    }
+    const user = await this.prisma.user.create({
+      data: {
+        email: dto.email,
+        passwordHash,
+        firstName: dto.firstName,
+        lastName: dto.lastName,
+        roles: ["STUDENT"],
+        studentProfile: { create: { profileStatus: "INCOMPLETE" } },
+      },
+    });
 
     return this.issueTokens(user);
   }
@@ -105,7 +100,7 @@ export class AuthService {
     await this.prisma.refreshToken.deleteMany({ where: { tokenHash } });
   }
 
-  private async issueTokens(user: User, db: Db = this.prisma): Promise<IssuedSession> {
+  private async issueTokens(user: User, db: SessionDb = this.prisma): Promise<IssuedSession> {
     const accessToken = this.jwtService.sign({
       sub: user.id,
       email: user.email,

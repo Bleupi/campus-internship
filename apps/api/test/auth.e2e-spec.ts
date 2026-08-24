@@ -91,6 +91,14 @@ describe("Auth (e2e)", () => {
     expect(profile?.promotion).toBeNull();
   });
 
+  it("rejects a duplicate signup with the same email (409), translated by the global PrismaExceptionFilter", async () => {
+    const email = uniqueEmail();
+    await signup(email).expect(201);
+
+    const response = await signup(email).expect(409);
+    expect(response.body.message).toBe("Un compte existe déjà avec cette adresse email");
+  });
+
   it("rejects login with the wrong password (401)", async () => {
     const email = uniqueEmail();
     await signup(email).expect(201);

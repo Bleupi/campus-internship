@@ -9,7 +9,7 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import type { Request, Response } from "express";
+import type { CookieOptions, Request, Response } from "express";
 import ms from "ms";
 import { loginSchema, signupSchema, type AuthUser, type MeResponse } from "shared";
 import { Public } from "../../common/decorators/public.decorator";
@@ -91,26 +91,31 @@ export class AuthController {
   }
 
   private setSessionCookies(res: Response, session: IssuedSession) {
-    const isProduction = process.env.NODE_ENV === "production";
     const accessTtl = this.configService.get("JWT_ACCESS_TTL", { infer: true });
     const refreshTtl = this.configService.get("JWT_REFRESH_TTL", { infer: true });
 
-    res.cookie(ACCESS_TOKEN_COOKIE, session.accessToken, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: isProduction,
-      path: "/",
-      maxAge: ms(accessTtl as ms.StringValue),
-    });
+    res.cookie(
+      ACCESS_TOKEN_COOKIE,
+      session.accessToken,
+      this.cookieOptions("/", ms(accessTtl as ms.StringValue)),
+    );
 
     // Scoped to /auth so the refresh token is only ever sent to
     // /auth/refresh and /auth/logout, never leaked on every API call.
-    res.cookie(REFRESH_TOKEN_COOKIE, session.refreshToken, {
+    res.cookie(
+      REFRESH_TOKEN_COOKIE,
+      session.refreshToken,
+      this.cookieOptions("/auth", ms(refreshTtl as ms.StringValue)),
+    );
+  }
+
+  private cookieOptions(path: string, maxAge: number): CookieOptions {
+    return {
       httpOnly: true,
       sameSite: "lax",
-      secure: isProduction,
-      path: "/auth",
-      maxAge: ms(refreshTtl as ms.StringValue),
-    });
+      secure: process.env.NODE_ENV === "production",
+      path,
+      maxAge,
+    };
   }
 }

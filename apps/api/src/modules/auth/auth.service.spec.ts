@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { ConflictException, UnauthorizedException } from "@nestjs/common";
+import { UnauthorizedException } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
@@ -111,13 +111,12 @@ describe("AuthService", () => {
       expect(createArgs.data.studentProfile.create.profileStatus).toBe("INCOMPLETE");
     });
 
-    it("throws ConflictException when the email is already taken", async () => {
-      prisma.user.create.mockRejectedValue(
-        new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
-          code: "P2002",
-          clientVersion: "6.19.3",
-        }),
-      );
+    it("lets a P2002 (duplicate email) Prisma error propagate for the global PrismaExceptionFilter to translate", async () => {
+      const prismaError = new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
+        code: "P2002",
+        clientVersion: "6.19.3",
+      });
+      prisma.user.create.mockRejectedValue(prismaError);
 
       await expect(
         service.signup({
@@ -126,7 +125,7 @@ describe("AuthService", () => {
           firstName: baseUser.firstName,
           lastName: baseUser.lastName,
         }),
-      ).rejects.toBeInstanceOf(ConflictException);
+      ).rejects.toBe(prismaError);
     });
 
     it("returns the created user and issues an access + refresh token", async () => {

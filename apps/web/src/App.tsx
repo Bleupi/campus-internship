@@ -1,9 +1,10 @@
 import type { ReactElement } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
-import { Typography } from "@mui/material";
+import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { Button, Typography } from "@mui/material";
 import { LoginPage } from "./features/auth/LoginPage";
 import { SignupPage } from "./features/auth/SignupPage";
-import { useCurrentUser } from "./features/auth/hooks";
+import { useCurrentUser } from "./features/auth/useCurrentUser";
+import { useLogout } from "./features/auth/useLogout";
 
 function RequireAuth({ children }: { children: ReactElement }) {
   const { data, isLoading, isError } = useCurrentUser();
@@ -20,7 +21,21 @@ function RequireAuth({ children }: { children: ReactElement }) {
 // Not a real feature — just an unblocking redirect target until the real
 // dashboard/profile screens (issue #11) exist.
 function DashboardPage() {
-  return <Typography sx={{ mt: 8, textAlign: "center" }}>Tableau de bord (à venir)</Typography>;
+  const navigate = useNavigate();
+  const logout = useLogout();
+
+  return (
+    <Typography sx={{ mt: 8, textAlign: "center" }}>
+      Tableau de bord (à venir)
+      <br />
+      <Button
+        onClick={() => logout.mutate(undefined, { onSuccess: () => navigate("/login") })}
+        disabled={logout.isPending}
+      >
+        Déconnexion
+      </Button>
+    </Typography>
+  );
 }
 
 export function App() {

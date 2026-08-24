@@ -5,7 +5,7 @@ import { useNavigate, Link as RouterLink } from "react-router-dom";
 import { Alert, Box, Button, Container, Link, TextField, Typography } from "@mui/material";
 import { loginSchema, type LoginRequest } from "shared";
 import { ApiError } from "../../lib/api-client";
-import { useLogin } from "./hooks";
+import { useLogin } from "./useLogin";
 
 export function LoginPage() {
   const navigate = useNavigate();
