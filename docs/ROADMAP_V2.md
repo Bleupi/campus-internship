@@ -34,3 +34,11 @@ Let the front-end upload files directly to the bucket via presigned URLs; the ba
 ## Student-facing document preview/download
 
 Let a student view or re-download their own previously uploaded `ID_PHOTO`/`INSURANCE_CERTIFICATE` from the profile screen. V1's `GET /students/me/profile` returns file metadata only (type, upload date, MIME type) — no content-retrieval endpoint on the student side. (The admin certificate-validation flow, issue #13, still needs its own `GetObject`-backed read path to review a submitted certificate; that's in scope there and unrelated to this deferral, which is specifically about the student re-viewing their own files.)
+
+## Local/dev cleanup for test-uploaded certificates
+
+`FilesService` has no `delete` method — nothing removes an object from the bucket once uploaded. In particular, the `students.e2e-spec.ts` suite (issue #11/#17) uploads real insurance-certificate/ID-photo bytes to the local MinIO bucket on every run, and Prisma's cascade delete (`User` → `StudentProfile` → `FileObject`) only cleans up the DB rows, not the underlying bucket objects — so repeated local/CI test runs accumulate orphaned objects in MinIO indefinitely. Needs its own design pass: likely a `FilesService.delete(key)` plus an e2e teardown hook that calls it for whatever it uploaded, scoped to non-production only.
+
+## Production file deletion
+
+No path exists to remove a `FileObject`'s underlying bucket content in production (e.g. when an admin needs to purge a file, or a GDPR-style erasure request). Distinct from the dev-cleanup item above: this is a real, audited deletion capability, not a test-teardown convenience. Needs its own design pass: whether it's triggered automatically (e.g. old object removed on re-upload) or only ever by an explicit admin action, whether the `FileObject` row is hard- or soft-deleted, and how it's authorized/audited.
