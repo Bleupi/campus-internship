@@ -46,6 +46,17 @@ function validProfile() {
   };
 }
 
+function partiallyIncompleteProfile() {
+  return {
+    promotion: "L2",
+    phone: null,
+    personalEmail: null,
+    profileStatus: "INCOMPLETE",
+    profileYear: null,
+    files: [{ type: "ID_PHOTO", mimeType: "image/png", uploadedAt: "2026-01-01T00:00:00.000Z" }],
+  };
+}
+
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -174,5 +185,49 @@ describe("ProfilePage", () => {
     await waitFor(() => expect(uploadIdPhotoMock).toHaveBeenCalled());
     expect(uploadIdPhotoMock.mock.calls[0]![0]).toBe(file);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("colors the status chip warning for an INCOMPLETE profile", async () => {
+    getProfileMock.mockResolvedValue(incompleteProfile());
+    renderPage();
+
+    const chip = await screen.findByTestId("profile-status-chip");
+    expect(chip.className).toContain("MuiChip-colorWarning");
+  });
+
+  it("colors the status chip success (green) for a VALID profile", async () => {
+    getProfileMock.mockResolvedValue(validProfile());
+    renderPage();
+
+    const chip = await screen.findByTestId("profile-status-chip");
+    expect(chip.className).toContain("MuiChip-colorSuccess");
+  });
+
+  it("explains what's missing when the profile is INCOMPLETE", async () => {
+    getProfileMock.mockResolvedValue(incompleteProfile());
+    renderPage();
+
+    const alert = await screen.findByText(/votre profil est incomplet/i);
+    expect(alert.textContent).toMatch(/votre promotion/i);
+    expect(alert.textContent).toMatch(/votre photo d'identité/i);
+    expect(alert.textContent).toMatch(/votre attestation d'assurance/i);
+  });
+
+  it("only lists the still-missing pieces, not the ones already provided", async () => {
+    getProfileMock.mockResolvedValue(partiallyIncompleteProfile());
+    renderPage();
+
+    const alert = await screen.findByText(/votre profil est incomplet/i);
+    expect(alert.textContent).not.toMatch(/votre promotion/i);
+    expect(alert.textContent).not.toMatch(/votre photo d'identité/i);
+    expect(alert.textContent).toMatch(/votre attestation d'assurance/i);
+  });
+
+  it("shows no explanatory alert when the profile is VALID", async () => {
+    getProfileMock.mockResolvedValue(validProfile());
+    renderPage();
+
+    await screen.findByRole("button", { name: /^modifier$/i });
+    expect(screen.queryByText(/votre profil est incomplet/i)).not.toBeInTheDocument();
   });
 });

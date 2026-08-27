@@ -38,6 +38,16 @@ const PROFILE_STATUS_LABELS: Record<string, string> = {
   EXPIRED: "Expiré",
 };
 
+// MUI's own semantic palette, independent of the brand accent colors
+// (ADR-0017: "status/semantic colors ... use MUI's own semantic palette").
+const PROFILE_STATUS_COLORS: Record<string, "warning" | "info" | "success" | "error" | "default"> =
+  {
+    INCOMPLETE: "warning",
+    PENDING_VALIDATION: "info",
+    VALID: "success",
+    EXPIRED: "error",
+  };
+
 type PendingAction =
   { type: "promotion"; values: UpdateProfileRequest } | { type: "certificate"; file: File };
 
@@ -146,6 +156,14 @@ export function ProfilePage() {
   const idPhoto = fileFor(profile.files, "ID_PHOTO");
   const insuranceCertificate = fileFor(profile.files, "INSURANCE_CERTIFICATE");
 
+  // ADR-0004: INCOMPLETE means "missing fields or files" — spell out which
+  // ones, rather than a generic "complete your profile" message.
+  const missingItems = [
+    !profile.promotion && "votre promotion",
+    !idPhoto && "votre photo d'identité",
+    !insuranceCertificate && "votre attestation d'assurance",
+  ].filter((item): item is string => !!item);
+
   return (
     <Container maxWidth="sm">
       <Box sx={{ mt: 8, display: "flex", flexDirection: "column", gap: 3 }}>
@@ -153,8 +171,18 @@ export function ProfilePage() {
           <Typography variant="h4" component="h1">
             Mon profil
           </Typography>
-          <Chip label={PROFILE_STATUS_LABELS[profile.profileStatus] ?? profile.profileStatus} />
+          <Chip
+            data-testid="profile-status-chip"
+            color={PROFILE_STATUS_COLORS[profile.profileStatus] ?? "default"}
+            label={PROFILE_STATUS_LABELS[profile.profileStatus] ?? profile.profileStatus}
+          />
         </Stack>
+
+        {profile.profileStatus === "INCOMPLETE" && missingItems.length > 0 && (
+          <Alert severity="warning">
+            Votre profil est incomplet. Il manque : {missingItems.join(", ")}.
+          </Alert>
+        )}
 
         {serverError && <Alert severity="error">{serverError}</Alert>}
 
