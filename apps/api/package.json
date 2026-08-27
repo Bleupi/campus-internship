@@ -15,7 +15,8 @@
     "test": "jest --passWithNoTests",
     "test:watch": "jest --watch",
     "pretest:e2e": "pnpm run build:shared",
-    "test:e2e": "jest --config ./test/jest-e2e.json --passWithNoTests"
+    "test:e2e": "jest --config ./test/jest-e2e.json --passWithNoTests",
+    "prisma": "dotenv -e ../../.env -- prisma"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.15",
@@ -47,6 +48,7 @@
     "@types/node": "^22.10.5",
     "@types/passport-jwt": "^4.0.1",
     "@types/supertest": "^6.0.2",
+    "dotenv-cli": "^11.0.0",
     "jest": "^29.7.0",
     "prisma": "^6.2.1",
     "source-map-support": "^0.5.21",

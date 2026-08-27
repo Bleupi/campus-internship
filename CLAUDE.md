@@ -214,7 +214,8 @@ Consumed via the workspace protocol (`workspace:*`), never via relative paths re
 - Never use `--no-verify`, never comment out a hook to "get past" a failure — fix the underlying issue.
 - New env var → add it (name only, no value) to `.env.example`.
 - Never commit a real secret, even temporarily, even in a script or a fixture. `.env` is git-ignored; use it for local values.
-- Common commands: `pnpm install`, `pnpm dev`, `pnpm lint`, `pnpm format`, `pnpm typecheck`, `pnpm -r test`, `pnpm secrets:scan`, `pnpm --filter api exec prisma migrate dev`, `pnpm changeset`.
+- Common commands: `pnpm install`, `pnpm dev`, `pnpm lint`, `pnpm format`, `pnpm typecheck`, `pnpm -r test`, `pnpm secrets:scan`, `pnpm --filter api run prisma migrate dev`, `pnpm changeset`.
+  - Prisma CLI doesn't auto-load the root `.env` (it only looks in `apps/api/prisma/` or `apps/api/`) and wouldn't expand its `${POSTGRES_USER}`-style references even if it did — `apps/api`'s `"prisma"` script wraps the real CLI with `dotenv -e ../../.env --` (`dotenv-cli`, which does expand) so every Prisma subcommand (`migrate dev`, `migrate status`, `studio`, ...) gets a resolved `DATABASE_URL`. Always invoke Prisma via `pnpm --filter api run prisma <subcommand>`, never bare `prisma`/`exec prisma`.
 
 ---
 
