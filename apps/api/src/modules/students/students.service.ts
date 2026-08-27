@@ -28,7 +28,6 @@ export class StudentsService {
     const profile = await this.findProfileOrThrow(userId);
     const files = await this.currentFiles(profile.id);
 
-    const promotionChanged = dto.promotion !== undefined && dto.promotion !== profile.promotion;
     const newPromotion = dto.promotion !== undefined ? dto.promotion : profile.promotion;
 
     const data: Record<string, unknown> = {};
@@ -36,15 +35,7 @@ export class StudentsService {
     if (dto.phone !== undefined) data.phone = dto.phone;
     if (dto.personalEmail !== undefined) data.personalEmail = dto.personalEmail;
 
-    this.applyStatusTransition({
-      data,
-      profile,
-      newPromotion,
-      hasIdPhoto: this.hasFileOfType(files, "ID_PHOTO"),
-      hasCertificate: this.hasFileOfType(files, "INSURANCE_CERTIFICATE"),
-      promotionChanged,
-      certificateReuploaded: false,
-    });
+    this.applyStatusTransition(data, profile, files, { type: "profile-update", newPromotion });
 
     const updated = await this.prisma.studentProfile.update({ where: { id: profile.id }, data });
     return this.toResponse(updated, files);
@@ -76,15 +67,7 @@ export class StudentsService {
     const files = await this.currentFiles(profile.id);
 
     const data: Record<string, unknown> = {};
-    this.applyStatusTransition({
-      data,
-      profile,
-      newPromotion: profile.promotion,
-      hasIdPhoto: this.hasFileOfType(files, "ID_PHOTO"),
-      hasCertificate: this.hasFileOfType(files, "INSURANCE_CERTIFICATE"),
-      promotionChanged: false,
-      certificateReuploaded: type === "INSURANCE_CERTIFICATE",
-    });
+    this.applyStatusTransition(data, profile, files, { type: "file-upload", fileType: type });
 
     const updated =
       Object.keys(data).length > 0
@@ -94,28 +77,39 @@ export class StudentsService {
     return this.toResponse(updated, files);
   }
 
-  private applyStatusTransition(args: {
-    data: Record<string, unknown>;
-    profile: Pick<StudentProfile, "profileStatus">;
-    newPromotion: string | null;
-    hasIdPhoto: boolean;
-    hasCertificate: boolean;
-    promotionChanged: boolean;
-    certificateReuploaded: boolean;
-  }): void {
+  // Each call site only knows "what just happened" (a profile edit with its
+  // candidate promotion, or a file upload of a given type) — hasIdPhoto/
+  // hasCertificate/promotionChanged/certificateReuploaded are derived here
+  // instead of being recomputed identically by every caller.
+  private applyStatusTransition(
+    data: Record<string, unknown>,
+    profile: Pick<StudentProfile, "profileStatus" | "promotion">,
+    files: FileObject[],
+    event:
+      | { type: "profile-update"; newPromotion: string | null }
+      | { type: "file-upload"; fileType: FileType },
+  ): void {
+    const hasIdPhoto = this.hasFileOfType(files, "ID_PHOTO");
+    const hasCertificate = this.hasFileOfType(files, "INSURANCE_CERTIFICATE");
+    const promotionChanged =
+      event.type === "profile-update" && event.newPromotion !== profile.promotion;
+    const certificateReuploaded =
+      event.type === "file-upload" && event.fileType === "INSURANCE_CERTIFICATE";
+    const newPromotion = event.type === "profile-update" ? event.newPromotion : profile.promotion;
+
     const next = this.nextStatus(
-      { profileStatus: args.profile.profileStatus as ProfileStatus, promotion: args.newPromotion },
-      args.hasIdPhoto,
-      args.hasCertificate,
-      args.promotionChanged,
-      args.certificateReuploaded,
+      { profileStatus: profile.profileStatus as ProfileStatus, promotion: newPromotion },
+      hasIdPhoto,
+      hasCertificate,
+      promotionChanged,
+      certificateReuploaded,
     );
 
-    if (next === args.profile.profileStatus) return;
+    if (next === profile.profileStatus) return;
 
-    args.data.profileStatus = next;
-    if (args.profile.profileStatus === "INCOMPLETE" && next === "PENDING_VALIDATION") {
-      args.data.profileYear = getCurrentSchoolYear();
+    data.profileStatus = next;
+    if (profile.profileStatus === "INCOMPLETE" && next === "PENDING_VALIDATION") {
+      data.profileYear = getCurrentSchoolYear();
     }
   }
 
