@@ -15,6 +15,17 @@ export const envSchema = z
           .map((origin) => origin.trim())
           .filter(Boolean),
       ),
+    S3_ENDPOINT: z.string().url(),
+    S3_REGION: z.string().default("fr-par"),
+    S3_BUCKET: z.string(),
+    S3_ACCESS_KEY_ID: z.string(),
+    S3_SECRET_ACCESS_KEY: z.string(),
+    // "true"/"false" string, not z.coerce.boolean() — coerce treats any
+    // non-empty string (including "false") as true.
+    S3_FORCE_PATH_STYLE: z
+      .string()
+      .default("false")
+      .transform((value) => value === "true"),
   })
   // Nest's ConfigModule only reassigns this schema's *own* output back onto
   // process.env when `validate` is set (see ConfigModule.assignVariablesToProcess).

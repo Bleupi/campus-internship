@@ -1,10 +1,11 @@
 import type { ReactElement } from "react";
-import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { Navigate, Route, Routes, useNavigate, Link as RouterLink } from "react-router-dom";
 import { Button, Typography } from "@mui/material";
 import { LoginPage } from "./features/auth/LoginPage";
 import { SignupPage } from "./features/auth/SignupPage";
 import { useCurrentUser } from "./features/auth/useCurrentUser";
 import { useLogout } from "./features/auth/useLogout";
+import { ProfilePage } from "./features/students/ProfilePage";
 
 function RequireAuth({ children }: { children: ReactElement }) {
   const { data, isLoading, isError } = useCurrentUser();
@@ -28,6 +29,9 @@ function DashboardPage() {
     <Typography sx={{ mt: 8, textAlign: "center" }}>
       Tableau de bord (à venir)
       <br />
+      <Button component={RouterLink} to="/profile">
+        Mon profil
+      </Button>
       <Button
         onClick={() => logout.mutate(undefined, { onSuccess: () => navigate("/login") })}
         disabled={logout.isPending}
@@ -48,6 +52,14 @@ export function App() {
         element={
           <RequireAuth>
             <DashboardPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <RequireAuth>
+            <ProfilePage />
           </RequireAuth>
         }
       />
