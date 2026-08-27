@@ -16,7 +16,13 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { updateProfileSchema, type FileType, type UpdateProfileRequest } from "shared";
+import {
+  ID_PHOTO_MIME_TYPES,
+  INSURANCE_CERTIFICATE_MIME_TYPES,
+  updateProfileSchema,
+  type FileType,
+  type UpdateProfileRequest,
+} from "shared";
 import { useProfile } from "./useProfile";
 import { useUpdateProfile } from "./useUpdateProfile";
 import { useUploadIdPhoto, useUploadInsuranceCertificate } from "./useUploadFile";
@@ -221,7 +227,7 @@ export function ProfilePage() {
                 type="file"
                 hidden
                 data-testid="id-photo-input"
-                accept="image/jpeg,image/png"
+                accept={ID_PHOTO_MIME_TYPES.join(",")}
                 onChange={handleIdPhotoChange}
               />
             </Button>
@@ -240,7 +246,7 @@ export function ProfilePage() {
                 type="file"
                 hidden
                 data-testid="insurance-certificate-input"
-                accept="application/pdf"
+                accept={INSURANCE_CERTIFICATE_MIME_TYPES.join(",")}
                 onChange={handleCertificateChange}
               />
             </Button>

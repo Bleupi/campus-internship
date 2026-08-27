@@ -12,7 +12,12 @@ import {
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import type { Request } from "express";
-import { updateProfileSchema } from "shared";
+import {
+  idPhotoMimeTypeSchema,
+  insuranceCertificateMimeTypeSchema,
+  updateProfileSchema,
+} from "shared";
+import type { z } from "zod";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
@@ -25,18 +30,16 @@ function currentUserId(req: Request): string {
   return (req.user as { id: string }).id;
 }
 
-const ID_PHOTO_MIME_TYPES = ["image/jpeg", "image/png"];
 const ID_PHOTO_MAX_BYTES = 5 * 1024 * 1024;
-const INSURANCE_CERTIFICATE_MIME_TYPES = ["application/pdf"];
 const INSURANCE_CERTIFICATE_MAX_BYTES = 10 * 1024 * 1024;
 
-function mimeTypeFilter(allowed: string[]) {
+function mimeTypeFilter(schema: z.ZodTypeAny) {
   return (
     _req: Request,
     file: Express.Multer.File,
     callback: (error: Error | null, accept: boolean) => void,
   ) => {
-    if (!allowed.includes(file.mimetype)) {
+    if (!schema.safeParse(file.mimetype).success) {
       callback(new BadRequestException(`Type de fichier non autorisé : ${file.mimetype}`), false);
       return;
     }
@@ -71,7 +74,7 @@ export class StudentsController {
   @UseInterceptors(
     FileInterceptor("file", {
       limits: { fileSize: ID_PHOTO_MAX_BYTES },
-      fileFilter: mimeTypeFilter(ID_PHOTO_MIME_TYPES),
+      fileFilter: mimeTypeFilter(idPhotoMimeTypeSchema),
     }),
   )
   uploadIdPhoto(@UploadedFile() file: Express.Multer.File, @Req() req: Request) {
@@ -82,7 +85,7 @@ export class StudentsController {
   @UseInterceptors(
     FileInterceptor("file", {
       limits: { fileSize: INSURANCE_CERTIFICATE_MAX_BYTES },
-      fileFilter: mimeTypeFilter(INSURANCE_CERTIFICATE_MIME_TYPES),
+      fileFilter: mimeTypeFilter(insuranceCertificateMimeTypeSchema),
     }),
   )
   uploadInsuranceCertificate(@UploadedFile() file: Express.Multer.File, @Req() req: Request) {
