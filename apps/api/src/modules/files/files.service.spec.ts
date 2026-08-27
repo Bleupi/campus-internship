@@ -24,7 +24,7 @@ jest.mock("@aws-sdk/client-s3", () => {
 function buildConfigService(overrides: Record<string, unknown> = {}) {
   const values: Record<string, unknown> = {
     S3_ENDPOINT: "http://localhost:9000",
-    S3_REGION: "us-east-1",
+    S3_REGION: "fr-par",
     S3_BUCKET: "stages-files",
     S3_ACCESS_KEY_ID: "minioadmin",
     S3_SECRET_ACCESS_KEY: "minioadmin",
@@ -64,7 +64,7 @@ describe("FilesService", () => {
     expect(S3Client).toHaveBeenCalledWith(
       expect.objectContaining({
         endpoint: "http://localhost:9000",
-        region: "us-east-1",
+        region: "fr-par",
         forcePathStyle: true,
         credentials: { accessKeyId: "minioadmin", secretAccessKey: "minioadmin" },
       }),
