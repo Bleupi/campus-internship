@@ -39,4 +39,9 @@ describe("updateProfileSchema", () => {
     const result = updateProfileSchema.safeParse({ phone: "" });
     expect(result.success).toBe(false);
   });
+
+  it("rejects a landline-format phone (mobile-only, per PR #17 review)", () => {
+    const result = updateProfileSchema.safeParse({ phone: "0512345678" });
+    expect(result.success).toBe(false);
+  });
 });
