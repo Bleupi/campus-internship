@@ -30,8 +30,8 @@ Runs, in order: lint, typecheck, build (`packages/shared` first, per ADR-0016), 
    - **Web** (`apps/web`'s Vite `dist/` build, served by a minimal nginx/`serve` image).
 2. Wait for manual approval (see above).
 3. Deploy both images as Scaleway Serverless Containers.
-4. Database migration (`prisma migrate deploy`) is **not** a CI step run from the runner — it runs inside the API container's own entrypoint, before the Nest server starts listening. Unlike the original version of this decision, this is no longer forced by network reachability (the Serverless SQL Database has a public endpoint reachable from anywhere, including a GitHub-hosted runner) — it's now a deliberate choice to keep the database credential out of GitHub Actions Secrets entirely. See "Database credential exposure & mitigations" below.
-5. Secrets: GitHub Actions Secrets hold CI-side values only (Scaleway IAM deploy key, registry credentials). The database credential is **not** one of them — see below.
+4. Database migration (`prisma migrate deploy`) is **not** a CI step run from the runner — it runs inside the API container's own entrypoint, before the Nest server starts listening, using a separate migration-only credential (DDL-capable) that the running Nest process never holds. Unlike the original version of this decision, running migration outside CI is no longer forced by network reachability (the Serverless SQL Database has a public endpoint reachable from anywhere, including a GitHub-hosted runner) — it's now a deliberate choice to keep both database credentials out of GitHub Actions Secrets entirely. See "Database credential exposure & mitigations" below.
+5. Secrets: GitHub Actions Secrets hold CI-side values only (Scaleway IAM deploy key, registry credentials). Neither database credential (migrate or runtime) is one of them — see below.
 
 ### Scaleway resources
 
@@ -40,7 +40,7 @@ Runs, in order: lint, typecheck, build (`packages/shared` first, per ADR-0016), 
 | Region | `fr-par` (Paris) — most mature region, lowest latency for a French user base; also the only region the Serverless SQL Database is currently available in |
 | API compute | Serverless Containers |
 | Web compute | Serverless Containers (second container; not Object Storage + Edge Services — see "Rejected" below) |
-| Database | **Serverless SQL Database**, scale-to-zero (`min_scale=0`), authenticated via a dedicated IAM Application's API key (not a plain Postgres password) |
+| Database | **Serverless SQL Database**, scale-to-zero (`min_scale=0`), authenticated via dedicated IAM Applications' API keys (not a plain Postgres password) — two separate keys, split by privilege (see "Database credential exposure & mitigations") |
 | File storage | Object Storage (unchanged — ADR-0020/0021 already established this) |
 | Registry | Scaleway Container Registry |
 | Domain | A subdomain (`stages.<domain>`, domain TBD) attached directly to each Serverless Container, TLS via Scaleway's built-in managed Let's Encrypt — no CDN needed |
@@ -54,11 +54,14 @@ The Serverless SQL Database has no Private Network attachment and no IP allowlis
 Mitigations adopted:
 
 - **Authentication is a Scaleway IAM API key, not a Postgres password.** The connection string's user/password pair is an IAM Application's access key ID and secret key (`postgres://<app-id>:<secret-key>@<host>.pg.sdb.fr-par.scw.cloud:5432/<db>?sslmode=require`). This is structurally different from a database-native password: it's managed and revocable through Scaleway IAM, independently of the database itself.
-- **A dedicated, non-personal IAM Application**, never the project owner's own account, holds this credential. Its Policy is scoped to only what's needed to connect to this one database — a leak of this key doesn't expose Object Storage, the Container Registry, or anything else in the account.
+- **Two dedicated, non-personal IAM Applications, split by privilege — not one shared credential:**
+  - `campus-internship-api-migrate`, granted the `ServerlessSQLDatabaseReadWrite` permission set (data **and** table-structure changes). Used only by the API container's entrypoint script to run `prisma migrate deploy`, then never touched again for the rest of that container's life.
+  - `campus-internship-api-runtime`, granted the narrower `ServerlessSQLDatabaseDataReadWrite` permission set (data only — no `CREATE`/`ALTER`/`DROP TABLE`). Used by the running Nest process for every request it serves. A leak of the runtime credential — the one actually exposed to a live, request-serving process for its entire uptime — cannot be used to alter schema. The migrate credential, which can, is never held by that long-running process at all, only invoked briefly at boot.
+- Neither Application is the project owner's own account, and neither Policy grants anything beyond this one database — a leak of either key doesn't expose Object Storage, the Container Registry, or anything else in the account.
 - **TLS is enforced** (`sslmode=require`) on every connection.
-- **Centralized, instant revocation.** Because the credential is an IAM key rather than a database role's password, a suspected leak is closed by deleting the key in IAM — no database-side change, no downtime beyond issuing and deploying a replacement key.
-- **Scheduled rotation**, not just reactive: the key is rotated periodically (e.g. quarterly) as routine hygiene, not only when a leak is suspected.
-- **Least-privilege at the Postgres role level too**, as defense in depth on top of IAM scoping: the role the API connects as holds only the grants it actually needs — no superuser, no grants beyond the application schema.
+- **Centralized, instant revocation.** Because each credential is an IAM key rather than a database role's password, a suspected leak is closed by deleting that key in IAM — no database-side change, no downtime beyond issuing and deploying a replacement key.
+- **Scheduled rotation**, not just reactive: both keys are rotated periodically (e.g. quarterly) as routine hygiene, not only when a leak is suspected.
+- **Least-privilege at the Postgres role level too**, as a finer-grained layer underneath the IAM split above: IAM's `DataReadWrite` permission set restricts the runtime credential to DML across the database, but doesn't scope it to specific tables — the runtime role's own Postgres grants should still be limited to the application's schema, no more.
 
 What this deliberately does not attempt: an IP allowlist or network-level barrier, since neither exists yet for this product. If Scaleway ships Private Network support for the Serverless SQL Database, revisit this section — it would let the network-isolation posture of the original decision be restored without changing database products again.
 
@@ -77,6 +80,7 @@ Treat step 1–3 as a deliberate, time-boxed exception every time, never a stand
 - **No network isolation for the database, by product limitation, not by choice within it.** The mitigations above narrow who could plausibly reach it (nobody without the current IAM key) and how long a leaked key stays useful (until the next scheduled rotation or a revocation), but they do not remove the public reachability itself the way the original decision's Private Network did. Accepted for this project's scale; revisit if that scale changes.
 - **Cost drops substantially** versus the original decision — an estimated few euros a month at `min_scale=0`, versus a fixed €79+/month for even the cheapest Managed Database tier realistically positioned for production use.
 - **Cold starts can now compound**: a genuinely cold request may pay both the API container's cold start and the database's own wake-from-zero latency. Still accepted under the same cost-minimizing stance as the container cold starts, but worth watching in practice.
+- **Two database credentials to provision and rotate instead of one** (migrate + runtime), a small added operational cost in exchange for the running application process never holding schema-altering rights.
 - **Migration-in-entrypoint is now a deliberate secret-hygiene choice, not a network necessity** — a side effect worth noting: because it's no longer coupled to network reachability, switching the migration path again later (e.g. to a dedicated CI step) is a smaller, more isolated change than it would have been under the original decision.
 - No staging environment: the merge-CI e2e suite and the manual approval gate are the only safety nets before production. A regression class neither covers (e.g. an environment/config-only issue) can still reach prod — accepted given the timeline.
 - A failed migration's logs are interleaved with the API container's boot logs (not isolated in a dedicated CI step), since migration runs at container startup rather than as its own pipeline stage.
