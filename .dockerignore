@@ -1,0 +1,37 @@
+# Applies to every Dockerfile in this monorepo (build context is the repo
+# root, since both images need to COPY across multiple workspace packages).
+
+# --- Secrets & environment --------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_rsa.*
+
+# --- Dependencies (reinstalled inside the image, never copied in) ----------
+node_modules/
+**/node_modules/
+.pnpm-store/
+
+# --- Build output (rebuilt inside the image) --------------------------------
+dist/
+**/dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# --- VCS / editor / docs (irrelevant to the build, only bust layer cache) --
+.git/
+.github/
+.vscode/
+.idea/
+docs/
+*.md
+
+# --- Logs & caches -----------------------------------------------------------
+*.log
+.eslintcache
