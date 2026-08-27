@@ -1,4 +1,5 @@
 import { NotFoundException } from "@nestjs/common";
+import { Test } from "@nestjs/testing";
 import { PrismaService } from "../../prisma/prisma.service";
 import { FilesService } from "../files/files.service";
 import { StudentsService } from "./students.service";
@@ -61,7 +62,7 @@ describe("StudentsService", () => {
   };
   let filesService: { upload: jest.Mock };
 
-  beforeEach(() => {
+  beforeEach(async () => {
     prisma = {
       studentProfile: {
         findUnique: jest.fn(),
@@ -74,10 +75,15 @@ describe("StudentsService", () => {
     };
     filesService = { upload: jest.fn().mockResolvedValue(undefined) };
 
-    service = new StudentsService(
-      prisma as unknown as PrismaService,
-      filesService as unknown as FilesService,
-    );
+    const module = await Test.createTestingModule({
+      providers: [
+        StudentsService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: FilesService, useValue: filesService },
+      ],
+    }).compile();
+
+    service = module.get(StudentsService);
   });
 
   describe("getProfile", () => {
