@@ -21,6 +21,19 @@ describe("schoolYearSchema", () => {
     const result = schoolYearSchema.safeParse("2025-2024");
     expect(result.success).toBe(false);
   });
+
+  it("trims leading/trailing whitespace before validating (ADR-0012 normalization)", () => {
+    const result = schoolYearSchema.safeParse("  2024-2025  ");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toBe("2024-2025");
+    }
+  });
+
+  it("still rejects a malformed value once whitespace is trimmed away", () => {
+    const result = schoolYearSchema.safeParse("  2024/2025  ");
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("getCurrentSchoolYear", () => {

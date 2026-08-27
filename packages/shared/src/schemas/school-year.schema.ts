@@ -6,6 +6,7 @@ import { z } from "zod";
 // that's #12/BR-06's job.
 export const schoolYearSchema = z
   .string()
+  .trim()
   .regex(/^\d{4}-\d{4}$/, "Le format attendu est AAAA-AAAA")
   .refine(
     (value) => {
