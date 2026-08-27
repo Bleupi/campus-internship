@@ -32,6 +32,7 @@ Runs, in order: lint, typecheck, build (`packages/shared` first, per ADR-0016), 
 3. Deploy both images as Scaleway Serverless Containers.
 4. Database migration (`prisma migrate deploy`) is **not** a CI step run from the runner — it runs inside the API container's own entrypoint, before the Nest server starts listening, using a separate migration-only credential (DDL-capable) that the running Nest process never holds. Unlike the original version of this decision, running migration outside CI is no longer forced by network reachability (the Serverless SQL Database has a public endpoint reachable from anywhere, including a GitHub-hosted runner) — it's now a deliberate choice to keep both database credentials out of GitHub Actions Secrets entirely. See "Database credential exposure & mitigations" below.
 5. Secrets: GitHub Actions Secrets hold CI-side values only (Scaleway IAM deploy key, registry credentials). Neither database credential (migrate or runtime) is one of them — see below.
+6. The Scaleway IAM deploy key (`campus-internship-ci-deploy`, scoped to `ContainerRegistryFullAccess` + `ContainersFullAccess`, no database or bucket-creation rights) follows the same scheduled-rotation discipline as the database credentials: rotated periodically (e.g. quarterly), not only when a leak is suspected. It's a long-lived credential sitting in GitHub Actions Secrets, so the same exposure-window reasoning applies.
 
 ### Scaleway resources
 
