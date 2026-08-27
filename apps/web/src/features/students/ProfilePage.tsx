@@ -23,9 +23,13 @@ import {
   type FileType,
   type UpdateProfileRequest,
 } from "shared";
+import {
+  uploadIdPhoto as uploadIdPhotoRequest,
+  uploadInsuranceCertificate as uploadInsuranceCertificateRequest,
+} from "./api";
 import { useProfile } from "./useProfile";
 import { useUpdateProfile } from "./useUpdateProfile";
-import { useUploadIdPhoto, useUploadInsuranceCertificate } from "./useUploadFile";
+import { useUploadFile } from "./useUploadFile";
 
 const PROFILE_STATUS_LABELS: Record<string, string> = {
   INCOMPLETE: "Incomplet",
@@ -47,8 +51,8 @@ function fileFor(
 export function ProfilePage() {
   const { data: profile, isLoading, isError } = useProfile();
   const updateProfile = useUpdateProfile();
-  const uploadIdPhoto = useUploadIdPhoto();
-  const uploadInsuranceCertificate = useUploadInsuranceCertificate();
+  const uploadIdPhoto = useUploadFile(uploadIdPhotoRequest);
+  const uploadInsuranceCertificate = useUploadFile(uploadInsuranceCertificateRequest);
 
   const [isEditing, setIsEditing] = useState<boolean | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
