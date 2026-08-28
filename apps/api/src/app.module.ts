@@ -14,6 +14,7 @@ import { StagesModule } from "./modules/stages/stages.module";
 import { OrganismsModule } from "./modules/organisms/organisms.module";
 import { AdminModule } from "./modules/admin/admin.module";
 import { FilesModule } from "./modules/files/files.module";
+import { HealthModule } from "./modules/health/health.module";
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { FilesModule } from "./modules/files/files.module";
     OrganismsModule,
     AdminModule,
     FilesModule,
+    HealthModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
