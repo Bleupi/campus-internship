@@ -8,12 +8,18 @@ Ressources à provisionner sur Scaleway (version Serverless SQL DB)
 - `campus-internship-api-migrate` — permission set `ServerlessSQLDatabaseReadWrite` (données + structure). Utilisée uniquement par `docker-entrypoint.sh` au démarrage du conteneur pour `prisma migrate deploy` (`DATABASE_MIGRATE_URL`), jamais par le process qui sert les requêtes.
 - Pour chacune : IAM Application non-personnelle (pas ton compte), Policy scopée à cette base précise uniquement (pas d'accès Object Storage, Registry, etc.), puis génération de sa clé API (access key + secret key) → le couple devient user:password dans la connection string Postgres (sslmode=require).
 - Ces deux credentials sont configurés directement comme variables d'environnement sur le Serverless Container API (5) — jamais dans les GitHub Actions Secrets (voir point 9 plus bas).
+- **Les deux clés (runtime ET migrate) doivent être posées sur le container en même temps, dès sa création** — pas migrate "plus tard". `docker-entrypoint.sh` retombe sur `DATABASE_URL` (runtime) si `DATABASE_MIGRATE_URL` est absent, et la clé runtime n'a pas les droits DDL : sans migrate dès le premier boot, `prisma migrate deploy` échoue à la toute première table (aucune table n'existe encore sur une base neuve).
 
 3. Object Storage bucket — créer manuellement en fr-par (nom = ta variable S3_BUCKET, ex. stages-files). Rappel : le code ne le crée pas automatiquement en prod, exprès.
 
+- **IAM Application dédiée à ce bucket, non documentée jusqu'ici** — ni ADR-0020 ni ADR-0021 ne précisent ce credential. Par cohérence avec le split par privilège du point 2, créer une troisième IAM Application (`campus-internship-api-storage`), Policy scopée en lecture/écriture sur ce bucket précis uniquement (pas de `CreateBucket`), clé API → `S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY`, posée en secret-environment-variable sur le Serverless Container API (5), jamais dans les GitHub Actions Secrets — même logique que le point 2.
+
 4. Container Registry — un registre Scaleway en fr-par.
 
-5. Deux Serverless Containers (API + web) — en fr-par. Aucun des deux n'a plus besoin d'être rattaché à un Private Network (c'est justement ce que ce changement d'architecture retire). Ils resteront vides tant que le ticket #25 n'aura pas tourné.
+5. Un Containers Namespace, puis deux Serverless Containers (API + web) dedans — en fr-par. **Le namespace est une ressource à part, distincte du Container Registry namespace (4)** — `scw container container create` exige un `namespace-id` existant, donc `scw container namespace create name=campus-internship region=fr-par` (ou l'équivalent console) est un préalable, pas optionnel.
+
+- Aucun des deux n'a plus besoin d'être rattaché à un Private Network (c'est justement ce que ce changement d'architecture retire).
+- **Un container ne peut pas être créé "vide" — il lui faut une `registry-image` valide dès sa création.** Comme `.github/workflows/deploy.yml` ne fait que `update` un container déjà existant (recherché par nom), la toute première image de chaque doit être poussée à la main avant de créer les containers : build + push (voir la commande `docker login`/`docker build`/`docker push` fournie séparément), puis `scw container container create ... registry-image=<cette image bootstrap>`. Une fois les deux containers créés, tous les déploiements suivants passent par le workflow automatiquement.
 
 6. Domaine personnalisé + TLS — une fois le conteneur API/web créé, attacher le domaine perso depuis la console, récupérer la valeur cible du CNAME, la poser chez OVH, Scaleway gère le Let's Encrypt automatiquement.
 
@@ -35,22 +41,24 @@ Ordre conseillé:
 
 1. Serverless SQL Database (1)
 2. IAM Applications runtime + migrate + Policies + clés (2) — tu en auras besoin pour tester la connexion dès que la base existe
-3. Object Storage bucket (3)
+3. Object Storage bucket + IAM Application storage (3)
 4. Container Registry (4)
-5. Serverless Containers API + web (5)
-6. Domaine + CNAME chez OVH (6)
-7. IAM Application CI/CD + Policy + clé (7)
+5. IAM Application CI/CD + Policy + clé (7) — nécessaire pour le `docker login` du bootstrap juste après
+6. Bootstrap manuel : build + push les deux premières images, puis Containers Namespace + Serverless Containers API + web (5), env vars posées à la création
+7. Domaine + CNAME chez OVH (6)
 8. GitHub Environment production (8)
-9. GitHub Secrets + Variables (9) — dépend de (7) pour les secrets et de (6) pour `VITE_API_BASE_URL`
+9. GitHub Secrets + Variables (9) — dépend de (7) pour les secrets et de (6)/(5) pour `VITE_API_BASE_URL`
 
 | Ressource | Nom proposé |
 | --- | --- |
 | Serverless SQL Database | campus-internship-db-prod |
 | IAM Application (runtime, accès DB pour l'API) | campus-internship-api-runtime |
 | IAM Application (migrate, accès DB pour l'entrypoint) | campus-internship-api-migrate |
+| IAM Application (storage, accès bucket pour l'API) | campus-internship-api-storage |
 | IAM Application (CI/CD deploy) | campus-internship-ci-deploy |
 | Object Storage bucket | campus-internship-files-prod |
 | Container Registry (namespace) | campus-internship — images taguées api:\<sha\> / web:\<sha\> dedans |
+| Containers Namespace (Serverless Containers, distinct du Registry) | campus-internship |
 | Serverless Container API | campus-internship-api-prod |
 | Serverless Container web | campus-internship-web-prod |
 | GitHub Environment | production (déjà la convention GitHub standard, rien à inventer) |
