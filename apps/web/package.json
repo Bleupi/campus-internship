@@ -9,6 +9,8 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "eslint .",
+    "build:shared": "pnpm --filter shared build",
+    "pretypecheck": "pnpm run build:shared",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run --passWithNoTests"
   },

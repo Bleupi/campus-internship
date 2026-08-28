@@ -1,0 +1,113 @@
+name: PR validation
+
+# Runs on every push to an open PR (opened/synchronize/reopened are the
+# default `pull_request` event types). This is the merge CI described in
+# ADR-0022: lint, typecheck, build, unit tests, e2e — nothing here ever
+# touches a Scaleway credential or pushes to a registry (see the same ADR's
+# separate, gated deploy pipeline).
+on:
+  pull_request:
+
+# Cancel a stale run when a new commit lands on the same PR.
+concurrency:
+  group: pr-validation-${{ github.head_ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Lint, typecheck, build, unit tests, e2e
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: stages
+          POSTGRES_PASSWORD: stages
+          POSTGRES_DB: stages
+        ports:
+          # Host port 5433, matching docker-compose.yml / .env.example's
+          # DATABASE_URL, so the checked-in .env.example needs no edits.
+          - 5433:5432
+        options: >-
+          --health-cmd=pg_isready --health-interval=10s --health-timeout=5s --health-retries=5
+
+      minio:
+        # Same image docker-compose.yml uses for local dev. Its entrypoint
+        # needs an explicit `server /data` command (it has no default one) —
+        # the `command` key below is what makes that possible for a service
+        # container (GitHub Actions added it in April 2026; previously this
+        # required a custom wrapper image).
+        image: minio/minio:latest
+        command: server /data --console-address ":9001"
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+        ports:
+          - 9000:9000
+          - 9001:9001
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/setup@v2 # also installs Node.js; supersedes pnpm/action-setup for pnpm v11+ (packageManager field)
+        with:
+          runtime: node@24
+          cache: true
+          # install:true (the default) would run an unconstrained `pnpm
+          # install` here, silently reconciling a drifted lockfile before the
+          # --frozen-lockfile install below ever runs — defeating the point
+          # of that flag. Install once, explicitly, ourselves.
+          install: false
+
+      - name: Create .env for CI
+        # Mirrors the local-dev "cp .env.example .env" step (CLAUDE.md §10):
+        # every value the app needs already has a working default there
+        # except JWT_SECRET, which must be non-empty and >=32 chars
+        # (apps/api/src/config/env.schema.ts) and is generated fresh per run
+        # rather than committed, since it's a signing secret even for a
+        # throwaway CI database.
+        run: |
+          cp .env.example .env
+          sed -i "s#^JWT_SECRET=.*#JWT_SECRET=$(openssl rand -base64 48)#" .env
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm lint
+
+      - run: pnpm typecheck
+
+      - name: Build (packages/shared first, per ADR-0016)
+        run: pnpm build
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Apply database migrations
+        run: pnpm --filter api run prisma migrate deploy
+
+      - name: Wait for MinIO and create the test bucket
+        # MinIO doesn't auto-create buckets; the file-upload e2e specs
+        # (students.e2e-spec.ts) need S3_BUCKET (stages-files, .env.example)
+        # to already exist. AWS CLI is preinstalled on ubuntu-latest runners.
+        run: |
+          ready=false
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:9000/minio/health/live && { ready=true; break; }
+            sleep 2
+          done
+          if [ "$ready" != true ]; then
+            echo "MinIO did not become ready in time" >&2
+            exit 1
+          fi
+          aws --endpoint-url http://localhost:9000 s3 mb s3://stages-files
+        env:
+          AWS_ACCESS_KEY_ID: minioadmin
+          AWS_SECRET_ACCESS_KEY: minioadmin
+          AWS_DEFAULT_REGION: fr-par
+
+      - name: E2e tests
+        run: pnpm --filter api run test:e2e
