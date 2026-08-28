@@ -23,15 +23,21 @@ COPY pnpm-workspace.yaml package.json pnpm-lock.yaml tsconfig.base.json ./
 RUN pnpm pkg delete scripts.prepare
 COPY packages/shared/package.json packages/shared/package.json
 COPY apps/api/package.json apps/api/package.json
+# apps/api's own "postinstall" (package.json) runs `prisma generate` on every
+# install, and — unlike @prisma/client's own postinstall, which just warns —
+# it exits non-zero when the schema isn't there yet, failing the install
+# below outright. So the schema has to be present *before* that install
+# step, not copied in afterward with the rest of apps/api.
+COPY apps/api/prisma apps/api/prisma
 # --filter api... resolves apps/api plus its workspace dependency (shared)
 # only — apps/web and its unrelated dependencies never enter this image.
 RUN pnpm install --filter api... --frozen-lockfile
 COPY packages/shared packages/shared
 COPY apps/api apps/api
-# `pnpm install` only auto-runs @prisma/client's generate step if the schema
-# is already present *at install time* — it wasn't (only package.json was
-# copied above). Generate explicitly so nest build's type-check always sees
-# node_modules/.prisma/client, regardless of that postinstall timing.
+# Redundant with the postinstall above in the common case, but kept as a
+# safety net so nest build's type-check always sees node_modules/.prisma/client
+# even if the schema changes here (COPY apps/api apps/api, line above) after
+# the client was generated against the schema-only copy.
 RUN pnpm --filter api exec prisma generate
 RUN pnpm --filter shared build && pnpm --filter api build
 
