@@ -7,6 +7,7 @@
     "dev": "nest start --watch",
     "build": "nest build",
     "start": "node dist/main.js",
+    "postinstall": "pnpm run prisma generate",
     "lint": "eslint .",
     "build:shared": "pnpm --filter shared build",
     "pretypecheck": "pnpm run build:shared",
