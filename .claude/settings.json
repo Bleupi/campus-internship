@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/implement-fresh-branch.sh",
+            "timeout": 30,
+            "statusMessage": "Preparing a fresh branch off main..."
+          }
+        ]
+      }
+    ]
+  }
+}
