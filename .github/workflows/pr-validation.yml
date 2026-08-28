@@ -111,3 +111,121 @@ jobs:
 
       - name: E2e tests
         run: pnpm --filter api run test:e2e
+
+  container-smoke-test:
+    name: Build container images and smoke-test the API image
+    runs-on: ubuntu-latest
+
+    # Same Postgres/MinIO shape as the validate job above (#22) — this job
+    # runs as a separate GitHub Actions job (its own fresh runner), so
+    # services can't literally be shared across jobs; this declares an
+    # equivalent pair for the API container to run against.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: stages
+          POSTGRES_PASSWORD: stages
+          POSTGRES_DB: stages
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd=pg_isready --health-interval=10s --health-timeout=5s --health-retries=5
+
+      minio:
+        image: minio/minio:latest
+        command: server /data --console-address ":9001"
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+        ports:
+          - 9000:9000
+          - 9001:9001
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build API image
+        # Context is the repo root (see apps/api/Dockerfile's header comment)
+        # — it COPYs packages/shared alongside apps/api. Tagged for local use
+        # only: this job never pushes to a registry and never touches a
+        # Scaleway credential (issue #24 acceptance criteria).
+        run: docker build -f apps/api/Dockerfile -t campus-internship-api:ci .
+
+      - name: Build web image
+        run: docker build -f apps/web/Dockerfile -t campus-internship-web:ci .
+
+      - name: Wait for MinIO and create the test bucket
+        # FilesService#onModuleInit (apps/api/src/modules/files/files.service.ts)
+        # HeadBuckets on boot and, under NODE_ENV=production (set by the API
+        # Dockerfile), throws instead of auto-creating a missing bucket — so
+        # the container will fail to start unless the bucket already exists.
+        run: |
+          ready=false
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:9000/minio/health/live && { ready=true; break; }
+            sleep 2
+          done
+          if [ "$ready" != true ]; then
+            echo "MinIO did not become ready in time" >&2
+            exit 1
+          fi
+          aws --endpoint-url http://localhost:9000 s3 mb s3://stages-files
+        env:
+          AWS_ACCESS_KEY_ID: minioadmin
+          AWS_SECRET_ACCESS_KEY: minioadmin
+          AWS_DEFAULT_REGION: fr-par
+
+      - name: Start the API image and call GET /health
+        # --network host: the job's steps run directly on the runner (not in
+        # a `container:`), so the postgres/minio services above are published
+        # on the runner's own localhost — host networking is the simplest way
+        # for a plain `docker run` container to reach them the same way it
+        # would reach sibling containers in production (ADR-0022).
+        #
+        # Only DATABASE_URL is passed, no DATABASE_MIGRATE_URL: per
+        # apps/api/docker-entrypoint.sh's own comment, that's the documented
+        # fallback for a single-credential setup like this smoke test.
+        run: |
+          JWT_SECRET="$(openssl rand -base64 48)"
+          # Same non-secret local/CI-only Postgres creds as the postgres
+          # service block above (POSTGRES_USER/POSTGRES_PASSWORD: stages) and
+          # .env.example's DATABASE_URL — not a real credential.
+          DATABASE_URL="postgresql://stages:stages@localhost:5433/stages?schema=public" # gitleaks:allow
+          container_id="$(docker run -d --network host \
+            -e DATABASE_URL="$DATABASE_URL" \
+            -e JWT_SECRET="$JWT_SECRET" \
+            -e S3_ENDPOINT="http://localhost:9000" \
+            -e S3_BUCKET="stages-files" \
+            -e S3_ACCESS_KEY_ID="minioadmin" \
+            -e S3_SECRET_ACCESS_KEY="minioadmin" \
+            -e S3_FORCE_PATH_STYLE="true" \
+            -e API_PORT=3000 \
+            campus-internship-api:ci)"
+
+          cleanup() {
+            echo "--- API container logs ---"
+            docker logs "$container_id" || true
+            docker rm -f "$container_id" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          ready=false
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:3000/health; then
+              ready=true
+              break
+            fi
+            # A dead container will never answer curl — fail fast instead of
+            # burning the full retry budget.
+            if [ "$(docker inspect -f '{{.State.Running}}' "$container_id")" != "true" ]; then
+              echo "API container exited early" >&2
+              exit 1
+            fi
+            sleep 2
+          done
+
+          if [ "$ready" != true ]; then
+            echo "API container did not become healthy in time" >&2
+            exit 1
+          fi
