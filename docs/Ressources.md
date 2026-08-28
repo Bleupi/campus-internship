@@ -28,6 +28,7 @@ Ressources à provisionner sur Scaleway (version Serverless SQL DB)
 - Policy scopée au push sur le Container Registry (4) + déploiement sur les deux Serverless Containers (5).
 - Explicitement sans droit sur la Serverless SQL Database ni CreateBucket sur l'Object Storage.
 - Sa clé API va dans les GitHub Actions Secrets du repo.
+- **Piège vécu** : le scope d'une Policy Scaleway IAM ne va pas plus fin que Project (voir doc IAM officielle) — Container Registry n'a pas encore de scoping par namespace (`resource.id`), c'est une feature request encore ouverte côté Scaleway. Une condition `resource.id == <namespace-id>` ajoutée sur la Policy bloque silencieusement tout le flow d'auth `docker login`/`scw` (401 générique, aucun message explicite) sans jamais être le mécanisme qui accorde l'accès. Le scope correct est simplement "This project" = celui qui contient le namespace Registry (4), sans condition additionnelle.
 
 8. GitHub Environment production avec toi comme reviewer obligatoire — le gate d'approbation manuelle.
 
