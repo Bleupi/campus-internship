@@ -46,3 +46,7 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+
+# --- Claude Code (personal overrides; .claude/settings.json is team-shared) -
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
