@@ -50,3 +50,6 @@ Thumbs.db
 # --- Claude Code (personal overrides; .claude/settings.json is team-shared) -
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+
+# --- Infra notes (kept local only — too much infra topology to commit) -----
+docs/Ressources.md
