@@ -16,7 +16,7 @@ Ressources à provisionner sur Scaleway (version Serverless SQL DB)
 
 4. Container Registry — un registre Scaleway en fr-par.
 
-5. Un Containers Namespace, puis deux Serverless Containers (API + web) dedans — en fr-par. **Le namespace est une ressource à part, distincte du Container Registry namespace (4)** — `scw container container create` exige un `namespace-id` existant, donc `scw container namespace create name=campus-internship region=fr-par` (ou l'équivalent console) est un préalable, pas optionnel.
+5. Un Containers Namespace, puis deux Serverless Containers (API + web) dedans — en fr-par. **Le namespace est une ressource à part, distincte du Container Registry namespace (4)** — `scw container container create` exige un `namespace-id` existant, donc `scw container namespace create name=campus-internship-prod region=fr-par project-id=<PROJECT_ID>` (ou l'équivalent console) est un préalable, pas optionnel. Nommé avec le suffixe d'environnement (comme les containers eux-mêmes, cf. tableau) pour ne pas avoir à migrer le jour où un namespace `-preprod` est ajouté.
 
 - Aucun des deux n'a plus besoin d'être rattaché à un Private Network (c'est justement ce que ce changement d'architecture retire).
 - **Un container ne peut pas être créé "vide" — il lui faut une `registry-image` valide dès sa création.** Comme `.github/workflows/deploy.yml` ne fait que `update` un container déjà existant (recherché par nom), la toute première image de chaque doit être poussée à la main avant de créer les containers : build + push (voir la commande `docker login`/`docker build`/`docker push` fournie séparément), puis `scw container container create ... registry-image=<cette image bootstrap>`. Une fois les deux containers créés, tous les déploiements suivants passent par le workflow automatiquement.
@@ -59,7 +59,7 @@ Ordre conseillé:
 | IAM Application (CI/CD deploy) | campus-internship-ci-deploy |
 | Object Storage bucket | campus-internship-files-prod |
 | Container Registry (namespace) | campus-internship — images taguées api:\<sha\> / web:\<sha\> dedans |
-| Containers Namespace (Serverless Containers, distinct du Registry) | campus-internship |
+| Containers Namespace (Serverless Containers, distinct du Registry) | campus-internship-prod |
 | Serverless Container API | campus-internship-api-prod |
 | Serverless Container web | campus-internship-web-prod |
 | GitHub Environment | production (déjà la convention GitHub standard, rien à inventer) |
