@@ -1,21 +1,13 @@
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 
-const navigateMock = vi.fn();
-vi.mock("react-router-dom", async () => {
-  const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
-  return { ...actual, useNavigate: () => navigateMock };
-});
-
 const getMeMock = vi.fn();
-const logoutMock = vi.fn();
 vi.mock("./features/auth/api", () => ({
   getMe: (...args: unknown[]) => getMeMock(...args),
-  logout: (...args: unknown[]) => logoutMock(...args),
+  logout: vi.fn(),
   login: vi.fn(),
   signup: vi.fn(),
 }));
@@ -28,45 +20,39 @@ const authenticatedUser = {
   roles: ["STUDENT"],
 };
 
-function renderDashboard() {
+function renderApp(initialPath: string) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={["/dashboard"]}>
+      <MemoryRouter initialEntries={[initialPath]}>
         <App />
       </MemoryRouter>
     </QueryClientProvider>,
   );
 }
 
-describe("DashboardPage logout button", () => {
+describe("App route protection", () => {
   beforeEach(() => {
     getMeMock.mockReset();
-    logoutMock.mockReset();
-    navigateMock.mockReset();
   });
 
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it("shows a 'Déconnexion' button once the user is authenticated", async () => {
+  it("renders the authenticated shell around /dashboard once the user is loaded", async () => {
     getMeMock.mockResolvedValue({ user: authenticatedUser });
-    renderDashboard();
+    renderApp("/dashboard");
 
-    expect(await screen.findByRole("button", { name: /déconnexion/i })).toBeInTheDocument();
-    expect(logoutMock).not.toHaveBeenCalled();
+    expect(await screen.findByText(/tableau de bord \(à venir\)/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /profil/i })).toBeInTheDocument();
   });
 
-  it("calls the logout API and navigates to /login when clicked", async () => {
-    getMeMock.mockResolvedValue({ user: authenticatedUser });
-    logoutMock.mockResolvedValue(undefined);
-    const user = userEvent.setup();
-    renderDashboard();
+  it("redirects to /login without flashing the shell when the user isn't authenticated", async () => {
+    getMeMock.mockRejectedValue(new Error("unauthenticated"));
+    renderApp("/dashboard");
 
-    await user.click(await screen.findByRole("button", { name: /déconnexion/i }));
-
-    expect(logoutMock).toHaveBeenCalled();
-    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/login"));
+    expect(await screen.findByRole("heading", { name: /se connecter/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /profil/i })).not.toBeInTheDocument();
   });
 });
