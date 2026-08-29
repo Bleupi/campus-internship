@@ -65,15 +65,21 @@ jobs:
           tags: ${{ env.REGISTRY }}/web:${{ github.sha }}
 
   deploy:
-    name: Deploy Serverless Containers
+    name: Deploy ${{ matrix.app }} Serverless Container
     needs: build-and-push
     runs-on: ubuntu-latest
     # Protected GitHub Environment with a required reviewer (docs/Ressources.md
-    # #8) — this job does not start until that approval is granted
-    # (ADR-0022). No database credential is used or needed here: each
-    # container's DATABASE_URL/DATABASE_MIGRATE_URL is configured directly
-    # on the Scaleway container, never passed through this workflow.
+    # #8) — neither matrix job below starts until that approval is granted
+    # (ADR-0022). GitHub batches same-environment jobs from one workflow run
+    # into a single approval prompt, so this is still one human decision
+    # gating both containers, not two. No database credential is used or
+    # needed here: each container's DATABASE_URL/DATABASE_MIGRATE_URL is
+    # configured directly on the Scaleway container, never passed through
+    # this workflow.
     environment: production
+    strategy:
+      matrix:
+        app: [api, web]
     steps:
       - name: Install Scaleway CLI
         uses: scaleway/action-scw@v0
@@ -84,28 +90,18 @@ jobs:
           secret-key: ${{ secrets.SCW_SECRET_KEY }}
           default-project-id: ${{ vars.SCW_PROJECT_ID }}
 
-      - name: Deploy API container
+      - name: Deploy ${{ matrix.app }} container
         # `update` with a changed registry-image auto-redeploys the
         # container (Scaleway CLI docs) — no separate deploy call needed.
         # Looked up by name rather than a stored ID so no container ID has
         # to be provisioned as a secret/var alongside this workflow.
         run: |
+          container_name="campus-internship-${{ matrix.app }}-prod"
           container_id="$(scw container container list region="$SCW_REGION" -o json \
-            | jq -r '.[] | select(.name == "campus-internship-api-prod") | .id')"
+            | jq -r --arg name "$container_name" '.[] | select(.name == $name) | .id')"
           if [ -z "$container_id" ]; then
-            echo "No Serverless Container named campus-internship-api-prod in region $SCW_REGION" >&2
+            echo "No Serverless Container named $container_name in region $SCW_REGION" >&2
             exit 1
           fi
           scw container container update "$container_id" region="$SCW_REGION" \
-            registry-image="${{ env.REGISTRY }}/api:${{ github.sha }}"
-
-      - name: Deploy web container
-        run: |
-          container_id="$(scw container container list region="$SCW_REGION" -o json \
-            | jq -r '.[] | select(.name == "campus-internship-web-prod") | .id')"
-          if [ -z "$container_id" ]; then
-            echo "No Serverless Container named campus-internship-web-prod in region $SCW_REGION" >&2
-            exit 1
-          fi
-          scw container container update "$container_id" region="$SCW_REGION" \
-            registry-image="${{ env.REGISTRY }}/web:${{ github.sha }}"
+            registry-image="${{ env.REGISTRY }}/${{ matrix.app }}:${{ github.sha }}"
