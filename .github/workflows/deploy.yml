@@ -1,0 +1,111 @@
+name: Deploy to Scaleway
+
+# Runs only on push to main — this is the deploy pipeline described in
+# ADR-0022, entirely separate from pr-validation.yml's `pull_request`
+# trigger: no shared trigger, no shared job with that workflow.
+on:
+  push:
+    branches: [main]
+
+# A second push to main while a deploy is still running (build, waiting for
+# approval, or deploying) should queue behind it, never cancel it mid-flight
+# — cancelling could leave the two Serverless Containers on mismatched image
+# versions.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  SCW_REGION: fr-par
+  # Container Registry namespace (docs/Ressources.md) — one registry, two
+  # images distinguished by name.
+  REGISTRY: rg.fr-par.scw.cloud/campus-internship
+
+jobs:
+  build-and-push:
+    name: Build and push images to Scaleway Container Registry
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      # nologin + the CI/CD IAM Application's secret key (docs/Ressources.md
+      # #7) is Scaleway's documented Container Registry auth — not a
+      # database credential, and this Application has no database or
+      # bucket-creation rights (ADR-0022).
+      - name: Log in to Scaleway Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: rg.fr-par.scw.cloud
+          username: nologin
+          password: ${{ secrets.SCW_SECRET_KEY }}
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/api:${{ github.sha }}
+
+      - name: Build and push web image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: true
+          # VITE_* vars are baked in at build time (apps/web/Dockerfile) —
+          # the API's public URL, not a secret.
+          build-args: |
+            VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL }}
+          tags: ${{ env.REGISTRY }}/web:${{ github.sha }}
+
+  deploy:
+    name: Deploy Serverless Containers
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    # Protected GitHub Environment with a required reviewer (docs/Ressources.md
+    # #8) — this job does not start until that approval is granted
+    # (ADR-0022). No database credential is used or needed here: each
+    # container's DATABASE_URL/DATABASE_MIGRATE_URL is configured directly
+    # on the Scaleway container, never passed through this workflow.
+    environment: production
+    steps:
+      - name: Install Scaleway CLI
+        uses: scaleway/action-scw@v0
+        with:
+          save-config: true
+          version: v2.61.0
+          access-key: ${{ secrets.SCW_ACCESS_KEY }}
+          secret-key: ${{ secrets.SCW_SECRET_KEY }}
+          default-project-id: ${{ vars.SCW_PROJECT_ID }}
+
+      - name: Deploy API container
+        # `update` with a changed registry-image auto-redeploys the
+        # container (Scaleway CLI docs) — no separate deploy call needed.
+        # Looked up by name rather than a stored ID so no container ID has
+        # to be provisioned as a secret/var alongside this workflow.
+        run: |
+          container_id="$(scw container container list region="$SCW_REGION" -o json \
+            | jq -r '.[] | select(.name == "campus-internship-api-prod") | .id')"
+          if [ -z "$container_id" ]; then
+            echo "No Serverless Container named campus-internship-api-prod in region $SCW_REGION" >&2
+            exit 1
+          fi
+          scw container container update "$container_id" region="$SCW_REGION" \
+            registry-image="${{ env.REGISTRY }}/api:${{ github.sha }}"
+
+      - name: Deploy web container
+        run: |
+          container_id="$(scw container container list region="$SCW_REGION" -o json \
+            | jq -r '.[] | select(.name == "campus-internship-web-prod") | .id')"
+          if [ -z "$container_id" ]; then
+            echo "No Serverless Container named campus-internship-web-prod in region $SCW_REGION" >&2
+            exit 1
+          fi
+          scw container container update "$container_id" region="$SCW_REGION" \
+            registry-image="${{ env.REGISTRY }}/web:${{ github.sha }}"
