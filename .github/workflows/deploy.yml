@@ -83,6 +83,7 @@ jobs:
           access-key: ${{ secrets.SCW_ACCESS_KEY }}
           secret-key: ${{ secrets.SCW_SECRET_KEY }}
           default-project-id: ${{ vars.SCW_PROJECT_ID }}
+          default-organization-id: ${{ vars.SCW_ORGANIZATION_ID }}
 
       - name: Deploy API container
         # `update` with a changed registry-image auto-redeploys the
