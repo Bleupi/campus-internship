@@ -244,6 +244,7 @@ Full detail lives in `CONTRIBUTING.md` — read it before writing a commit messa
 - Skip the plan-then-tests sequence in §4 for anything touching business rules, even if the fix "looks obvious."
 - Introduce a new shared dependency, library, or architectural pattern without flagging it and, if it's structural, writing an ADR.
 - Write a commit message that isn't a valid Conventional Commit, or land a behavior-changing PR without a changeset (ADR-0015).
+- Include a link to the Claude Code conversation/session in a PR description or commit message (see `CONTRIBUTING.md`).
 
 ---
 

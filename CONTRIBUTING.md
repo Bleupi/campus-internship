@@ -93,6 +93,7 @@ A PR that changes user-facing behaviour without a changeset should fail CI. Pure
 - The **PR title must itself be a Conventional Commit** — it becomes the squash commit message.
 - **Reference the business rule** you implement or change in the description (e.g. "implements BR-03", "updates BR-06").
 - CI must be green: lint, type-check, tests, commitlint, and a pending changeset when behaviour changed.
+- **Never include a link to the Claude Code conversation/session** in a PR description or in any commit message — neither the URL nor a `Claude-Session:`-style footer. Attribution as an author (e.g. "Co-Authored-By: Claude") is fine; a link back to the chat transcript is not, since it isn't meaningful to reviewers and this project doubles as a portfolio piece.
 
 ---
 
