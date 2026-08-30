@@ -19,7 +19,8 @@ permissions:
   contents: read
 
 env:
-  SCW_REGION: fr-par
+  # `SCW_REGION` is deprecated by the Scaleway CLI in favour of this name.
+  SCW_DEFAULT_REGION: fr-par
   # Container Registry namespace (docs/Ressources.md) — one registry, two
   # images distinguished by name.
   REGISTRY: rg.fr-par.scw.cloud/campus-internship
@@ -86,27 +87,27 @@ jobs:
           default-organization-id: ${{ vars.SCW_ORGANIZATION_ID }}
 
       - name: Deploy API container
-        # `update` with a changed registry-image auto-redeploys the
-        # container (Scaleway CLI docs) — no separate deploy call needed.
-        # Looked up by name rather than a stored ID so no container ID has
-        # to be provisioned as a secret/var alongside this workflow.
+        # `update` with a changed image auto-redeploys the container
+        # (Scaleway CLI docs) — no separate deploy call needed. Looked up
+        # by name rather than a stored ID so no container ID has to be
+        # provisioned as a secret/var alongside this workflow.
         run: |
-          container_id="$(scw container container list region="$SCW_REGION" -o json \
+          container_id="$(scw container container list region="$SCW_DEFAULT_REGION" -o json \
             | jq -r '.[] | select(.name == "campus-internship-api-prod") | .id')"
           if [ -z "$container_id" ]; then
-            echo "No Serverless Container named campus-internship-api-prod in region $SCW_REGION" >&2
+            echo "No Serverless Container named campus-internship-api-prod in region $SCW_DEFAULT_REGION" >&2
             exit 1
           fi
-          scw container container update "$container_id" region="$SCW_REGION" \
-            registry-image="${{ env.REGISTRY }}/api:${{ github.sha }}"
+          scw container container update "$container_id" region="$SCW_DEFAULT_REGION" \
+            image="${{ env.REGISTRY }}/api:${{ github.sha }}"
 
       - name: Deploy web container
         run: |
-          container_id="$(scw container container list region="$SCW_REGION" -o json \
+          container_id="$(scw container container list region="$SCW_DEFAULT_REGION" -o json \
             | jq -r '.[] | select(.name == "campus-internship-web-prod") | .id')"
           if [ -z "$container_id" ]; then
-            echo "No Serverless Container named campus-internship-web-prod in region $SCW_REGION" >&2
+            echo "No Serverless Container named campus-internship-web-prod in region $SCW_DEFAULT_REGION" >&2
             exit 1
           fi
-          scw container container update "$container_id" region="$SCW_REGION" \
-            registry-image="${{ env.REGISTRY }}/web:${{ github.sha }}"
+          scw container container update "$container_id" region="$SCW_DEFAULT_REGION" \
+            image="${{ env.REGISTRY }}/web:${{ github.sha }}"
