@@ -65,6 +65,15 @@ describe("AppShell", () => {
     );
   });
 
+  it("visually distinguishes the active nav link from inactive ones", () => {
+    renderShell("/profile");
+
+    expect(screen.getByRole("link", { name: /profil/i })).toHaveStyle({ fontWeight: "700" });
+    expect(screen.getByRole("link", { name: /tableau de bord/i })).toHaveStyle({
+      fontWeight: "400",
+    });
+  });
+
   it("calls the logout API and navigates to /login when clicked", async () => {
     logoutMock.mockResolvedValue(undefined);
     const user = userEvent.setup();

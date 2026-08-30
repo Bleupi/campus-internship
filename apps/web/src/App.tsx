@@ -4,6 +4,7 @@ import { AppShell } from "./components/AppShell";
 import { LoginPage } from "./features/auth/LoginPage";
 import { SignupPage } from "./features/auth/SignupPage";
 import { useCurrentUser } from "./features/auth/useCurrentUser";
+import { ROUTES } from "./routes";
 import { ProfilePage } from "./features/students/ProfilePage";
 
 function RequireAuth() {
@@ -31,8 +32,8 @@ export function App() {
       <Route path="/signup" element={<SignupPage />} />
       <Route element={<RequireAuth />}>
         <Route element={<AppShell />}>
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
+          <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
+          <Route path={ROUTES.PROFILE} element={<ProfilePage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/login" replace />} />
