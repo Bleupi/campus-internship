@@ -147,6 +147,10 @@ A thin typed wrapper around `fetch`, typed against the request/response contract
 
 French, hardcoded directly in components. No i18n library in V1 — this is a single-locale app and a full i18n setup would be speculative infrastructure. Revisit only if multi-locale is explicitly requested.
 
+### Icons
+
+`@mui/icons-material`, always the **`Outlined`** variant (e.g. `LogoutOutlined`, not `Logout`) — every icon in a given view must come from the same variant so the icon set reads as one system. Don't mix filled and outlined icons in the same component.
+
 ---
 
 ## 7. `packages/shared` — what goes here, what doesn't

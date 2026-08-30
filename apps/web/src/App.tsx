@@ -1,13 +1,13 @@
-import type { ReactElement } from "react";
-import { Navigate, Route, Routes, useNavigate, Link as RouterLink } from "react-router-dom";
-import { Button, Typography } from "@mui/material";
+import { Navigate, Route, Routes, Outlet } from "react-router-dom";
+import { Typography } from "@mui/material";
+import { AppShell } from "./components/AppShell";
 import { LoginPage } from "./features/auth/LoginPage";
 import { SignupPage } from "./features/auth/SignupPage";
 import { useCurrentUser } from "./features/auth/useCurrentUser";
-import { useLogout } from "./features/auth/useLogout";
+import { ROUTES } from "./routes";
 import { ProfilePage } from "./features/students/ProfilePage";
 
-function RequireAuth({ children }: { children: ReactElement }) {
+function RequireAuth() {
   const { data, isLoading, isError } = useCurrentUser();
 
   if (isLoading) {
@@ -16,30 +16,13 @@ function RequireAuth({ children }: { children: ReactElement }) {
   if (isError || !data) {
     return <Navigate to="/login" replace />;
   }
-  return children;
+  return <Outlet />;
 }
 
-// Not a real feature — just an unblocking redirect target until the real
-// dashboard/profile screens (issue #11) exist.
+// Not a real feature — just an unblocking placeholder until the real
+// dashboard screen (issue #11) exists.
 function DashboardPage() {
-  const navigate = useNavigate();
-  const logout = useLogout();
-
-  return (
-    <Typography sx={{ mt: 8, textAlign: "center" }}>
-      Tableau de bord (à venir)
-      <br />
-      <Button component={RouterLink} to="/profile">
-        Mon profil
-      </Button>
-      <Button
-        onClick={() => logout.mutate(undefined, { onSuccess: () => navigate("/login") })}
-        disabled={logout.isPending}
-      >
-        Déconnexion
-      </Button>
-    </Typography>
-  );
+  return <Typography sx={{ mt: 8, textAlign: "center" }}>Tableau de bord (à venir)</Typography>;
 }
 
 export function App() {
@@ -47,22 +30,12 @@ export function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
-      <Route
-        path="/dashboard"
-        element={
-          <RequireAuth>
-            <DashboardPage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/profile"
-        element={
-          <RequireAuth>
-            <ProfilePage />
-          </RequireAuth>
-        }
-      />
+      <Route element={<RequireAuth />}>
+        <Route element={<AppShell />}>
+          <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
+          <Route path={ROUTES.PROFILE} element={<ProfilePage />} />
+        </Route>
+      </Route>
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
