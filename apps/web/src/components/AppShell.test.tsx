@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, waitForElementToBeRemoved } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -15,6 +15,19 @@ const logoutMock = vi.fn();
 vi.mock("../features/auth/api", () => ({
   logout: (...args: unknown[]) => logoutMock(...args),
 }));
+
+function setViewport(isMobile: boolean) {
+  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+    matches: isMobile,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+}
 
 function renderShell(initialPath: string) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -83,5 +96,53 @@ describe("AppShell", () => {
 
     expect(logoutMock).toHaveBeenCalled();
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/login"));
+  });
+
+  describe("on mobile viewports", () => {
+    beforeEach(() => {
+      setViewport(true);
+    });
+
+    it("shows a menu button instead of the inline nav row", () => {
+      renderShell("/dashboard");
+
+      expect(screen.getByRole("button", { name: /ouvrir le menu/i })).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: /profil/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /déconnexion/i })).not.toBeInTheDocument();
+    });
+
+    it("opens a drawer with the nav links and logout when the menu button is clicked", async () => {
+      const user = userEvent.setup();
+      renderShell("/dashboard");
+
+      await user.click(screen.getByRole("button", { name: /ouvrir le menu/i }));
+
+      expect(screen.getByRole("link", { name: /tableau de bord/i })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: /profil/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /déconnexion/i })).toBeInTheDocument();
+    });
+
+    it("closes the drawer after clicking a nav link", async () => {
+      const user = userEvent.setup();
+      renderShell("/dashboard");
+
+      await user.click(screen.getByRole("button", { name: /ouvrir le menu/i }));
+      await user.click(screen.getByRole("link", { name: /profil/i }));
+
+      await waitForElementToBeRemoved(() => screen.queryByRole("link", { name: /profil/i }));
+    });
+
+    it("calls the logout API and closes the drawer when the drawer's logout item is clicked", async () => {
+      logoutMock.mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      renderShell("/dashboard");
+
+      await user.click(screen.getByRole("button", { name: /ouvrir le menu/i }));
+      await user.click(screen.getByRole("button", { name: /déconnexion/i }));
+
+      expect(logoutMock).toHaveBeenCalled();
+      await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/login"));
+      await waitForElementToBeRemoved(() => screen.queryByRole("button", { name: /déconnexion/i }));
+    });
   });
 });
