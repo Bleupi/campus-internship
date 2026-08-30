@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { setMatchMedia } from "../test/setup";
 import { AppShell } from "./AppShell";
 
 const navigateMock = vi.fn();
@@ -15,19 +16,6 @@ const logoutMock = vi.fn();
 vi.mock("../features/auth/api", () => ({
   logout: (...args: unknown[]) => logoutMock(...args),
 }));
-
-function setViewport(isMobile: boolean) {
-  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
-    matches: isMobile,
-    media: query,
-    onchange: null,
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  }));
-}
 
 function renderShell(initialPath: string) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -100,7 +88,7 @@ describe("AppShell", () => {
 
   describe("on mobile viewports", () => {
     beforeEach(() => {
-      setViewport(true);
+      setMatchMedia(true);
     });
 
     it("shows a menu button instead of the inline nav row", () => {
