@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getCurrentSchoolYear, schoolYearSchema } from "./school-year.schema";
+import { getCurrentSchoolYear, getSchoolYearEnd, schoolYearSchema } from "./school-year.schema";
 
 describe("schoolYearSchema", () => {
   it("accepts a well-formed schoolYear where the second year is the first + 1", () => {
@@ -52,5 +52,17 @@ describe("getCurrentSchoolYear", () => {
   it("defaults to the current date when none is provided", () => {
     const result = getCurrentSchoolYear();
     expect(result).toMatch(/^\d{4}-\d{4}$/);
+  });
+});
+
+describe("getSchoolYearEnd", () => {
+  it("returns the half-open upper bound (BR-05c): (YYYY+1)-09-01T00:00:00 UTC", () => {
+    expect(getSchoolYearEnd("2025-2026")).toEqual(new Date("2026-09-01T00:00:00.000Z"));
+  });
+
+  it("is the boundary getCurrentSchoolYear treats as belonging to the NEXT year (ADR-0009 half-open tiling)", () => {
+    const end = getSchoolYearEnd("2025-2026");
+    expect(getCurrentSchoolYear(end)).toBe("2026-2027");
+    expect(getCurrentSchoolYear(new Date(end.getTime() - 1))).toBe("2025-2026");
   });
 });

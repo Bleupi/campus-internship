@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { Role } from "../enums";
+import type { ProfileStatus, Role } from "../enums";
 import type { loginSchema } from "../schemas/login.schema";
 import type { signupSchema } from "../schemas/signup.schema";
 
@@ -20,6 +20,9 @@ export interface SignupResponse {
 
 export interface LoginResponse {
   user: AuthUser;
+  // BR-06: the profile status after the lazy yearly rollover has been
+  // applied; null for a user with no StudentProfile (referent/admin).
+  profileStatus: ProfileStatus | null;
 }
 
 export interface MeResponse {

@@ -50,8 +50,11 @@ describe("LoginPage", () => {
     expect(loginMock).not.toHaveBeenCalled();
   });
 
-  it("submits successfully and navigates to /dashboard", async () => {
-    loginMock.mockResolvedValue({ user: { id: "1", email: "etu@u-paris.fr" } });
+  it("submits successfully and navigates to /dashboard when the profile doesn't need attention", async () => {
+    loginMock.mockResolvedValue({
+      user: { id: "1", email: "etu@u-paris.fr" },
+      profileStatus: "VALID",
+    });
     const user = userEvent.setup();
     renderPage();
 
@@ -61,6 +64,24 @@ describe("LoginPage", () => {
 
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/dashboard"));
   });
+
+  it.each(["INCOMPLETE", "EXPIRED"])(
+    "navigates to /profile instead of /dashboard when the login response's profileStatus is %s (BR-06)",
+    async (profileStatus) => {
+      loginMock.mockResolvedValue({
+        user: { id: "1", email: "etu@u-paris.fr" },
+        profileStatus,
+      });
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.type(screen.getByLabelText(/email/i), "etu@u-paris.fr");
+      await user.type(screen.getByLabelText(/mot de passe/i), "whatever-they-typed");
+      await user.click(screen.getByRole("button", { name: /se connecter/i }));
+
+      await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/profile"));
+    },
+  );
 
   it("surfaces a 401 as 'identifiants incorrects'", async () => {
     loginMock.mockRejectedValue(new ApiError(401, "Email ou mot de passe incorrect"));

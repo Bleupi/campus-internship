@@ -17,6 +17,7 @@ import {
   Typography,
 } from "@mui/material";
 import {
+  blocksNavigation,
   ID_PHOTO_MIME_TYPES,
   INSURANCE_CERTIFICATE_MIME_TYPES,
   updateProfileSchema,
@@ -68,7 +69,10 @@ export function ProfilePage() {
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
 
-  const editing = isEditing ?? profile?.profileStatus === "INCOMPLETE";
+  // BR-06: EXPIRED is a hard-block state too (lazy yearly rollover at
+  // login) — same forced edit form as INCOMPLETE, see ProfilePage.test.tsx.
+  const mustComplete = !!profile && blocksNavigation(profile.profileStatus);
+  const editing = isEditing ?? mustComplete;
 
   const {
     register,
@@ -178,9 +182,17 @@ export function ProfilePage() {
           />
         </Stack>
 
+        {profile.profileStatus === "EXPIRED" && (
+          <Alert severity="warning">
+            Votre dossier doit être renouvelé pour la nouvelle année scolaire : merci de confirmer
+            votre promotion et de déposer une nouvelle attestation d'assurance.
+          </Alert>
+        )}
+
         {profile.profileStatus === "INCOMPLETE" && missingItems.length > 0 && (
           <Alert severity="warning">
-            Votre profil est incomplet. Il manque : {missingItems.join(", ")}.
+            Complétez votre dossier. Votre profil est incomplet, il manque :{" "}
+            {missingItems.join(", ")}.
           </Alert>
         )}
 
@@ -223,9 +235,7 @@ export function ProfilePage() {
               <Button type="submit" variant="contained" disabled={isSubmitting}>
                 Enregistrer
               </Button>
-              {profile.profileStatus !== "INCOMPLETE" && (
-                <Button onClick={() => setIsEditing(false)}>Annuler</Button>
-              )}
+              {!mustComplete && <Button onClick={() => setIsEditing(false)}>Annuler</Button>}
             </Stack>
           </Box>
         ) : (

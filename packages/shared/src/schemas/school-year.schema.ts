@@ -24,3 +24,11 @@ export function getCurrentSchoolYear(date: Date = new Date()): string {
   const startYear = isBeforeSeptember ? year - 1 : year;
   return `${startYear}-${startYear + 1}`;
 }
+
+// BR-05c/ADR-0009: a school year's exclusive upper bound — the instant an
+// insurance certificate uploaded for that year stops being current (#12/
+// BR-06). `schoolYear` is assumed already-validated ("YYYY-YYYY+1").
+export function getSchoolYearEnd(schoolYear: string): Date {
+  const endYear = Number(schoolYear.split("-")[1]);
+  return new Date(Date.UTC(endYear, 8, 1, 0, 0, 0, 0));
+}

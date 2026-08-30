@@ -2,10 +2,10 @@ import { createHash, randomBytes } from "node:crypto";
 import { Injectable, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
-import type { User } from "@prisma/client";
+import type { StudentProfile, User } from "@prisma/client";
 import * as bcrypt from "bcrypt";
 import ms from "ms";
-import type { AuthUser } from "shared";
+import { getCurrentSchoolYear, type AuthUser, type ProfileStatus } from "shared";
 import type { Env } from "../../config/env.schema";
 import { PrismaService } from "../../prisma/prisma.service";
 import type { LoginDto } from "./dto/login.dto";
@@ -14,6 +14,14 @@ import type { SignupDto } from "./dto/signup.dto";
 const BCRYPT_ROUNDS = 10;
 const LOGIN_FAILURE_MESSAGE = "Email ou mot de passe incorrect";
 const REFRESH_FAILURE_MESSAGE = "Session invalide, merci de vous reconnecter";
+
+// BR-06: lazy yearly reset. Absent from this map, a status is left
+// unchanged — INCOMPLETE has nowhere lower to go, and an already-EXPIRED
+// profile stays EXPIRED until the student resolves it (see StudentsService).
+const YEARLY_ROLLOVER_MAP: Partial<Record<ProfileStatus, ProfileStatus>> = {
+  VALID: "EXPIRED",
+  PENDING_VALIDATION: "INCOMPLETE",
+};
 
 function hashToken(rawToken: string): string {
   return createHash("sha256").update(rawToken).digest("hex");
@@ -66,8 +74,11 @@ export class AuthService {
     return this.issueTokens(user);
   }
 
-  async login(dto: LoginDto): Promise<IssuedSession> {
-    const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
+  async login(dto: LoginDto): Promise<IssuedSession & { profileStatus: ProfileStatus | null }> {
+    const user = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+      include: { studentProfile: true },
+    });
     if (!user) {
       throw new UnauthorizedException(LOGIN_FAILURE_MESSAGE);
     }
@@ -77,7 +88,14 @@ export class AuthService {
       throw new UnauthorizedException(LOGIN_FAILURE_MESSAGE);
     }
 
-    return this.issueTokens(user);
+    // Independent: the rollover touches StudentProfile, token issuance
+    // touches RefreshToken — running them concurrently halves the added
+    // latency on the login hot path.
+    const [profileStatus, session] = await Promise.all([
+      this.applyYearlyRollover(user.studentProfile),
+      this.issueTokens(user),
+    ]);
+    return { ...session, profileStatus };
   }
 
   async refresh(rawToken: string): Promise<IssuedSession> {
@@ -98,6 +116,29 @@ export class AuthService {
   async logout(rawToken: string): Promise<void> {
     const tokenHash = hashToken(rawToken);
     await this.prisma.refreshToken.deleteMany({ where: { tokenHash } });
+  }
+
+  // BR-06: evaluated lazily at login only, never on refresh — the login
+  // response is the point where the frontend needs a fresh decision to
+  // redirect. Referents/admins have no StudentProfile and are left alone.
+  private async applyYearlyRollover(profile: StudentProfile | null): Promise<ProfileStatus | null> {
+    if (!profile) return null;
+
+    const currentStatus = profile.profileStatus as ProfileStatus;
+    if (profile.profileYear === getCurrentSchoolYear()) {
+      return currentStatus;
+    }
+
+    const rolledOverStatus = YEARLY_ROLLOVER_MAP[currentStatus];
+    if (!rolledOverStatus) {
+      return currentStatus;
+    }
+
+    await this.prisma.studentProfile.update({
+      where: { id: profile.id },
+      data: { profileStatus: rolledOverStatus },
+    });
+    return rolledOverStatus;
   }
 
   private async issueTokens(user: User, db: SessionDb = this.prisma): Promise<IssuedSession> {

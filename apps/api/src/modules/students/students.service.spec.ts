@@ -192,6 +192,42 @@ describe("StudentsService", () => {
     });
   });
 
+  describe("updateProfile — EXPIRED regression (BR-06 resolution path)", () => {
+    it("does NOT resolve EXPIRED via a promotion-only edit while the certificate is still missing/expired", async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue(
+        baseProfile({ promotion: "L2", profileStatus: "EXPIRED", profileYear: "2024-2025" }),
+      );
+      // currentFiles() would exclude a certificate whose expiresAt has
+      // passed — this is what that looks like from the caller's side.
+      prisma.fileObject.findMany.mockResolvedValue([idPhotoFile()]);
+      prisma.studentProfile.update.mockImplementation(({ data }) =>
+        Promise.resolve(baseProfile({ ...data })),
+      );
+
+      await service.updateProfile(USER_ID, { promotion: "L3" });
+
+      const data = prisma.studentProfile.update.mock.calls[0][0].data;
+      expect(data.profileStatus).toBeUndefined();
+      expect(data.profileYear).toBeUndefined();
+    });
+
+    it("resolves EXPIRED to PENDING_VALIDATION and re-stamps profileYear once promotion + a fresh certificate are both present", async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue(
+        baseProfile({ promotion: "L2", profileStatus: "EXPIRED", profileYear: "2024-2025" }),
+      );
+      prisma.fileObject.findMany.mockResolvedValue([idPhotoFile(), certificateFile()]);
+      prisma.studentProfile.update.mockImplementation(({ data }) =>
+        Promise.resolve(baseProfile({ ...data })),
+      );
+
+      await service.updateProfile(USER_ID, { promotion: "L3" });
+
+      const data = prisma.studentProfile.update.mock.calls[0][0].data;
+      expect(data.profileStatus).toBe("PENDING_VALIDATION");
+      expect(data.profileYear).toMatch(/^\d{4}-\d{4}$/);
+    });
+  });
+
   describe("uploadFile", () => {
     it("always creates a new FileObject row rather than mutating an existing one", async () => {
       prisma.studentProfile.findUnique.mockResolvedValue(baseProfile());
@@ -214,6 +250,23 @@ describe("StudentsService", () => {
       expect(filesService.upload).toHaveBeenCalledTimes(1);
     });
 
+    it("sets the insurance certificate's expiresAt to the current school year's end (BR-06), unlike the id photo", async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue(baseProfile());
+      prisma.fileObject.findMany.mockResolvedValue([]);
+      prisma.fileObject.create.mockResolvedValue(certificateFile());
+
+      await service.uploadFile(USER_ID, "INSURANCE_CERTIFICATE", {
+        buffer: Buffer.from("bytes"),
+        mimetype: "application/pdf",
+        size: 200,
+      } as Express.Multer.File);
+
+      const createArgs = prisma.fileObject.create.mock.calls[0][0].data;
+      expect(createArgs.expiresAt).toBeInstanceOf(Date);
+      expect(createArgs.expiresAt.getUTCMonth()).toBe(8); // September, 0-indexed
+      expect(createArgs.expiresAt.getUTCDate()).toBe(1);
+    });
+
     it("regresses VALID to PENDING_VALIDATION when the insurance certificate is re-uploaded", async () => {
       prisma.studentProfile.findUnique.mockResolvedValue(
         baseProfile({ promotion: "L2", profileStatus: "VALID", profileYear: "2025-2026" }),
@@ -232,6 +285,27 @@ describe("StudentsService", () => {
 
       const data = prisma.studentProfile.update.mock.calls[0][0].data;
       expect(data.profileStatus).toBe("PENDING_VALIDATION");
+    });
+
+    it("resolves an EXPIRED profile to PENDING_VALIDATION and re-stamps profileYear when the insurance certificate is re-uploaded", async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue(
+        baseProfile({ promotion: "L2", profileStatus: "EXPIRED", profileYear: "2024-2025" }),
+      );
+      prisma.fileObject.findMany.mockResolvedValue([idPhotoFile(), certificateFile()]);
+      prisma.fileObject.create.mockResolvedValue(certificateFile({ id: "file-cert-2" }));
+      prisma.studentProfile.update.mockImplementation(({ data }) =>
+        Promise.resolve(baseProfile({ ...data })),
+      );
+
+      await service.uploadFile(USER_ID, "INSURANCE_CERTIFICATE", {
+        buffer: Buffer.from("bytes"),
+        mimetype: "application/pdf",
+        size: 200,
+      } as Express.Multer.File);
+
+      const data = prisma.studentProfile.update.mock.calls[0][0].data;
+      expect(data.profileStatus).toBe("PENDING_VALIDATION");
+      expect(data.profileYear).toMatch(/^\d{4}-\d{4}$/);
     });
 
     it("does not regress VALID, and skips the write entirely, when the id photo (not the certificate) is re-uploaded", async () => {
