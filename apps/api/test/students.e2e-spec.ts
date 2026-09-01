@@ -5,39 +5,10 @@ import cookieParser from "cookie-parser";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
+import { cookieHeader, cookieMap, requireCookie } from "./helpers/cookies";
 
 function uniqueEmail(): string {
   return `e2e.students.${randomUUID()}@u-paris.fr`;
-}
-
-// Same gap as auth.e2e-spec.ts: @types/superagent types set-cookie as a
-// plain string, but Node preserves repeated Set-Cookie headers as an array.
-function extractSetCookie(response: request.Response): string[] {
-  return (response.headers["set-cookie"] as unknown as string[] | undefined) ?? [];
-}
-
-function cookieMap(response: request.Response): Record<string, string> {
-  const map: Record<string, string> = {};
-  for (const raw of extractSetCookie(response)) {
-    const [pair = ""] = raw.split(";");
-    const [name = "", value = ""] = pair.split("=");
-    map[name] = value;
-  }
-  return map;
-}
-
-function cookieHeader(cookies: Record<string, string>): string {
-  return Object.entries(cookies)
-    .map(([name, value]) => `${name}=${value}`)
-    .join("; ");
-}
-
-function requireCookie(cookies: Record<string, string>, name: string): string {
-  const value = cookies[name];
-  if (!value) {
-    throw new Error(`Expected cookie "${name}" to be set`);
-  }
-  return value;
 }
 
 describe("Students profile (e2e)", () => {
