@@ -2,6 +2,7 @@ import { Navigate, Route, Routes, Outlet, useLocation } from "react-router-dom";
 import { Typography } from "@mui/material";
 import { blocksNavigation } from "shared";
 import { AppShell } from "./components/AppShell";
+import { CertificateQueuePage } from "./features/admin/CertificateQueuePage";
 import { LoginPage } from "./features/auth/LoginPage";
 import { SignupPage } from "./features/auth/SignupPage";
 import { useCurrentUser } from "./features/auth/useCurrentUser";
@@ -47,6 +48,18 @@ function RequireCompleteProfile() {
   return <Outlet />;
 }
 
+// Issue #42: defense-in-depth only — the backend already 403s a non-ADMIN
+// caller of the queue endpoint itself; this just avoids rendering the page
+// (and firing its query) for a role that could never see data from it.
+function RequireAdmin() {
+  const { data } = useCurrentUser();
+  const isAdmin = data?.user.roles.includes("ADMIN") ?? false;
+  if (!isAdmin) {
+    return <Navigate to={ROUTES.DASHBOARD} replace />;
+  }
+  return <Outlet />;
+}
+
 // Not a real feature — just an unblocking placeholder until the real
 // dashboard screen (issue #11) exists.
 function DashboardPage() {
@@ -63,6 +76,9 @@ export function App() {
           <Route element={<AppShell />}>
             <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
             <Route path={ROUTES.PROFILE} element={<ProfilePage />} />
+            <Route element={<RequireAdmin />}>
+              <Route path={ROUTES.CERTIFICATE_QUEUE} element={<CertificateQueuePage />} />
+            </Route>
           </Route>
         </Route>
       </Route>
