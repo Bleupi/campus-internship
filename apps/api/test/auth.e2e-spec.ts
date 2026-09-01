@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
+import type { ProfileStatus } from "@prisma/client";
 import cookieParser from "cookie-parser";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
@@ -180,6 +181,66 @@ describe("Auth (e2e)", () => {
         cookieHeader({ refresh_token: requireCookie(initialCookies, "refresh_token") }),
       )
       .expect(401);
+  });
+
+  describe("BR-06: lazy yearly rollover at login", () => {
+    async function signupAndPrimeProfile(
+      overrides: { profileStatus: ProfileStatus; profileYear: string },
+      password = "a-password-that-is-long-enough",
+    ) {
+      const email = uniqueEmail();
+      await signup(email, password).expect(201);
+      await prisma.studentProfile.updateMany({
+        where: { user: { email } },
+        data: overrides,
+      });
+      return { email, password };
+    }
+
+    it("rolls a stale VALID profile to EXPIRED, reflected in both the response and the DB", async () => {
+      const { email, password } = await signupAndPrimeProfile({
+        profileStatus: "VALID",
+        profileYear: "2000-2001",
+      });
+
+      const response = await request(app.getHttpServer())
+        .post("/auth/login")
+        .send({ email, password })
+        .expect(200);
+
+      expect(response.body.profileStatus).toBe("EXPIRED");
+      const profile = await prisma.studentProfile.findFirst({ where: { user: { email } } });
+      expect(profile?.profileStatus).toBe("EXPIRED");
+    });
+
+    it("rolls a stale PENDING_VALIDATION profile to INCOMPLETE", async () => {
+      const { email, password } = await signupAndPrimeProfile({
+        profileStatus: "PENDING_VALIDATION",
+        profileYear: "2000-2001",
+      });
+
+      const response = await request(app.getHttpServer())
+        .post("/auth/login")
+        .send({ email, password })
+        .expect(200);
+
+      expect(response.body.profileStatus).toBe("INCOMPLETE");
+      const profile = await prisma.studentProfile.findFirst({ where: { user: { email } } });
+      expect(profile?.profileStatus).toBe("INCOMPLETE");
+    });
+
+    it("returns INCOMPLETE with no rollover for a freshly signed-up profile (null profileYear)", async () => {
+      const email = uniqueEmail();
+      const password = "a-password-that-is-long-enough";
+      await signup(email, password).expect(201);
+
+      const response = await request(app.getHttpServer())
+        .post("/auth/login")
+        .send({ email, password })
+        .expect(200);
+
+      expect(response.body.profileStatus).toBe("INCOMPLETE");
+    });
   });
 
   it("supports two concurrent sessions (two devices): logging out one leaves the other's refresh working", async () => {

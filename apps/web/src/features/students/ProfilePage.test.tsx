@@ -46,6 +46,24 @@ function validProfile() {
   };
 }
 
+function expiredProfile() {
+  return {
+    promotion: "L2",
+    phone: "0601020304",
+    personalEmail: "etu@gmail.com",
+    profileStatus: "EXPIRED",
+    profileYear: "2024-2025",
+    files: [
+      { type: "ID_PHOTO", mimeType: "image/png", uploadedAt: "2026-01-01T00:00:00.000Z" },
+      {
+        type: "INSURANCE_CERTIFICATE",
+        mimeType: "application/pdf",
+        uploadedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ],
+  };
+}
+
 function partiallyIncompleteProfile() {
   return {
     promotion: "L2",
@@ -208,6 +226,7 @@ describe("ProfilePage", () => {
     renderPage();
 
     const alert = await screen.findByText(/votre profil est incomplet/i);
+    expect(alert.textContent).toMatch(/complétez votre dossier/i);
     expect(alert.textContent).toMatch(/votre promotion/i);
     expect(alert.textContent).toMatch(/votre photo d'identité/i);
     expect(alert.textContent).toMatch(/votre attestation d'assurance/i);
@@ -221,6 +240,23 @@ describe("ProfilePage", () => {
     expect(alert.textContent).not.toMatch(/votre promotion/i);
     expect(alert.textContent).not.toMatch(/votre photo d'identité/i);
     expect(alert.textContent).toMatch(/votre attestation d'assurance/i);
+  });
+
+  it("starts in edit mode (form visible, no 'Modifier' button) when the profile is EXPIRED (BR-06)", async () => {
+    getProfileMock.mockResolvedValue(expiredProfile());
+    renderPage();
+
+    expect(await screen.findByRole("button", { name: /enregistrer/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^modifier$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /annuler/i })).not.toBeInTheDocument();
+  });
+
+  it("shows the renewal alert (not the missing-items one) when the profile is EXPIRED (BR-06)", async () => {
+    getProfileMock.mockResolvedValue(expiredProfile());
+    renderPage();
+
+    expect(await screen.findByText(/doit être renouvelé/i)).toBeInTheDocument();
+    expect(screen.queryByText(/votre profil est incomplet/i)).not.toBeInTheDocument();
   });
 
   it("shows no explanatory alert when the profile is VALID", async () => {

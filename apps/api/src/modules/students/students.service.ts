@@ -3,6 +3,7 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import type { FileObject, StudentProfile } from "@prisma/client";
 import {
   getCurrentSchoolYear,
+  getSchoolYearEnd,
   type FileType,
   type ProfileStatus,
   type StudentProfileResponse,
@@ -57,9 +58,14 @@ export class StudentsService {
         bucketKey,
         mimeType: file.mimetype,
         sizeBytes: file.size,
-        // Expiry tied to school-year rollover is #12/BR-06's job — left null
-        // here, so "most recent non-expired" is just "most recent" for now.
-        expiresAt: null,
+        // BR-06: an insurance certificate is only good for the school year
+        // it was uploaded in — currentFiles() stops counting it once that
+        // year's upper bound passes, forcing a genuine re-upload rather than
+        // letting a stale certificate silently carry a rollover forward. An
+        // id photo never expires (dataModel.md: "expiresAt ... set for
+        // insurance certificate").
+        expiresAt:
+          type === "INSURANCE_CERTIFICATE" ? getSchoolYearEnd(getCurrentSchoolYear()) : null,
         studentProfileId: profile.id,
       },
     });
@@ -108,7 +114,10 @@ export class StudentsService {
     if (next === profile.profileStatus) return;
 
     data.profileStatus = next;
-    if (profile.profileStatus === "INCOMPLETE" && next === "PENDING_VALIDATION") {
+    if (
+      (profile.profileStatus === "INCOMPLETE" || profile.profileStatus === "EXPIRED") &&
+      next === "PENDING_VALIDATION"
+    ) {
       data.profileYear = getCurrentSchoolYear();
     }
   }
@@ -121,11 +130,17 @@ export class StudentsService {
     promotionChanged: boolean,
     certificateReuploaded: boolean,
   ): ProfileStatus {
-    if (current.profileStatus === "INCOMPLETE") {
+    // BR-06: EXPIRED (lazy yearly rollover, see AuthService) resolves the
+    // same way a fresh INCOMPLETE profile completes — presence, not delta.
+    // This relies on currentFiles() already excluding a stale insurance
+    // certificate (expiresAt tied to the school year, see uploadFile): once
+    // rolled over, hasCertificate stays false until a real re-upload lands,
+    // so a no-op save (or a promotion-only edit) can never resolve it.
+    if (current.profileStatus === "INCOMPLETE" || current.profileStatus === "EXPIRED") {
       if (current.promotion !== null && hasIdPhoto && hasCertificate) {
         return "PENDING_VALIDATION";
       }
-      return "INCOMPLETE";
+      return current.profileStatus;
     }
 
     if (current.profileStatus === "VALID" && (promotionChanged || certificateReuploaded)) {

@@ -3,8 +3,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useNavigate, Link as RouterLink } from "react-router-dom";
 import { Alert, Box, Button, Container, Link, TextField, Typography } from "@mui/material";
-import { loginSchema, type LoginRequest } from "shared";
+import { blocksNavigation, loginSchema, type LoginRequest } from "shared";
 import { ApiError } from "../../lib/api-client";
+import { ROUTES } from "../../routes";
 import { useLogin } from "./useLogin";
 
 export function LoginPage() {
@@ -21,8 +22,14 @@ export function LoginPage() {
   const onSubmit = handleSubmit(async (values) => {
     setServerError(null);
     try {
-      await login.mutateAsync(values);
-      navigate("/dashboard");
+      const session = await login.mutateAsync(values);
+      // BR-06: skip a doomed trip through /dashboard when the login response
+      // already says the profile needs attention (fresh signup or a
+      // just-applied yearly rollover) — App.tsx's route guard enforces this
+      // regardless, this only avoids the redirect flash.
+      const mustCompleteProfile =
+        !!session.profileStatus && blocksNavigation(session.profileStatus);
+      navigate(mustCompleteProfile ? ROUTES.PROFILE : "/dashboard");
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         setServerError("Identifiants incorrects.");

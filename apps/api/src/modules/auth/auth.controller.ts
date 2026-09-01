@@ -51,7 +51,7 @@ export class AuthController {
   ) {
     const session = await this.authService.login(dto);
     this.setSessionCookies(res, session);
-    return { user: session.user };
+    return { user: session.user, profileStatus: session.profileStatus };
   }
 
   @Public()
