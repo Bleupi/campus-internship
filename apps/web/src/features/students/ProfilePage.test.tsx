@@ -176,6 +176,7 @@ describe("ProfilePage", () => {
     renderPage();
 
     await screen.findByRole("button", { name: /^modifier$/i });
+    await user.click(screen.getByRole("checkbox", { name: /je confirme que mon attestation/i }));
     const certificateInput = screen.getByTestId("insurance-certificate-input");
     const file = new File(["pdf-bytes"], "certificat.pdf", { type: "application/pdf" });
     await user.upload(certificateInput, file);
@@ -187,6 +188,112 @@ describe("ProfilePage", () => {
 
     await waitFor(() => expect(uploadInsuranceCertificateMock).toHaveBeenCalled());
     expect(uploadInsuranceCertificateMock.mock.calls[0]![0]).toBe(file);
+  });
+
+  it("labels the document 'attestation de responsabilité civile scolaire', not 'certificat d'assurance'", async () => {
+    getProfileMock.mockResolvedValue(validProfile());
+    renderPage();
+
+    expect(
+      await screen.findByText(/attestation de responsabilité civile scolaire/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/certificat d'assurance/i)).not.toBeInTheDocument();
+  });
+
+  it("shows a content checklist above the upload describing what the attestation must cover", async () => {
+    getProfileMock.mockResolvedValue(validProfile());
+    renderPage();
+
+    await screen.findByRole("button", { name: /^modifier$/i });
+    const checklist = screen.getByTestId("certificate-content-checklist");
+    expect(checklist.textContent).toMatch(/vos stages/i);
+    expect(checklist.textContent).toMatch(/stages conventionnés/i);
+    expect(checklist.textContent).toMatch(/l'année scolaire en cours/i);
+    expect(checklist.textContent).toMatch(/vie scolaire/i);
+  });
+
+  it("disables the certificate upload until the confirmation checkbox is checked", async () => {
+    getProfileMock.mockResolvedValue(incompleteProfile());
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByRole("button", { name: /enregistrer/i });
+    const checkbox = screen.getByRole("checkbox", { name: /je confirme que mon attestation/i });
+    expect(checkbox).not.toBeChecked();
+    expect(screen.getByTestId("insurance-certificate-input")).toBeDisabled();
+
+    const certificateInput = screen.getByTestId("insurance-certificate-input");
+    const file = new File(["pdf-bytes"], "certificat.pdf", { type: "application/pdf" });
+    await user.upload(certificateInput, file);
+    expect(uploadInsuranceCertificateMock).not.toHaveBeenCalled();
+
+    await user.click(checkbox);
+    expect(screen.getByTestId("insurance-certificate-input")).not.toBeDisabled();
+
+    uploadInsuranceCertificateMock.mockResolvedValue(incompleteProfile());
+    await user.upload(certificateInput, file);
+    await waitFor(() => expect(uploadInsuranceCertificateMock).toHaveBeenCalled());
+  });
+
+  it("resets the confirmation checkbox after a certificate upload, requiring re-confirmation next time", async () => {
+    getProfileMock.mockResolvedValue(incompleteProfile());
+    uploadInsuranceCertificateMock.mockResolvedValue(incompleteProfile());
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByRole("button", { name: /enregistrer/i });
+    const checkbox = screen.getByRole("checkbox", { name: /je confirme que mon attestation/i });
+    await user.click(checkbox);
+    const certificateInput = screen.getByTestId("insurance-certificate-input");
+    const file = new File(["pdf-bytes"], "certificat.pdf", { type: "application/pdf" });
+    await user.upload(certificateInput, file);
+
+    await waitFor(() => expect(uploadInsuranceCertificateMock).toHaveBeenCalled());
+    expect(
+      screen.getByRole("checkbox", { name: /je confirme que mon attestation/i }),
+    ).not.toBeChecked();
+  });
+
+  it("keeps the confirmation checkbox checked after a failed certificate upload, so retrying doesn't require re-confirming", async () => {
+    getProfileMock.mockResolvedValue(incompleteProfile());
+    uploadInsuranceCertificateMock.mockRejectedValue(new Error("network error"));
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByRole("button", { name: /enregistrer/i });
+    const checkbox = screen.getByRole("checkbox", { name: /je confirme que mon attestation/i });
+    await user.click(checkbox);
+    const certificateInput = screen.getByTestId("insurance-certificate-input");
+    const file = new File(["pdf-bytes"], "certificat.pdf", { type: "application/pdf" });
+    await user.upload(certificateInput, file);
+
+    await waitFor(() => expect(uploadInsuranceCertificateMock).toHaveBeenCalled());
+    expect(await screen.findByText(/une erreur est survenue/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", { name: /je confirme que mon attestation/i }),
+    ).toBeChecked();
+    expect(screen.getByTestId("insurance-certificate-input")).not.toBeDisabled();
+  });
+
+  it("resets the confirmation checkbox when a VALID-profile certificate replacement is canceled", async () => {
+    getProfileMock.mockResolvedValue(validProfile());
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByRole("button", { name: /^modifier$/i });
+    await user.click(screen.getByRole("checkbox", { name: /je confirme que mon attestation/i }));
+    const certificateInput = screen.getByTestId("insurance-certificate-input");
+    const file = new File(["pdf-bytes"], "certificat.pdf", { type: "application/pdf" });
+    await user.upload(certificateInput, file);
+
+    await screen.findByRole("dialog");
+    await user.click(screen.getByRole("button", { name: /annuler/i }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(
+      screen.getByRole("checkbox", { name: /je confirme que mon attestation/i }),
+    ).not.toBeChecked();
+    expect(uploadInsuranceCertificateMock).not.toHaveBeenCalled();
   });
 
   it("never shows a confirmation dialog for an id photo replacement, even on a VALID profile", async () => {
@@ -229,7 +336,7 @@ describe("ProfilePage", () => {
     expect(alert.textContent).toMatch(/complétez votre dossier/i);
     expect(alert.textContent).toMatch(/votre promotion/i);
     expect(alert.textContent).toMatch(/votre photo d'identité/i);
-    expect(alert.textContent).toMatch(/votre attestation d'assurance/i);
+    expect(alert.textContent).toMatch(/votre attestation de responsabilité civile scolaire/i);
   });
 
   it("only lists the still-missing pieces, not the ones already provided", async () => {
@@ -239,7 +346,7 @@ describe("ProfilePage", () => {
     const alert = await screen.findByText(/votre profil est incomplet/i);
     expect(alert.textContent).not.toMatch(/votre promotion/i);
     expect(alert.textContent).not.toMatch(/votre photo d'identité/i);
-    expect(alert.textContent).toMatch(/votre attestation d'assurance/i);
+    expect(alert.textContent).toMatch(/votre attestation de responsabilité civile scolaire/i);
   });
 
   it("starts in edit mode (form visible, no 'Modifier' button) when the profile is EXPIRED (BR-06)", async () => {
