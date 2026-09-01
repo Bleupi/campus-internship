@@ -53,7 +53,14 @@ export class AdminStudentsService {
   // Only reached when the conditional updateMany above matched zero rows —
   // distinguishes "no such profile" (404) from "wrong status for this
   // action" (409) without a redundant read on the success path.
-  private async throwForFailedTransition(studentId: string, action: string): Promise<never> {
+  //
+  // `action` is a French infinitive, inserted as-is into the error message
+  // below ("Impossible de <action> un profil..."); the union keeps it to the
+  // two verbs the current transitions actually use.
+  private async throwForFailedTransition(
+    studentId: string,
+    action: "valider" | "rejeter",
+  ): Promise<never> {
     const profile = await this.prisma.studentProfile.findUnique({ where: { id: studentId } });
     if (!profile) {
       throw new NotFoundException("Profil étudiant introuvable");
