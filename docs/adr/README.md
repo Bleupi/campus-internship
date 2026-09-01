@@ -26,3 +26,4 @@ Every structuring decision is recorded here as an ADR. Format: lightweight [MADR
 | [0020](0020-s3-client-aws-sdk.md) | Object storage client: `@aws-sdk/client-s3` | Accepted |
 | [0021](0021-s3-bucket-lifecycle.md) | S3/MinIO bucket lifecycle: provisioned by the app outside production | Accepted |
 | [0022](0022-cicd-scaleway-deployment.md) | CI/CD and Scaleway deployment: Serverless Containers + a private database | Accepted |
+| [0023](0023-profile-status-conditional-update.md) | Status-conditioned `updateMany` for `StudentProfile` concurrency | Accepted |
