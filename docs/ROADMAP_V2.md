@@ -43,6 +43,10 @@ Let a student view or re-download their own previously uploaded `ID_PHOTO`/`INSU
 
 When a student account is created, send a verification email with a code to confirm the address is a genuine university email, before the account can be used. V1 has no such check. This is an application-level access control (who can ever obtain a valid account), noted here alongside ADR-0022's database-credential discussion because it was raised in that context — but it doesn't affect the database credential itself, which only the API holds and no student account, verified or not, is ever exposed to; don't treat it as a substitute for that ADR's residual risk.
 
+## Partially automated insurance-certificate content verification
+
+Assist the admin's certificate-validation queue review (see the admin certificate-validation-queue design, wayfinder map issue #4) by surfacing/highlighting specific terms inside the uploaded PDF (e.g. "stages conventionnés", the current school year) instead of leaving the full read to the admin. V1 is a fully manual visual check — insurers issue this document in enough different formats (per the client's own archives) that even naming a canonical "expected format" is risky; V2 would need real design work on what "found" vs "not found" means before it can assist rather than mislead.
+
 ## Production file deletion
 
 No path exists to remove a `FileObject`'s underlying bucket content in production (e.g. when an admin needs to purge a file, or a GDPR-style erasure request). Distinct from the dev-cleanup item above: this is a real, audited deletion capability, not a test-teardown convenience. Needs its own design pass: whether it's triggered automatically (e.g. old object removed on re-upload) or only ever by an explicit admin action, whether the `FileObject` row is hard- or soft-deleted, and how it's authorized/audited.
