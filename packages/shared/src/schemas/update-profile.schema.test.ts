@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { updateProfileSchema } from "./update-profile.schema";
+import { STUDENT_EMAIL_DOMAIN } from "./university-email.schema";
 
 describe("updateProfileSchema", () => {
   it("accepts an empty object (a partial patch may touch no field)", () => {
@@ -32,6 +33,18 @@ describe("updateProfileSchema", () => {
 
   it("rejects a malformed personalEmail", () => {
     const result = updateProfileSchema.safeParse({ personalEmail: "not-an-email" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a personalEmail on the u-paris.fr domain", () => {
+    const result = updateProfileSchema.safeParse({
+      personalEmail: `etu.dupont${STUDENT_EMAIL_DOMAIN}`,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a personalEmail on the u-paris.fr domain regardless of case", () => {
+    const result = updateProfileSchema.safeParse({ personalEmail: "etu.dupont@U-PARIS.FR" });
     expect(result.success).toBe(false);
   });
 
