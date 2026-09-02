@@ -9,7 +9,7 @@ import { PrismaService } from "../src/prisma/prisma.service";
 import { cookieHeader, cookieMap } from "./helpers/cookies";
 
 function uniqueEmail(prefix: string): string {
-  return `e2e.admin-students-queue.${prefix}.${randomUUID()}@u-paris.fr`;
+  return `e2e.admin-students-queue.${prefix}.${randomUUID()}@u-pariscite.fr`;
 }
 
 describe("Admin certificate-validation queue (e2e) — issue #42", () => {
@@ -63,18 +63,15 @@ describe("Admin certificate-validation queue (e2e) — issue #42", () => {
   ): Promise<{ studentId: string }> {
     const email = uniqueEmail("student");
     createdUserEmails.push(email);
-    const signupRes = await request(app.getHttpServer())
+    await request(app.getHttpServer())
       .post("/auth/signup")
       .send({
         email,
         password: "a-password-that-is-long-enough",
         firstName: options.firstName ?? "Étu",
         lastName: options.lastName ?? "Dupont",
-      });
-    if (signupRes.status !== 201) {
-      console.error("DIAG studentWithProfile signup", signupRes.status, signupRes.text);
-    }
-    expect(signupRes.status).toBe(201);
+      })
+      .expect(201);
 
     const created = await prisma.studentProfile.findFirstOrThrow({ where: { user: { email } } });
     const profile = await prisma.studentProfile.update({
@@ -103,16 +100,15 @@ describe("Admin certificate-validation queue (e2e) — issue #42", () => {
     it("403s for a non-ADMIN caller", async () => {
       const email = uniqueEmail("rbac");
       createdUserEmails.push(email);
-      const signup = await request(app.getHttpServer()).post("/auth/signup").send({
-        email,
-        password: "a-password-that-is-long-enough",
-        firstName: "Étu",
-        lastName: "Dupont",
-      });
-      if (signup.status !== 201) {
-        console.error("DIAG RBAC signup", signup.status, signup.text);
-      }
-      expect(signup.status).toBe(201);
+      const signup = await request(app.getHttpServer())
+        .post("/auth/signup")
+        .send({
+          email,
+          password: "a-password-that-is-long-enough",
+          firstName: "Étu",
+          lastName: "Dupont",
+        })
+        .expect(201);
       const accessToken = cookieMap(signup).access_token ?? "";
 
       await request(app.getHttpServer())
