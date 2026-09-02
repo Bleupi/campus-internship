@@ -1,6 +1,5 @@
 import { z } from "zod";
-
-export const STUDENT_EMAIL_DOMAIN = "@u-paris.fr";
+import { STUDENT_EMAIL_DOMAIN } from "./university-email.schema";
 
 export const signupSchema = z.object({
   email: z

@@ -23,7 +23,7 @@ describe("JwtStrategy", () => {
 
     const result = strategy.validate({
       sub: "user-id-123",
-      email: "etu@u-paris.fr",
+      email: "etu@u-pariscite.fr",
       firstName: "Étu",
       lastName: "Dupont",
       roles: ["STUDENT"],
@@ -31,7 +31,7 @@ describe("JwtStrategy", () => {
 
     expect(result).toEqual({
       id: "user-id-123",
-      email: "etu@u-paris.fr",
+      email: "etu@u-pariscite.fr",
       firstName: "Étu",
       lastName: "Dupont",
       roles: ["STUDENT"],
