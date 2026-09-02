@@ -9,7 +9,7 @@ import { PrismaService } from "../src/prisma/prisma.service";
 import { cookieHeader, cookieMap, requireCookie } from "./helpers/cookies";
 
 function uniqueEmail(): string {
-  return `e2e.${randomUUID()}@u-paris.fr`;
+  return `e2e.${randomUUID()}@u-pariscite.fr`;
 }
 
 describe("Auth (e2e)", () => {
@@ -37,7 +37,7 @@ describe("Auth (e2e)", () => {
       .send({ email, password, firstName: "Étu", lastName: "Dupont" });
   }
 
-  it("rejects signup with a non-@u-paris.fr email (400)", async () => {
+  it("rejects signup with a non-@u-pariscite.fr email (400)", async () => {
     await request(app.getHttpServer())
       .post("/auth/signup")
       .send({

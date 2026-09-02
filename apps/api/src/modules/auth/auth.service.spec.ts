@@ -13,7 +13,7 @@ function sha256(value: string): string {
 
 const baseUser = {
   id: "user-1",
-  email: "etu.dupont@u-paris.fr",
+  email: "etu.dupont@u-pariscite.fr",
   firstName: "Étu",
   lastName: "Dupont",
   roles: ["STUDENT"],
@@ -181,7 +181,7 @@ describe("AuthService", () => {
       prisma.user.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.login({ email: "ghost@u-paris.fr", password: "whatever-they-typed" }),
+        service.login({ email: "ghost@u-pariscite.fr", password: "whatever-they-typed" }),
       ).rejects.toBeInstanceOf(UnauthorizedException);
     });
 
@@ -199,7 +199,7 @@ describe("AuthService", () => {
       prisma.user.findUnique.mockResolvedValueOnce(null);
       let unknownEmailMessage = "";
       try {
-        await service.login({ email: "ghost@u-paris.fr", password: "whatever-they-typed" });
+        await service.login({ email: "ghost@u-pariscite.fr", password: "whatever-they-typed" });
       } catch (error) {
         unknownEmailMessage = (error as UnauthorizedException).message;
       }

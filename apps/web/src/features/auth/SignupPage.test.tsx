@@ -29,7 +29,7 @@ function renderPage() {
 }
 
 async function fillValidForm(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(screen.getByLabelText(/email/i), "etu.dupont@u-paris.fr");
+  await user.type(screen.getByLabelText(/email/i), "etu.dupont@u-pariscite.fr");
   await user.type(screen.getByLabelText(/mot de passe/i), "un-mot-de-passe-bien-assez-long");
   await user.type(screen.getByLabelText(/prénom/i), "Étu");
   await user.type(screen.getByLabelText("Nom"), "Dupont");
@@ -45,7 +45,7 @@ describe("SignupPage", () => {
     vi.clearAllMocks();
   });
 
-  it("shows a validation error for a non-@u-paris.fr email without calling the API", async () => {
+  it("shows a validation error for a non-@u-pariscite.fr email without calling the API", async () => {
     const user = userEvent.setup();
     renderPage();
 
@@ -55,12 +55,12 @@ describe("SignupPage", () => {
     await user.type(screen.getByLabelText("Nom"), "Dupont");
     await user.click(screen.getByRole("button", { name: /s'inscrire/i }));
 
-    expect(await screen.findByText(/u-paris\.fr/i)).toBeInTheDocument();
+    expect(await screen.findByText(/u-pariscite\.fr/i)).toBeInTheDocument();
     expect(signupMock).not.toHaveBeenCalled();
   });
 
   it("submits successfully and navigates to /dashboard", async () => {
-    signupMock.mockResolvedValue({ user: { id: "1", email: "etu.dupont@u-paris.fr" } });
+    signupMock.mockResolvedValue({ user: { id: "1", email: "etu.dupont@u-pariscite.fr" } });
     const user = userEvent.setup();
     renderPage();
 

@@ -36,15 +36,15 @@ describe("updateProfileSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects a personalEmail on the u-paris.fr domain", () => {
+  it("rejects a personalEmail on the u-pariscite.fr domain", () => {
     const result = updateProfileSchema.safeParse({
       personalEmail: `etu.dupont${STUDENT_EMAIL_DOMAIN}`,
     });
     expect(result.success).toBe(false);
   });
 
-  it("rejects a personalEmail on the u-paris.fr domain regardless of case", () => {
-    const result = updateProfileSchema.safeParse({ personalEmail: "etu.dupont@U-PARIS.FR" });
+  it("rejects a personalEmail on the u-pariscite.fr domain regardless of case", () => {
+    const result = updateProfileSchema.safeParse({ personalEmail: "etu.dupont@U-PARISCITE.FR" });
     expect(result.success).toBe(false);
   });
 
