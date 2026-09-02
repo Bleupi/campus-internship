@@ -14,6 +14,7 @@ import {
   useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
+import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
 import LogoutIcon from "@mui/icons-material/LogoutOutlined";
 import MenuIcon from "@mui/icons-material/MenuOutlined";
 import PersonOutlineOutlinedIcon from "@mui/icons-material/PersonOutlineOutlined";
@@ -21,13 +22,22 @@ import SpaceDashboardOutlinedIcon from "@mui/icons-material/SpaceDashboardOutlin
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { NavLink, Outlet, useMatch, useNavigate } from "react-router-dom";
+import { useCurrentUser } from "../features/auth/useCurrentUser";
 import { useLogout } from "../features/auth/useLogout";
 import { ROUTES } from "../routes";
 
-const navItems = [
+const baseNavItems = [
   { to: ROUTES.DASHBOARD, label: "Tableau de bord", icon: <SpaceDashboardOutlinedIcon /> },
   { to: ROUTES.PROFILE, label: "Profil", icon: <PersonOutlineOutlinedIcon /> },
 ];
+
+// Issue #42: the queue-list link only makes sense (and only avoids a 403)
+// for an ADMIN — same role check as App.tsx's RequireAdmin route guard.
+const adminNavItem = {
+  to: ROUTES.CERTIFICATE_QUEUE,
+  label: "Certificats à valider",
+  icon: <FactCheckOutlinedIcon />,
+};
 
 // useMatch is the same matching react-router uses internally for NavLink's
 // own active state (aria-current) — deriving the visual style from it too
@@ -97,6 +107,9 @@ export function AppShell() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const navigate = useNavigate();
   const logout = useLogout();
+  const { data: me } = useCurrentUser();
+  const isAdmin = me?.user.roles.includes("ADMIN") ?? false;
+  const navItems = isAdmin ? [...baseNavItems, adminNavItem] : baseNavItems;
 
   const handleLogout = () => {
     setDrawerOpen(false);

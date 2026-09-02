@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { ProfileStatus } from "../enums";
+import type { ProfileStatus, Promotion } from "../enums";
 import type { rejectProfileSchema } from "../schemas/reject-profile.schema";
 
 export type RejectProfileRequest = z.infer<typeof rejectProfileSchema>;
@@ -14,3 +14,22 @@ export interface AdminProfileTransitionResponse {
 
 export type ValidateProfileResponse = AdminProfileTransitionResponse;
 export type RejectProfileResponse = AdminProfileTransitionResponse;
+
+// Issue #42: queue-list slice of #41 (admin certificate-validation queue).
+// Metadata only — no file bytes, that's ticket 2 (PDF proxy/stream).
+export interface CertificateQueueEntry {
+  studentId: string;
+  firstName: string;
+  lastName: string;
+  promotion: Promotion | null;
+  // Proxy for "waiting since": StudentProfile.updatedAt moves exactly when a
+  // profile (re-)enters PENDING_VALIDATION (see StudentsService), so no new
+  // column is needed to sort the queue FIFO. Known gap tracked in issue #46:
+  // a cosmetic edit while already pending also bumps updatedAt.
+  waitingSince: string;
+  // null in the rare case a PENDING_VALIDATION profile's certificate expired
+  // (BR-06 school-year boundary) before the lazy per-login rollover caught up.
+  certificate: { uploadedAt: string } | null;
+}
+
+export type CertificateQueueResponse = CertificateQueueEntry[];

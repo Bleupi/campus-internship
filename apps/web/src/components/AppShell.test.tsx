@@ -13,9 +13,19 @@ vi.mock("react-router-dom", async () => {
 });
 
 const logoutMock = vi.fn();
+const getMeMock = vi.fn();
 vi.mock("../features/auth/api", () => ({
   logout: (...args: unknown[]) => logoutMock(...args),
+  getMe: (...args: unknown[]) => getMeMock(...args),
 }));
+
+const studentUser = {
+  id: "1",
+  email: "etu@u-paris.fr",
+  firstName: "Étu",
+  lastName: "Dupont",
+  roles: ["STUDENT"],
+};
 
 function renderShell(initialPath: string) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -37,6 +47,8 @@ describe("AppShell", () => {
   beforeEach(() => {
     logoutMock.mockReset();
     navigateMock.mockReset();
+    getMeMock.mockReset();
+    getMeMock.mockResolvedValue({ user: studentUser });
   });
 
   afterEach(() => {
@@ -84,6 +96,20 @@ describe("AppShell", () => {
 
     expect(logoutMock).toHaveBeenCalled();
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/login"));
+  });
+
+  it("does not show the certificate-queue link for a non-ADMIN user", async () => {
+    renderShell("/dashboard");
+
+    await waitFor(() => expect(getMeMock).toHaveBeenCalled());
+    expect(screen.queryByRole("link", { name: /certificats à valider/i })).not.toBeInTheDocument();
+  });
+
+  it("shows the certificate-queue link for an ADMIN user (issue #42)", async () => {
+    getMeMock.mockResolvedValue({ user: { ...studentUser, roles: ["ADMIN"] } });
+    renderShell("/dashboard");
+
+    expect(await screen.findByRole("link", { name: /certificats à valider/i })).toBeInTheDocument();
   });
 
   describe("on mobile viewports", () => {

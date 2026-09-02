@@ -20,6 +20,11 @@ vi.mock("./features/students/api", () => ({
   uploadInsuranceCertificate: vi.fn(),
 }));
 
+const getCertificateQueueMock = vi.fn();
+vi.mock("./features/admin/api", () => ({
+  getCertificateQueue: (...args: unknown[]) => getCertificateQueueMock(...args),
+}));
+
 const authenticatedUser = {
   id: "1",
   email: "etu@u-pariscite.fr",
@@ -54,6 +59,7 @@ describe("App route protection", () => {
   beforeEach(() => {
     getMeMock.mockReset();
     getProfileMock.mockReset();
+    getCertificateQueueMock.mockReset();
   });
 
   afterEach(() => {
@@ -135,5 +141,36 @@ describe("App route protection — BR-06 profile-completion guard", () => {
 
     expect(await screen.findByText(/tableau de bord \(à venir\)/i)).toBeInTheDocument();
     expect(getProfileMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("App route protection — issue #42 admin certificate queue", () => {
+  beforeEach(() => {
+    getMeMock.mockReset();
+    getProfileMock.mockReset();
+    getCertificateQueueMock.mockReset();
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("redirects a non-ADMIN user away from /admin/certificate-queue", async () => {
+    getMeMock.mockResolvedValue({ user: authenticatedUser });
+    getProfileMock.mockResolvedValue(studentProfile("VALID"));
+    renderApp("/admin/certificate-queue");
+
+    expect(await screen.findByText(/tableau de bord \(à venir\)/i)).toBeInTheDocument();
+    expect(getCertificateQueueMock).not.toHaveBeenCalled();
+  });
+
+  it("renders the certificate queue for an ADMIN user at /admin/certificate-queue", async () => {
+    getMeMock.mockResolvedValue({ user: { ...authenticatedUser, roles: ["ADMIN"] } });
+    getCertificateQueueMock.mockResolvedValue([]);
+    renderApp("/admin/certificate-queue");
+
+    expect(
+      await screen.findByRole("heading", { name: /certificats à valider/i }),
+    ).toBeInTheDocument();
   });
 });
