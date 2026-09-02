@@ -159,6 +159,15 @@ describe("CertificateQueuePage", () => {
       await user.type(screen.getByRole("textbox", { name: /précision/i }), "Photo floue");
       expect(screen.getByRole("button", { name: /^refuser$/i })).toBeEnabled();
     });
+
+    it("disables Valider once a canned reason is checked (contradictory intent guard)", async () => {
+      const user = await selectAlice();
+      expect(screen.getByRole("button", { name: /^valider$/i })).toBeEnabled();
+
+      await user.click((await screen.findAllByRole("checkbox"))[0]!);
+
+      expect(screen.getByRole("button", { name: /^valider$/i })).toBeDisabled();
+    });
   });
 
   it("Valider: calls validateProfile and auto-advances the right pane to the next student", async () => {

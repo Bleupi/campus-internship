@@ -112,10 +112,13 @@ export function CertificateQueuePage() {
     );
   }
 
+  const actionPending = validateMutation.isPending || rejectMutation.isPending;
+  // A checked reason means the admin has started building a rejection —
+  // Valider is disabled so the two actions can't be triggered on
+  // contradictory intent at once.
+  const validerDisabled = checkedReasons.length > 0 || actionPending;
   const refuserDisabled =
-    (checkedReasons.length === 0 && freeText.trim().length === 0) ||
-    validateMutation.isPending ||
-    rejectMutation.isPending;
+    (checkedReasons.length === 0 && freeText.trim().length === 0) || actionPending;
 
   return (
     <Box sx={{ display: "flex", gap: 3 }}>
@@ -176,16 +179,6 @@ export function CertificateQueuePage() {
                 />
               ) : null)}
 
-            <Stack direction="row" spacing={2} sx={{ mt: 1 }}>
-              <Button
-                variant="contained"
-                onClick={handleValidate}
-                disabled={validateMutation.isPending || rejectMutation.isPending}
-              >
-                Valider
-              </Button>
-            </Stack>
-
             <Box sx={{ mt: 2 }}>
               <Typography variant="subtitle2">Motif de refus</Typography>
               <FormGroup>
@@ -211,16 +204,21 @@ export function CertificateQueuePage() {
                 onChange={(event) => setFreeText(event.target.value)}
                 sx={{ mt: 1 }}
               />
+            </Box>
+
+            <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
+              <Button variant="contained" onClick={handleValidate} disabled={validerDisabled}>
+                Valider
+              </Button>
               <Button
                 variant="outlined"
                 color="error"
-                sx={{ mt: 1 }}
                 disabled={refuserDisabled}
                 onClick={handleReject}
               >
                 Refuser
               </Button>
-            </Box>
+            </Stack>
           </Box>
         ) : (
           <Typography sx={{ color: "text.secondary" }}>
