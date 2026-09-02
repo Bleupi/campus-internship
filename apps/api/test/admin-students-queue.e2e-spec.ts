@@ -169,14 +169,14 @@ describe("Admin certificate-validation queue (e2e) — issue #42", () => {
           firstName: string;
           lastName: string;
           promotion: string;
-          certificate: { uploadedAt: string; mimeType: string } | null;
+          certificate: { uploadedAt: string } | null;
         }>
       ).find((entry) => entry.studentId === older.studentId);
       expect(olderEntry).toMatchObject({
         firstName: "Alice",
         lastName: "Martin",
         promotion: "L2",
-        certificate: { uploadedAt: "2026-07-01T00:00:00.000Z", mimeType: "application/pdf" },
+        certificate: { uploadedAt: "2026-07-01T00:00:00.000Z" },
       });
     });
 

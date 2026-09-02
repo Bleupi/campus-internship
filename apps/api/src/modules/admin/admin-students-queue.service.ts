@@ -32,6 +32,7 @@ export class AdminStudentsQueueService {
           },
           orderBy: { uploadedAt: "desc" },
           take: 1,
+          select: { uploadedAt: true },
         },
       },
     });
@@ -44,9 +45,7 @@ export class AdminStudentsQueueService {
         lastName: profile.user.lastName,
         promotion: profile.promotion as Promotion | null,
         waitingSince: profile.updatedAt.toISOString(),
-        certificate: certificate
-          ? { uploadedAt: certificate.uploadedAt.toISOString(), mimeType: certificate.mimeType }
-          : null,
+        certificate: certificate ? { uploadedAt: certificate.uploadedAt.toISOString() } : null,
       };
     });
   }

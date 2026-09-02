@@ -69,7 +69,7 @@ export function CertificateQueuePage() {
             <Typography>
               Certificat :{" "}
               {selected.certificate
-                ? `envoyé le ${formatDate(selected.certificate.uploadedAt)} (${selected.certificate.mimeType})`
+                ? `envoyé le ${formatDate(selected.certificate.uploadedAt)}`
                 : "aucun certificat valide actuellement"}
             </Typography>
           </Box>

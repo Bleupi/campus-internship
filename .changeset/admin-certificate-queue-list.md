@@ -4,7 +4,7 @@
 "web": minor
 ---
 
-Add the admin certificate-validation queue list (issue #42, first slice of #41): `GET /admin/students/certificate-queue` returns every `PENDING_VALIDATION` `StudentProfile`, oldest-`updatedAt`-first, with student identity, promotion and the current `INSURANCE_CERTIFICATE` metadata (`uploadedAt`, `mimeType` — no file bytes). `ADMIN`-only via `RolesGuard`; no pagination at this scale (~300 rows).
+Add the admin certificate-validation queue list (issue #42, first slice of #41): `GET /admin/students/certificate-queue` returns every `PENDING_VALIDATION` `StudentProfile`, oldest-`updatedAt`-first, with student identity, promotion and the current `INSURANCE_CERTIFICATE`'s `uploadedAt` — no file bytes. `ADMIN`-only via `RolesGuard`; no pagination at this scale (~300 rows).
 
 - `packages/shared`: `CertificateQueueEntry`/`CertificateQueueResponse` in `admin.contract.ts`.
 - `apps/api`: a new `AdminStudentsQueueController`/`AdminStudentsQueueService` pair alongside the existing admin-students controller.

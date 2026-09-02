@@ -29,7 +29,7 @@ export interface CertificateQueueEntry {
   waitingSince: string;
   // null in the rare case a PENDING_VALIDATION profile's certificate expired
   // (BR-06 school-year boundary) before the lazy per-login rollover caught up.
-  certificate: { uploadedAt: string; mimeType: string } | null;
+  certificate: { uploadedAt: string } | null;
 }
 
 export type CertificateQueueResponse = CertificateQueueEntry[];

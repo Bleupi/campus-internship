@@ -39,7 +39,6 @@ describe("AdminStudentsQueueService", () => {
           user: { firstName: "Alice", lastName: "Martin" },
           files: [
             {
-              mimeType: "application/pdf",
               uploadedAt: new Date("2026-07-15T00:00:00.000Z"),
             },
           ],
@@ -56,7 +55,6 @@ describe("AdminStudentsQueueService", () => {
           promotion: "L3",
           waitingSince: "2026-08-01T00:00:00.000Z",
           certificate: {
-            mimeType: "application/pdf",
             uploadedAt: "2026-07-15T00:00:00.000Z",
           },
         },

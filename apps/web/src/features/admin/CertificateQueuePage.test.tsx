@@ -18,7 +18,7 @@ function entry(overrides: Partial<Record<string, unknown>> = {}) {
     lastName: "Martin",
     promotion: "L3",
     waitingSince: "2026-08-01T00:00:00.000Z",
-    certificate: { uploadedAt: "2026-07-15T00:00:00.000Z", mimeType: "application/pdf" },
+    certificate: { uploadedAt: "2026-07-15T00:00:00.000Z" },
     ...overrides,
   };
 }
@@ -88,7 +88,7 @@ describe("CertificateQueuePage", () => {
 
     expect(screen.getByRole("heading", { name: "Alice Martin" })).toBeInTheDocument();
     expect(screen.getByText(/promotion : l3/i)).toBeInTheDocument();
-    expect(screen.getByText(/application\/pdf/)).toBeInTheDocument();
+    expect(screen.getByText(/envoyé le/i)).toBeInTheDocument();
   });
 
   it("reports the certificate as absent when the entry's certificate is null", async () => {
