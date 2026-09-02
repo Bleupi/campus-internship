@@ -72,7 +72,7 @@ describe("apiClient 401-retry-once interceptor", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(401, { message: "bad credentials" }, false));
 
     await expect(
-      apiClient.post("/auth/login", { email: "a@u-paris.fr", password: "x" }),
+      apiClient.post("/auth/login", { email: "a@u-pariscite.fr", password: "x" }),
     ).rejects.toBeInstanceOf(ApiError);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });

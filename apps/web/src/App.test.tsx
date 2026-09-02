@@ -22,7 +22,7 @@ vi.mock("./features/students/api", () => ({
 
 const authenticatedUser = {
   id: "1",
-  email: "etu@u-paris.fr",
+  email: "etu@u-pariscite.fr",
   firstName: "Étu",
   lastName: "Dupont",
   roles: ["STUDENT"],

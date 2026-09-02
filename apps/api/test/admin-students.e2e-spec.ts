@@ -9,7 +9,7 @@ import { PrismaService } from "../src/prisma/prisma.service";
 import { cookieHeader, cookieMap } from "./helpers/cookies";
 
 function uniqueEmail(prefix: string): string {
-  return `e2e.admin-students.${prefix}.${randomUUID()}@u-paris.fr`;
+  return `e2e.admin-students.${prefix}.${randomUUID()}@u-pariscite.fr`;
 }
 
 describe("Admin profile-validation transitions (e2e)", () => {
