@@ -1,8 +1,10 @@
+import { Readable } from "node:stream";
 import { ConfigService } from "@nestjs/config";
 import { Test } from "@nestjs/testing";
 import {
   BucketAlreadyOwnedByYou,
   CreateBucketCommand,
+  GetObjectCommand,
   HeadBucketCommand,
   NotFound,
   PutObjectCommand,
@@ -86,6 +88,24 @@ describe("FilesService", () => {
       Key: "students/1/ID_PHOTO/abc",
       Body: body,
       ContentType: "image/png",
+    });
+  });
+
+  it("streams a key's body via GetObjectCommand (issue #43: certificate proxy)", async () => {
+    const service = await createFilesService();
+    sendMock.mockClear(); // drop the HeadBucket call made during onModuleInit
+    const body = Readable.from([Buffer.from("pdf-bytes")]);
+    sendMock.mockResolvedValueOnce({ Body: body });
+
+    const result = await service.download("students/1/INSURANCE_CERTIFICATE/abc");
+
+    expect(result).toBe(body);
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    const command = sendMock.mock.calls[0][0];
+    expect(command).toBeInstanceOf(GetObjectCommand);
+    expect(command.input).toEqual({
+      Bucket: "stages-files",
+      Key: "students/1/INSURANCE_CERTIFICATE/abc",
     });
   });
 

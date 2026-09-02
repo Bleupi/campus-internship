@@ -1,8 +1,10 @@
+import type { Readable } from "node:stream";
 import { Injectable, type OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
   BucketAlreadyOwnedByYou,
   CreateBucketCommand,
+  GetObjectCommand,
   HeadBucketCommand,
   NotFound,
   PutObjectCommand,
@@ -81,5 +83,16 @@ export class FilesService implements OnModuleInit {
         ContentType: contentType,
       }),
     );
+  }
+
+  // Issue #43: proxied read (ADR-0024) — the caller (AdminStudentsService)
+  // streams this straight into the HTTP response, so the object never
+  // touches disk or a Buffer in full. In the Node runtime the SDK always
+  // resolves GetObjectCommandOutput.Body to a Readable.
+  async download(key: string): Promise<Readable> {
+    const { Body } = await this.client.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
+    return Body as Readable;
   }
 }

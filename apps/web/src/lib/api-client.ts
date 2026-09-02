@@ -39,7 +39,10 @@ async function tryRefresh(): Promise<boolean> {
   return refreshPromise;
 }
 
-async function request<T>(path: string, init?: RequestInit, isRetry = false): Promise<T> {
+// Shared by request() (JSON) and getBlob() (binary, e.g. issue #43's
+// certificate stream) — both need the same 401-retry-once/credentials
+// handling, only how the body is finally read differs.
+async function fetchWithAuth(path: string, init?: RequestInit, isRetry = false): Promise<Response> {
   // A FormData body (multipart file upload) must NOT get a manual
   // Content-Type — the browser sets one itself with the correct boundary.
   const isFormData = init?.body instanceof FormData;
@@ -56,13 +59,19 @@ async function request<T>(path: string, init?: RequestInit, isRetry = false): Pr
   if (response.status === 401 && !isRetry && !AUTH_ENDPOINTS_EXCLUDED_FROM_RETRY.includes(path)) {
     const refreshed = await tryRefresh();
     if (refreshed) {
-      return request<T>(path, init, true);
+      return fetchWithAuth(path, init, true);
     }
   }
 
   if (!response.ok) {
     throw new ApiError(response.status, await response.text());
   }
+
+  return response;
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetchWithAuth(path, init);
 
   if (response.status === 204) {
     return undefined as T;
@@ -80,4 +89,5 @@ export const apiClient = {
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
   postForm: <T>(path: string, formData: FormData) =>
     request<T>(path, { method: "POST", body: formData }),
+  getBlob: (path: string) => fetchWithAuth(path).then((response) => response.blob()),
 };

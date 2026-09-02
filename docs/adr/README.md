@@ -27,3 +27,4 @@ Every structuring decision is recorded here as an ADR. Format: lightweight [MADR
 | [0021](0021-s3-bucket-lifecycle.md) | S3/MinIO bucket lifecycle: provisioned by the app outside production | Accepted |
 | [0022](0022-cicd-scaleway-deployment.md) | CI/CD and Scaleway deployment: Serverless Containers + a private database | Accepted |
 | [0023](0023-profile-status-conditional-update.md) | Status-conditioned `updateMany` for `StudentProfile` concurrency | Accepted |
+| [0024](0024-certificate-proxy-stream.md) | Certificate download: proxied stream, never a presigned URL | Accepted |
