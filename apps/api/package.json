@@ -17,7 +17,11 @@
     "test:watch": "jest --watch",
     "pretest:e2e": "pnpm run build:shared",
     "test:e2e": "jest --config ./test/jest-e2e.json --passWithNoTests",
-    "prisma": "dotenv -e ../../.env -- prisma"
+    "prisma": "dotenv -e ../../.env -- prisma",
+    "db:seed": "pnpm run build:shared && pnpm run prisma db seed"
+  },
+  "prisma": {
+    "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1116.0",
