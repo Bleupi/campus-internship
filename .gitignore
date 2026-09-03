@@ -53,3 +53,6 @@ Thumbs.db
 
 # --- Infra notes (kept local only — too much infra topology to commit) -----
 docs/Ressources.md
+
+# --- Local-only ops scripts (never committed) -------------------------------
+apps/api/scripts/
