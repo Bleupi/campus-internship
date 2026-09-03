@@ -215,6 +215,7 @@ Consumed via the workspace protocol (`workspace:*`), never via relative paths re
 - Husky pre-commit: gitleaks + ESLint (`--fix`) + Prettier on staged files.
 - Husky commit-msg: `commitlint` (`@commitlint/config-conventional`) rejects a non-Conventional-Commits message locally (ADR-0015).
 - Husky pre-push: gitleaks re-scan + `tsc --noEmit` across the monorepo.
+- **Never overwrite, truncate, or wipe-and-reseed the production database, under any circumstances** — including when every row in it is seed/synthetic data. A correction to prod data always goes through an additive migration (schema migration with data-fixing SQL, or a reviewable one-off script), never a destructive reset.
 - Never use `--no-verify`, never comment out a hook to "get past" a failure — fix the underlying issue.
 - New env var → add it (name only, no value) to `.env.example`.
 - Never commit a real secret, even temporarily, even in a script or a fixture. `.env` is git-ignored; use it for local values.
@@ -236,6 +237,7 @@ Full detail lives in `CONTRIBUTING.md` — read it before writing a commit messa
 
 ## 12. Never do this
 
+- Overwrite, truncate, or wipe-and-reseed the production database — see §10; this holds even when the data at risk is purely seed/synthetic.
 - Add a `referentId` FK to `Stage`.
 - Accept `semester` as client input and persist it as-is.
 - Implement anything from `docs/ROADMAP_V2.md` without an explicit ask.
