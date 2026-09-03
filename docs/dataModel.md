@@ -32,7 +32,7 @@ enum Role {
 
 model User {
   id           String   @id @default(uuid())
-  email        String   @unique          // login email; for students this is the immutable etu.u-paris.fr email (STUDENT_EMAIL_DOMAIN); for staff (ADMIN/REFERENT) it will be u-pariscite.fr (STAFF_EMAIL_DOMAIN), not yet enforced — no personnel signup flow exists
+  email        String   @unique          // login email; for students this is the immutable etu.u-paris.fr email (STUDENT_EMAIL_DOMAIN)
   passwordHash String
   firstName    String
   lastName     String
@@ -46,6 +46,8 @@ model User {
   // adminProfile intentionally omitted in V1 (see ROADMAP_V2 / ADR-0002)
 }
 ```
+
+`ADMIN`/`REFERENT` accounts are provisioned out-of-band by an operator, not through self-service signup, and `email` for these roles is not validated against any institutional domain (unlike `STUDENT`, see below) — see ADR-0025.
 
 Login issues a short-lived JWT access token plus a refresh token (see ADR-0018). The refresh token is a high-entropy random value, never a JWT itself — only its SHA-256 hash is persisted, so a leaked database dump doesn't hand out usable tokens. Sessions are **multi-device**: each login creates its own `RefreshToken` row, so a student staying logged in on a phone and a laptop at the same time has two independent, independently-revocable rows.
 
