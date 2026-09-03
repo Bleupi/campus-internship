@@ -2,19 +2,19 @@ import { describe, expect, it } from "vitest";
 import { signupSchema } from "./signup.schema";
 
 const validPayload = {
-  email: "etu.dupont@u-pariscite.fr",
+  email: "etu.dupont@etu.u-paris.fr",
   password: "correct horse battery staple",
   firstName: "Étu",
   lastName: "Dupont",
 };
 
 describe("signupSchema", () => {
-  it("accepts a valid @u-pariscite.fr signup payload", () => {
+  it("accepts a valid @etu.u-paris.fr signup payload", () => {
     const result = signupSchema.safeParse(validPayload);
     expect(result.success).toBe(true);
   });
 
-  it("rejects an email outside the @u-pariscite.fr domain", () => {
+  it("rejects an email outside the @etu.u-paris.fr domain", () => {
     const result = signupSchema.safeParse({
       ...validPayload,
       email: "etu.dupont@gmail.com",

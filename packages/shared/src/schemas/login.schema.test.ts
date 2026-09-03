@@ -4,7 +4,7 @@ import { loginSchema } from "./login.schema";
 describe("loginSchema", () => {
   it("accepts a valid email/password pair", () => {
     const result = loginSchema.safeParse({
-      email: "etu.dupont@u-pariscite.fr",
+      email: "etu.dupont@etu.u-paris.fr",
       password: "whatever-the-user-typed",
     });
     expect(result.success).toBe(true);
@@ -20,7 +20,7 @@ describe("loginSchema", () => {
 
   it("rejects an empty password", () => {
     const result = loginSchema.safeParse({
-      email: "etu.dupont@u-pariscite.fr",
+      email: "etu.dupont@etu.u-paris.fr",
       password: "",
     });
     expect(result.success).toBe(false);

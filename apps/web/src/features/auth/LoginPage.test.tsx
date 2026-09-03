@@ -52,13 +52,13 @@ describe("LoginPage", () => {
 
   it("submits successfully and navigates to /dashboard when the profile doesn't need attention", async () => {
     loginMock.mockResolvedValue({
-      user: { id: "1", email: "etu@u-pariscite.fr" },
+      user: { id: "1", email: "etu@etu.u-paris.fr" },
       profileStatus: "VALID",
     });
     const user = userEvent.setup();
     renderPage();
 
-    await user.type(screen.getByLabelText(/email/i), "etu@u-pariscite.fr");
+    await user.type(screen.getByLabelText(/email/i), "etu@etu.u-paris.fr");
     await user.type(screen.getByLabelText(/mot de passe/i), "whatever-they-typed");
     await user.click(screen.getByRole("button", { name: /se connecter/i }));
 
@@ -69,13 +69,13 @@ describe("LoginPage", () => {
     "navigates to /profile instead of /dashboard when the login response's profileStatus is %s (BR-06)",
     async (profileStatus) => {
       loginMock.mockResolvedValue({
-        user: { id: "1", email: "etu@u-pariscite.fr" },
+        user: { id: "1", email: "etu@etu.u-paris.fr" },
         profileStatus,
       });
       const user = userEvent.setup();
       renderPage();
 
-      await user.type(screen.getByLabelText(/email/i), "etu@u-pariscite.fr");
+      await user.type(screen.getByLabelText(/email/i), "etu@etu.u-paris.fr");
       await user.type(screen.getByLabelText(/mot de passe/i), "whatever-they-typed");
       await user.click(screen.getByRole("button", { name: /se connecter/i }));
 
@@ -88,7 +88,7 @@ describe("LoginPage", () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.type(screen.getByLabelText(/email/i), "etu@u-pariscite.fr");
+    await user.type(screen.getByLabelText(/email/i), "etu@etu.u-paris.fr");
     await user.type(screen.getByLabelText(/mot de passe/i), "wrong-password");
     await user.click(screen.getByRole("button", { name: /se connecter/i }));
 
