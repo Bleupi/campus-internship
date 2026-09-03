@@ -32,7 +32,7 @@ enum Role {
 
 model User {
   id           String   @id @default(uuid())
-  email        String   @unique          // login email; for students this is the immutable u-pariscite email
+  email        String   @unique          // login email; for students this is the immutable etu.u-paris.fr email (STUDENT_EMAIL_DOMAIN); for staff (ADMIN/REFERENT) it will be u-pariscite.fr (STAFF_EMAIL_DOMAIN), not yet enforced — no personnel signup flow exists
   passwordHash String
   firstName    String
   lastName     String
@@ -92,7 +92,7 @@ model StudentProfile {
   userId        String        @unique
 
   phone         String?
-  personalEmail String?                     // mutable, unlike the login (u-pariscite) email; must not itself be a u-pariscite.fr address (STUDENT_EMAIL_DOMAIN)
+  personalEmail String?                     // mutable, unlike the login (etu.u-paris.fr) email; must not itself be an etu.u-paris.fr address (STUDENT_EMAIL_DOMAIN)
   promotion     Promotion?                  // null until profile completion (issue #9/#10); signup creates a bare login only
   profileStatus ProfileStatus @default(INCOMPLETE)
   profileYear   String?                     // school year the profile is up-to-date for, e.g. "2024-2025"

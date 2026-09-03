@@ -8,7 +8,7 @@ import { PrismaService } from "../src/prisma/prisma.service";
 import { cookieHeader, cookieMap, requireCookie } from "./helpers/cookies";
 
 function uniqueEmail(): string {
-  return `e2e.students.${randomUUID()}@u-pariscite.fr`;
+  return `e2e.students.${randomUUID()}@etu.u-paris.fr`;
 }
 
 describe("Students profile (e2e)", () => {

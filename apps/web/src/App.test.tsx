@@ -27,7 +27,7 @@ vi.mock("./features/admin/api", () => ({
 
 const authenticatedUser = {
   id: "1",
-  email: "etu@u-pariscite.fr",
+  email: "etu@etu.u-paris.fr",
   firstName: "Étu",
   lastName: "Dupont",
   roles: ["STUDENT"],
