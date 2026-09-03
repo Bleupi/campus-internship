@@ -24,6 +24,34 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("fr-FR");
 }
 
+function CertificatePreview({
+  loading,
+  error,
+  url,
+}: {
+  loading: boolean;
+  error: boolean;
+  url: string | null;
+}) {
+  if (loading) {
+    return <Typography sx={{ color: "text.secondary" }}>Chargement du certificat…</Typography>;
+  }
+  if (error) {
+    return <Alert severity="error">Impossible de charger le certificat.</Alert>;
+  }
+  if (!url) {
+    return null;
+  }
+  return (
+    <Box
+      component="iframe"
+      title="Aperçu du certificat"
+      src={url}
+      sx={{ width: "100%", height: 500, border: 1, borderColor: "divider" }}
+    />
+  );
+}
+
 const CONFLICT_TOAST_MESSAGE = "Déjà traité par un autre administrateur.";
 const GENERIC_ERROR_TOAST_MESSAGE = "Une erreur est survenue, réessayez.";
 
@@ -165,19 +193,13 @@ export function CertificateQueuePage() {
                 : "aucun certificat valide actuellement"}
             </Typography>
 
-            {selected.certificate &&
-              (certificateLoading ? (
-                <Typography sx={{ color: "text.secondary" }}>Chargement du certificat…</Typography>
-              ) : certificateError ? (
-                <Alert severity="error">Impossible de charger le certificat.</Alert>
-              ) : certificateUrl ? (
-                <Box
-                  component="iframe"
-                  title="Aperçu du certificat"
-                  src={certificateUrl}
-                  sx={{ width: "100%", height: 500, border: 1, borderColor: "divider" }}
-                />
-              ) : null)}
+            {selected.certificate && (
+              <CertificatePreview
+                loading={certificateLoading}
+                error={certificateError}
+                url={certificateUrl}
+              />
+            )}
 
             <Box sx={{ mt: 2 }}>
               <Typography variant="subtitle2">Motif de refus</Typography>
