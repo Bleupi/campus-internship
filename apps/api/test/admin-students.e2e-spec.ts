@@ -12,6 +12,15 @@ function uniqueEmail(prefix: string): string {
   return `e2e.admin-students.${prefix}.${randomUUID()}@u-pariscite.fr`;
 }
 
+// The certificate endpoint responds with an unregistered ("application/pdf")
+// content type, which supertest/superagent doesn't buffer into `res.body`
+// by default — this collects the raw bytes so tests can assert on them.
+function binaryParser(res: request.Response, callback: (err: null, body: Buffer) => void) {
+  const chunks: Buffer[] = [];
+  (res as unknown as NodeJS.ReadableStream).on("data", (chunk: Buffer) => chunks.push(chunk));
+  (res as unknown as NodeJS.ReadableStream).on("end", () => callback(null, Buffer.concat(chunks)));
+}
+
 describe("Admin profile-validation transitions (e2e)", () => {
   let app: INestApplication;
   let prisma: PrismaService;
@@ -81,7 +90,69 @@ describe("Admin profile-validation transitions (e2e)", () => {
     return { studentId: profile.id, accessToken };
   }
 
+  // Uploads a real object to the (test) bucket via the actual student
+  // upload endpoint — unlike studentWithProfile()'s direct DB write, this is
+  // needed here because GET .../certificate reads the object back from S3
+  // via FilesService.download(), not just the FileObject row.
+  async function completeProfileWithRealCertificate(certificateBytes: string): Promise<string> {
+    const email = uniqueEmail("cert-owner");
+    createdUserEmails.push(email);
+    const signupResponse = await request(app.getHttpServer())
+      .post("/auth/signup")
+      .send({
+        email,
+        password: "a-password-that-is-long-enough",
+        firstName: "Étu",
+        lastName: "Dupont",
+      })
+      .expect(201);
+    const accessToken = cookieMap(signupResponse).access_token ?? "";
+    const authCookie = cookieHeader({ access_token: accessToken });
+
+    await request(app.getHttpServer())
+      .patch("/students/me/profile")
+      .set("Cookie", authCookie)
+      .send({ promotion: "L3" })
+      .expect(200);
+    await request(app.getHttpServer())
+      .post("/students/me/profile/id-photo")
+      .set("Cookie", authCookie)
+      .attach("file", Buffer.from("fake-id-photo-bytes"), {
+        filename: "id.png",
+        contentType: "image/png",
+      })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post("/students/me/profile/insurance-certificate")
+      .set("Cookie", authCookie)
+      .attach("file", Buffer.from(certificateBytes), {
+        filename: "cert.pdf",
+        contentType: "application/pdf",
+      })
+      .expect(201);
+
+    const profile = await prisma.studentProfile.findFirstOrThrow({ where: { user: { email } } });
+    return profile.id;
+  }
+
   describe("RBAC — non-ADMIN caller is forbidden", () => {
+    it("GET .../certificate: 403 for a STUDENT caller", async () => {
+      const { studentId, accessToken } = await studentWithProfile("PENDING_VALIDATION");
+
+      await request(app.getHttpServer())
+        .get(`/admin/students/${studentId}/profile/certificate`)
+        .set("Cookie", cookieHeader({ access_token: accessToken }))
+        .expect(403);
+    });
+
+    it("GET .../certificate: 401 with no cookie at all", async () => {
+      const { studentId } = await studentWithProfile("PENDING_VALIDATION");
+
+      await request(app.getHttpServer())
+        .get(`/admin/students/${studentId}/profile/certificate`)
+        .expect(401);
+    });
+
     it("PATCH .../validate: 403 for a STUDENT caller", async () => {
       const { studentId, accessToken } = await studentWithProfile("PENDING_VALIDATION");
 
@@ -107,6 +178,38 @@ describe("Admin profile-validation transitions (e2e)", () => {
       await request(app.getHttpServer())
         .patch(`/admin/students/${studentId}/profile/validate`)
         .expect(401);
+    });
+  });
+
+  describe("GET .../certificate — issue #43 (ADR-0024): proxied stream, never a presigned URL", () => {
+    it("200s and streams the current certificate's bytes with its stored mimeType", async () => {
+      const studentId = await completeProfileWithRealCertificate("real-certificate-bytes");
+
+      const response = await request(app.getHttpServer())
+        .get(`/admin/students/${studentId}/profile/certificate`)
+        .set("Cookie", adminCookie)
+        .buffer(true)
+        .parse(binaryParser)
+        .expect(200);
+
+      expect(response.headers["content-type"]).toBe("application/pdf");
+      expect(response.body).toEqual(Buffer.from("real-certificate-bytes"));
+    });
+
+    it("404s when the student has no current (non-expired) certificate", async () => {
+      const { studentId } = await studentWithProfile("PENDING_VALIDATION");
+
+      await request(app.getHttpServer())
+        .get(`/admin/students/${studentId}/profile/certificate`)
+        .set("Cookie", adminCookie)
+        .expect(404);
+    });
+
+    it("404s for an unknown student id", async () => {
+      await request(app.getHttpServer())
+        .get(`/admin/students/${randomUUID()}/profile/certificate`)
+        .set("Cookie", adminCookie)
+        .expect(404);
     });
   });
 

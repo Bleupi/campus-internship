@@ -1,15 +1,22 @@
+import type { Readable } from "node:stream";
 import { ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
-import type { AdminProfileTransitionResponse, ProfileStatus } from "shared";
+import type { AdminProfileTransitionResponse, FileType, ProfileStatus } from "shared";
 import { PrismaService } from "../../prisma/prisma.service";
+import { currentFileFilter } from "../files/current-file.util";
+import { FilesService } from "../files/files.service";
 
 const VALIDATABLE_STATUSES: ProfileStatus[] = ["PENDING_VALIDATION"];
 const REJECTABLE_STATUSES: ProfileStatus[] = ["PENDING_VALIDATION", "VALID"];
+const CERTIFICATE_TYPE = "INSURANCE_CERTIFICATE" satisfies FileType;
 
 @Injectable()
 export class AdminStudentsService {
   private readonly logger = new Logger(AdminStudentsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly filesService: FilesService,
+  ) {}
 
   // ADR-0004: PENDING_VALIDATION -> VALID. The source-status check is part of
   // the `updateMany` WHERE clause (not a separate read-then-write) so two
@@ -48,6 +55,24 @@ export class AdminStudentsService {
     });
     this.notifyStudent(userId, `Votre profil a été rejeté : ${reason}`);
     return { studentId, profileStatus: "INCOMPLETE" };
+  }
+
+  // Issue #43 / ADR-0024: proxy the current non-expired certificate through
+  // this service rather than handing out a presigned URL, so every access
+  // still goes through JwtAuthGuard + RolesGuard(ADMIN). Same "current file"
+  // semantics as StudentsService.currentFiles(): most recent non-expired row
+  // of this type, if any.
+  async getCertificateStream(studentId: string): Promise<{ stream: Readable; mimeType: string }> {
+    const file = await this.prisma.fileObject.findFirst({
+      where: { studentProfileId: studentId, type: CERTIFICATE_TYPE, ...currentFileFilter() },
+      orderBy: { uploadedAt: "desc" },
+    });
+    if (!file) {
+      throw new NotFoundException("Aucun certificat d'assurance actuel pour cet étudiant");
+    }
+
+    const stream = await this.filesService.download(file.bucketKey);
+    return { stream, mimeType: file.mimeType };
   }
 
   // Only reached when the conditional updateMany above matched zero rows —

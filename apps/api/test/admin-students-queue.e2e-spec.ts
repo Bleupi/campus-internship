@@ -199,4 +199,44 @@ describe("Admin certificate-validation queue (e2e) — issue #42", () => {
       expect(entry?.certificate).toBeNull();
     });
   });
+
+  // Issue #43 acceptance criterion: after validate/reject, the acted-on
+  // student no longer appears in the queue-list response from #42 — the
+  // queue is derived purely from profileStatus, so this exercises the two
+  // endpoints together rather than re-testing either transition in isolation
+  // (already covered by admin-students.e2e-spec.ts).
+  describe("issue #43: queue reflects validate/reject transitions", () => {
+    it("removes the student from the queue after PATCH .../validate", async () => {
+      const { studentId } = await studentWithProfile("PENDING_VALIDATION");
+
+      await request(app.getHttpServer())
+        .patch(`/admin/students/${studentId}/profile/validate`)
+        .set("Cookie", adminCookie)
+        .expect(200);
+
+      const response = await request(app.getHttpServer())
+        .get("/admin/students/certificate-queue")
+        .set("Cookie", adminCookie)
+        .expect(200);
+      const ids = (response.body as Array<{ studentId: string }>).map((entry) => entry.studentId);
+      expect(ids).not.toContain(studentId);
+    });
+
+    it("removes the student from the queue after PATCH .../reject", async () => {
+      const { studentId } = await studentWithProfile("PENDING_VALIDATION");
+
+      await request(app.getHttpServer())
+        .patch(`/admin/students/${studentId}/profile/reject`)
+        .set("Cookie", adminCookie)
+        .send({ reason: "Document illisible" })
+        .expect(200);
+
+      const response = await request(app.getHttpServer())
+        .get("/admin/students/certificate-queue")
+        .set("Cookie", adminCookie)
+        .expect(200);
+      const ids = (response.body as Array<{ studentId: string }>).map((entry) => entry.studentId);
+      expect(ids).not.toContain(studentId);
+    });
+  });
 });

@@ -9,6 +9,7 @@ import {
   type StudentProfileResponse,
 } from "shared";
 import { PrismaService } from "../../prisma/prisma.service";
+import { currentFileFilter } from "../files/current-file.util";
 import { FilesService } from "../files/files.service";
 import type { UpdateProfileDto } from "./dto/update-profile.dto";
 
@@ -158,10 +159,7 @@ export class StudentsService {
   // one, never the full history.
   private async currentFiles(studentProfileId: string): Promise<FileObject[]> {
     const files = await this.prisma.fileObject.findMany({
-      where: {
-        studentProfileId,
-        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
-      },
+      where: { studentProfileId, ...currentFileFilter() },
       orderBy: { uploadedAt: "desc" },
     });
 

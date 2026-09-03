@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import type { CertificateQueueResponse, FileType, ProfileStatus, Promotion } from "shared";
 import { PrismaService } from "../../prisma/prisma.service";
+import { currentFileFilter } from "../files/current-file.util";
 
 const CERTIFICATE_TYPE = "INSURANCE_CERTIFICATE" satisfies FileType;
 
@@ -26,10 +27,7 @@ export class AdminStudentsQueueService {
         // Same "current file" semantics as StudentsService.currentFiles():
         // most recent non-expired row of this type, if any.
         files: {
-          where: {
-            type: CERTIFICATE_TYPE,
-            OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
-          },
+          where: { type: CERTIFICATE_TYPE, ...currentFileFilter() },
           orderBy: { uploadedAt: "desc" },
           take: 1,
           select: { uploadedAt: true },

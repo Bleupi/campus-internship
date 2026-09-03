@@ -1,6 +1,8 @@
+import { Readable } from "node:stream";
 import { ConflictException, NotFoundException } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import { PrismaService } from "../../prisma/prisma.service";
+import { FilesService } from "../files/files.service";
 import { AdminStudentsService } from "./admin-students.service";
 
 const STUDENT_ID = "profile-1";
@@ -14,7 +16,11 @@ describe("AdminStudentsService", () => {
       findUniqueOrThrow: jest.Mock;
       findUnique: jest.Mock;
     };
+    fileObject: {
+      findFirst: jest.Mock;
+    };
   };
+  let filesService: { download: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
@@ -23,10 +29,18 @@ describe("AdminStudentsService", () => {
         findUniqueOrThrow: jest.fn(),
         findUnique: jest.fn(),
       },
+      fileObject: {
+        findFirst: jest.fn(),
+      },
     };
+    filesService = { download: jest.fn() };
 
     const module = await Test.createTestingModule({
-      providers: [AdminStudentsService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        AdminStudentsService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: FilesService, useValue: filesService },
+      ],
     }).compile();
 
     service = module.get(AdminStudentsService);
@@ -99,6 +113,41 @@ describe("AdminStudentsService", () => {
       await expect(
         service.rejectProfile(STUDENT_ID, "Certificat illisible"),
       ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe("getCertificateStream — issue #43: certificate proxy", () => {
+    it("streams the current non-expired INSURANCE_CERTIFICATE via FilesService", async () => {
+      prisma.fileObject.findFirst.mockResolvedValue({
+        bucketKey: "students/profile-1/INSURANCE_CERTIFICATE/abc",
+        mimeType: "application/pdf",
+      });
+      const stream = Readable.from([Buffer.from("pdf-bytes")]);
+      filesService.download.mockResolvedValue(stream);
+
+      const result = await service.getCertificateStream(STUDENT_ID);
+
+      expect(prisma.fileObject.findFirst).toHaveBeenCalledWith({
+        where: {
+          studentProfileId: STUDENT_ID,
+          type: "INSURANCE_CERTIFICATE",
+          OR: [{ expiresAt: null }, { expiresAt: { gt: expect.any(Date) } }],
+        },
+        orderBy: { uploadedAt: "desc" },
+      });
+      expect(filesService.download).toHaveBeenCalledWith(
+        "students/profile-1/INSURANCE_CERTIFICATE/abc",
+      );
+      expect(result).toEqual({ stream, mimeType: "application/pdf" });
+    });
+
+    it("throws NotFoundException when no current certificate exists", async () => {
+      prisma.fileObject.findFirst.mockResolvedValue(null);
+
+      await expect(service.getCertificateStream(STUDENT_ID)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(filesService.download).not.toHaveBeenCalled();
     });
   });
 });

@@ -19,3 +19,9 @@ export function setMatchMedia(matches: boolean) {
 }
 
 setMatchMedia(false);
+
+// jsdom doesn't implement the Blob object-URL APIs either (issue #43's
+// certificate viewer uses URL.createObjectURL/revokeObjectURL) — stubbed
+// globally for the same reason as matchMedia above.
+URL.createObjectURL = vi.fn(() => "blob:mock-url");
+URL.revokeObjectURL = vi.fn();

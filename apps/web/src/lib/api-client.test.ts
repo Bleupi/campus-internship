@@ -11,6 +11,16 @@ function jsonResponse(status: number, body: unknown, ok = status >= 200 && statu
   } as unknown as Response;
 }
 
+function blobResponse(status: number, blob: Blob, ok = status >= 200 && status < 300) {
+  return {
+    ok,
+    status,
+    headers: { get: () => "application/pdf" },
+    blob: async () => blob,
+    text: async () => "",
+  } as unknown as Response;
+}
+
 describe("apiClient 401-retry-once interceptor", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
@@ -75,5 +85,21 @@ describe("apiClient 401-retry-once interceptor", () => {
       apiClient.post("/auth/login", { email: "a@u-pariscite.fr", password: "x" }),
     ).rejects.toBeInstanceOf(ApiError);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  // Issue #43: apiClient.getBlob() (used for the certificate stream) shares
+  // fetchWithAuth() with the JSON methods above, so it gets the same
+  // 401-retry-once behavior for free — this pins that down explicitly.
+  it("getBlob: retries once via /auth/refresh on a 401, then returns the retried Blob", async () => {
+    const blob = new Blob(["pdf-bytes"], { type: "application/pdf" });
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(401, { message: "expired" }, false)) // original call
+      .mockResolvedValueOnce(jsonResponse(200, { user: { id: "1" } })) // /auth/refresh
+      .mockResolvedValueOnce(blobResponse(200, blob)); // retried original call
+
+    const result = await apiClient.getBlob("/admin/students/s1/profile/certificate");
+
+    expect(result).toBe(blob);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });

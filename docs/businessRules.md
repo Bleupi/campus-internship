@@ -43,6 +43,8 @@
 
 **BR-08 — Snapshot immutability.** On `VALIDATED`/`REFUSED`, a Zod-validated, versioned snapshot of all stage information is frozen. Subsequent edits to related data (organism name, tutor, etc.) do **not** affect archived stages. Reporting FKs are kept but are not the display source.
 
+**BR-10 — Insurance certificate content is a manual visual check.** The admin's validate/reject judgment on an `INSURANCE_CERTIFICATE`'s content — that its coverage extends to internships specifically, and overlaps the current school year (see `CONTEXT.md` for the inconsistent phrasing insurers actually use for both) — is a manual, visual check in V1. No automated text extraction/OCR reads the document; that is parked in `docs/ROADMAP_V2.md`, not built unless explicitly requested.
+
 ## Concurrency
 
 **BR-09 — Optimistic locking.** Stage writes use an optimistic `version` counter. A write succeeds only if the version is unchanged since read; otherwise the admin is asked to reload.
