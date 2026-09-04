@@ -5,6 +5,7 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   Chip,
   Container,
   Dialog,
@@ -12,6 +13,7 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  FormControlLabel,
   Stack,
   TextField,
   Typography,
@@ -68,6 +70,8 @@ export function ProfilePage() {
   const [isEditing, setIsEditing] = useState<boolean | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
+  // Issue #65: nudge, not a verifiable guarantee — client-side only, never persisted.
+  const [certificateConsentChecked, setCertificateConsentChecked] = useState(false);
 
   // BR-06: EXPIRED is a hard-block state too (lazy yearly rollover at
   // login) — same forced edit form as INCOMPLETE, see ProfilePage.test.tsx.
@@ -130,29 +134,41 @@ export function ProfilePage() {
     });
   };
 
-  const handleCertificateChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    if (profile.profileStatus === "VALID") {
-      setPendingAction({ type: "certificate", file });
-      return;
-    }
+  const submitCertificate = (file: File) => {
     setServerError(null);
     uploadInsuranceCertificate.mutate(file, {
+      // Only reset consent on success: an unrelated upload failure shouldn't force the
+      // student to re-tick the checkbox just to retry the same file.
+      onSuccess: () => setCertificateConsentChecked(false),
       onError: () => setServerError("Une erreur est survenue, merci de réessayer."),
     });
   };
 
+  const handleCertificateChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !certificateConsentChecked) return;
+    if (profile.profileStatus === "VALID") {
+      setPendingAction({ type: "certificate", file });
+      return;
+    }
+    submitCertificate(file);
+  };
+
+  const cancelPendingAction = () => {
+    // A canceled certificate replacement must not carry a stale "confirmed" consent
+    // over to a different file picked afterwards.
+    if (pendingAction?.type === "certificate") setCertificateConsentChecked(false);
+    setPendingAction(null);
+  };
+
   const confirmPendingAction = () => {
     if (!pendingAction) return;
-    setServerError(null);
     if (pendingAction.type === "promotion") {
+      setServerError(null);
       applyUpdate(pendingAction.values);
     } else {
-      uploadInsuranceCertificate.mutate(pendingAction.file, {
-        onError: () => setServerError("Une erreur est survenue, merci de réessayer."),
-      });
+      submitCertificate(pendingAction.file);
     }
     setPendingAction(null);
   };
@@ -165,7 +181,7 @@ export function ProfilePage() {
   const missingItems = [
     !profile.promotion && "votre promotion",
     !idPhoto && "votre photo d'identité",
-    !insuranceCertificate && "votre attestation d'assurance",
+    !insuranceCertificate && "votre attestation de responsabilité civile scolaire",
   ].filter((item): item is string => !!item);
 
   return (
@@ -185,7 +201,8 @@ export function ProfilePage() {
         {profile.profileStatus === "EXPIRED" && (
           <Alert severity="warning">
             Votre dossier doit être renouvelé pour la nouvelle année scolaire : merci de confirmer
-            votre promotion et de déposer une nouvelle attestation d'assurance.
+            votre promotion et de déposer une nouvelle attestation de responsabilité civile
+            scolaire.
           </Alert>
         )}
 
@@ -198,60 +215,79 @@ export function ProfilePage() {
 
         {serverError && <Alert severity="error">{serverError}</Alert>}
 
-        {editing ? (
-          <Box
-            component="form"
-            onSubmit={onSubmit}
-            noValidate
-            sx={{ display: "flex", flexDirection: "column", gap: 2 }}
-          >
-            <TextField
-              select
-              label="Promotion"
-              slotProps={{ select: { native: true } }}
-              {...register("promotion")}
-              error={!!errors.promotion}
-              helperText={errors.promotion?.message}
+        <Stack spacing={2} component="section">
+          <Typography variant="h6" component="h2">
+            Mes informations
+          </Typography>
+
+          {editing ? (
+            <Box
+              component="form"
+              onSubmit={onSubmit}
+              noValidate
+              sx={{ display: "flex", flexDirection: "column", gap: 2 }}
             >
-              <option value="" />
-              <option value="L2">L2</option>
-              <option value="L3">L3</option>
-            </TextField>
-            <TextField
-              label="Téléphone"
-              {...register("phone")}
-              error={!!errors.phone}
-              helperText={errors.phone?.message}
-            />
-            <TextField
-              label="Email personnel"
-              type="email"
-              {...register("personalEmail")}
-              error={!!errors.personalEmail}
-              helperText={errors.personalEmail?.message}
-            />
+              <TextField
+                select
+                label="Promotion"
+                slotProps={{ select: { native: true } }}
+                {...register("promotion")}
+                error={!!errors.promotion}
+                helperText={errors.promotion?.message}
+              >
+                <option value="" />
+                <option value="L2">L2</option>
+                <option value="L3">L3</option>
+              </TextField>
+              <TextField
+                label="Téléphone"
+                {...register("phone")}
+                error={!!errors.phone}
+                helperText={errors.phone?.message}
+              />
+              <Box>
+                <TextField
+                  label="Email personnel"
+                  type="email"
+                  fullWidth
+                  {...register("personalEmail")}
+                  error={!!errors.personalEmail}
+                  helperText={errors.personalEmail?.message}
+                />
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                  Cette adresse est aussi utilisée pour vous envoyer des notifications par email.
+                </Typography>
+              </Box>
 
-            <Stack direction="row" spacing={2}>
-              <Button type="submit" variant="contained" disabled={isSubmitting}>
-                Enregistrer
-              </Button>
-              {!mustComplete && <Button onClick={() => setIsEditing(false)}>Annuler</Button>}
-            </Stack>
-          </Box>
-        ) : (
-          <Stack spacing={1}>
-            <Typography>Promotion : {profile.promotion ?? "—"}</Typography>
-            <Typography>Téléphone : {profile.phone ?? "—"}</Typography>
-            <Typography>Email personnel : {profile.personalEmail ?? "—"}</Typography>
-            <Box>
-              <Button variant="outlined" onClick={() => setIsEditing(true)}>
-                Modifier
-              </Button>
+              <Stack direction="row" spacing={2}>
+                <Button type="submit" variant="contained" disabled={isSubmitting}>
+                  Enregistrer
+                </Button>
+                {!mustComplete && <Button onClick={() => setIsEditing(false)}>Annuler</Button>}
+              </Stack>
             </Box>
-          </Stack>
-        )}
+          ) : (
+            <Stack spacing={1}>
+              <Typography>Promotion : {profile.promotion ?? "non renseigné"}</Typography>
+              <Typography>Téléphone : {profile.phone ?? "non renseigné"}</Typography>
+              <Box>
+                <Typography>
+                  Email personnel : {profile.personalEmail ?? "non renseigné"}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Cette adresse est aussi utilisée pour vous envoyer des notifications par email.
+                </Typography>
+              </Box>
+              <Box>
+                <Button variant="outlined" onClick={() => setIsEditing(true)}>
+                  Modifier
+                </Button>
+              </Box>
+            </Stack>
+          )}
+        </Stack>
 
-        <Stack spacing={2}>
+        <Stack spacing={2} component="section">
           <Typography variant="h6" component="h2">
             Documents
           </Typography>
@@ -275,28 +311,61 @@ export function ProfilePage() {
             </Button>
           </Stack>
 
-          <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
-            <Typography>
-              Attestation d'assurance :{" "}
-              {insuranceCertificate
-                ? `envoyée le ${new Date(insuranceCertificate.uploadedAt).toLocaleDateString("fr-FR")}`
-                : "aucun fichier"}
+          <Stack spacing={1}>
+            <Typography
+              id="certificate-content-checklist"
+              variant="body2"
+              color="text.secondary"
+              data-testid="certificate-content-checklist"
+            >
+              Votre document doit couvrir : vos stages (ex. « stages conventionnés », « stage de
+              formation », « stage en entreprise », « les stages nécessités par la scolarité »…) et
+              l'année scolaire en cours (ex. « vie scolaire », « activités scolaires et
+              extrascolaires », « enseignement supérieur », « au cours de ses études »…). Le
+              document varie selon votre assureur, ce qui compte, c'est que ces deux points y
+              figurent, peu importe la formulation exacte.
             </Typography>
-            <Button component="label" variant="outlined" size="small">
-              Remplacer
-              <input
-                type="file"
-                hidden
-                data-testid="insurance-certificate-input"
-                accept={INSURANCE_CERTIFICATE_MIME_TYPES.join(",")}
-                onChange={handleCertificateChange}
-              />
-            </Button>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={certificateConsentChecked}
+                  onChange={(event) => setCertificateConsentChecked(event.target.checked)}
+                  slotProps={{
+                    input: { "aria-describedby": "certificate-content-checklist" },
+                  }}
+                />
+              }
+              label="Je confirme que mon attestation couvre bien mes stages et l'année scolaire en cours."
+            />
+            <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
+              <Typography>
+                Attestation de responsabilité civile scolaire :{" "}
+                {insuranceCertificate
+                  ? `envoyée le ${new Date(insuranceCertificate.uploadedAt).toLocaleDateString("fr-FR")}`
+                  : "aucun fichier"}
+              </Typography>
+              <Button
+                component="label"
+                variant="outlined"
+                size="small"
+                disabled={!certificateConsentChecked}
+              >
+                Remplacer
+                <input
+                  type="file"
+                  hidden
+                  disabled={!certificateConsentChecked}
+                  data-testid="insurance-certificate-input"
+                  accept={INSURANCE_CERTIFICATE_MIME_TYPES.join(",")}
+                  onChange={handleCertificateChange}
+                />
+              </Button>
+            </Stack>
           </Stack>
         </Stack>
       </Box>
 
-      <Dialog open={pendingAction !== null} onClose={() => setPendingAction(null)}>
+      <Dialog open={pendingAction !== null} onClose={cancelPendingAction}>
         <DialogTitle>Confirmer la modification</DialogTitle>
         <DialogContent>
           <DialogContentText>
@@ -305,7 +374,7 @@ export function ProfilePage() {
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setPendingAction(null)}>Annuler</Button>
+          <Button onClick={cancelPendingAction}>Annuler</Button>
           <Button onClick={confirmPendingAction} variant="contained" autoFocus>
             Confirmer
           </Button>
