@@ -26,6 +26,13 @@ export const envSchema = z
       .string()
       .default("false")
       .transform((value) => value === "true"),
+    // Scaleway Transactional Email (ADR-0026) — region is fixed (fr-par is
+    // currently the only one Scaleway TEM offers), so only credentials and
+    // the verified sender identity are configurable.
+    MAILER_SCW_SECRET_KEY: z.string(),
+    MAILER_SCW_PROJECT_ID: z.string(),
+    MAILER_FROM_EMAIL: z.string().email(),
+    MAILER_FROM_NAME: z.string().default("Gestion des stages"),
   })
   // Nest's ConfigModule only reassigns this schema's *own* output back onto
   // process.env when `validate` is set (see ConfigModule.assignVariablesToProcess).

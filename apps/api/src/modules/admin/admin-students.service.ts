@@ -4,6 +4,7 @@ import type { AdminProfileTransitionResponse, FileType, ProfileStatus } from "sh
 import { PrismaService } from "../../prisma/prisma.service";
 import { currentFileFilter } from "../files/current-file.util";
 import { FilesService } from "../files/files.service";
+import { MailerService } from "../mailer/mailer.service";
 
 const VALIDATABLE_STATUSES: ProfileStatus[] = ["PENDING_VALIDATION"];
 const REJECTABLE_STATUSES: ProfileStatus[] = ["PENDING_VALIDATION", "VALID"];
@@ -16,6 +17,7 @@ export class AdminStudentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly filesService: FilesService,
+    private readonly mailerService: MailerService,
   ) {}
 
   // ADR-0004: PENDING_VALIDATION -> VALID. The source-status check is part of
@@ -31,11 +33,12 @@ export class AdminStudentsService {
       await this.throwForFailedTransition(studentId, "valider");
     }
 
-    const { userId } = await this.prisma.studentProfile.findUniqueOrThrow({
-      where: { id: studentId },
-      select: { userId: true },
-    });
-    this.notifyStudent(userId, "Votre certificat d'assurance a été validé.");
+    const profile = await this.getNotificationTarget(studentId);
+    await this.notifyStudent(
+      profile,
+      "Votre profil a été validé",
+      "Votre certificat d'assurance a été validé.",
+    );
     return { studentId, profileStatus: "VALID" };
   }
 
@@ -49,11 +52,12 @@ export class AdminStudentsService {
       await this.throwForFailedTransition(studentId, "rejeter");
     }
 
-    const { userId } = await this.prisma.studentProfile.findUniqueOrThrow({
-      where: { id: studentId },
-      select: { userId: true },
-    });
-    this.notifyStudent(userId, `Votre profil a été rejeté : ${reason}`);
+    const profile = await this.getNotificationTarget(studentId);
+    await this.notifyStudent(
+      profile,
+      "Votre profil a été rejeté",
+      `Votre profil a été rejeté : ${reason}`,
+    );
     return { studentId, profileStatus: "INCOMPLETE" };
   }
 
@@ -95,11 +99,44 @@ export class AdminStudentsService {
     );
   }
 
-  // BR-07: the student is notified on validation/refusal, and a refusal
-  // notification must include the reason. No notification subsystem
-  // (mailer, queue, ...) exists yet in this codebase — logged as a stub per
-  // issue #13 scope; building one is a separate ticket.
-  private notifyStudent(userId: string, message: string): void {
-    this.logger.log(`Notifying student user ${userId}: ${message}`);
+  // Shared by validateProfile/rejectProfile — both need the same recipient
+  // shape for notifyStudent() right after their own transition-specific
+  // updateMany/throwForFailedTransition.
+  private async getNotificationTarget(
+    studentId: string,
+  ): Promise<{ personalEmail: string | null; user: { email: string } }> {
+    return this.prisma.studentProfile.findUniqueOrThrow({
+      where: { id: studentId },
+      select: { personalEmail: true, user: { select: { email: true } } },
+    });
+  }
+
+  // BR-11: the student is notified by real email on validation/refusal — to
+  // their university address always, and cc'd to their personal address
+  // when one is on file. A refusal email's text already carries the reason
+  // (built by the caller). Errors are caught and logged rather than
+  // propagated: by this point the status transition already committed, and
+  // this project builds no in-app delivery-failure handling (ADR-0026) — a
+  // failed send is diagnosed via Scaleway's own activity dashboard, not by
+  // turning an already-successful admin action into a 500.
+  private async notifyStudent(
+    profile: { personalEmail: string | null; user: { email: string } },
+    subject: string,
+    text: string,
+  ): Promise<void> {
+    try {
+      await this.mailerService.send({
+        to: { email: profile.user.email },
+        cc: profile.personalEmail ? { email: profile.personalEmail } : undefined,
+        subject,
+        text,
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to email student ${profile.user.email}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
 }
