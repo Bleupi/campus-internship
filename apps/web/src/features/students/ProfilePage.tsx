@@ -109,7 +109,10 @@ export function ProfilePage() {
   const applyUpdate = (values: UpdateProfileRequest) => {
     setServerError(null);
     updateProfile.mutate(values, {
-      onSuccess: () => setIsEditing(false),
+      onSuccess: () => {
+        setIsEditing(false);
+        setCertificateConsentChecked(false);
+      },
       onError: () => setServerError("Une erreur est survenue, merci de réessayer."),
     });
   };
@@ -215,154 +218,193 @@ export function ProfilePage() {
 
         {serverError && <Alert severity="error">{serverError}</Alert>}
 
-        <Stack spacing={2} component="section">
-          <Typography variant="h6" component="h2">
-            Mes informations
-          </Typography>
+        <Box
+          component="form"
+          onSubmit={onSubmit}
+          noValidate
+          sx={{ display: "flex", flexDirection: "column", gap: 3 }}
+        >
+          <Stack spacing={2} component="section">
+            <Typography variant="h6" component="h2">
+              Identité &amp; contact
+            </Typography>
 
-          {editing ? (
-            <Box
-              component="form"
-              onSubmit={onSubmit}
-              noValidate
-              sx={{ display: "flex", flexDirection: "column", gap: 2 }}
-            >
-              <TextField
-                select
-                label="Promotion"
-                slotProps={{ select: { native: true } }}
-                {...register("promotion")}
-                error={!!errors.promotion}
-                helperText={errors.promotion?.message}
-              >
-                <option value="" />
-                <option value="L2">L2</option>
-                <option value="L3">L3</option>
-              </TextField>
-              <TextField
-                label="Téléphone"
-                {...register("phone")}
-                error={!!errors.phone}
-                helperText={errors.phone?.message}
-              />
-              <Box>
+            {editing ? (
+              <Stack spacing={2}>
                 <TextField
-                  label="Email personnel"
-                  type="email"
-                  fullWidth
-                  {...register("personalEmail")}
-                  error={!!errors.personalEmail}
-                  helperText={errors.personalEmail?.message}
+                  select
+                  label="Promotion"
+                  slotProps={{ select: { native: true } }}
+                  {...register("promotion")}
+                  error={!!errors.promotion}
+                  helperText={errors.promotion?.message}
+                >
+                  <option value="" />
+                  <option value="L2">L2</option>
+                  <option value="L3">L3</option>
+                </TextField>
+                <TextField
+                  label="Téléphone"
+                  {...register("phone")}
+                  error={!!errors.phone}
+                  helperText={errors.phone?.message}
                 />
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                  Cette adresse est aussi utilisée pour vous envoyer des notifications par email.
-                </Typography>
-              </Box>
+                <Box>
+                  <TextField
+                    label="Email personnel"
+                    type="email"
+                    fullWidth
+                    {...register("personalEmail")}
+                    error={!!errors.personalEmail}
+                    helperText={errors.personalEmail?.message}
+                  />
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    Cette adresse est aussi utilisée pour vous envoyer des notifications par email.
+                  </Typography>
+                </Box>
+              </Stack>
+            ) : (
+              <Stack spacing={1}>
+                <Typography>Promotion : {profile.promotion ?? "non renseigné"}</Typography>
+                <Typography>Téléphone : {profile.phone ?? "non renseigné"}</Typography>
+                <Box>
+                  <Typography>
+                    Email personnel : {profile.personalEmail ?? "non renseigné"}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Cette adresse est aussi utilisée pour vous envoyer des notifications par email.
+                  </Typography>
+                </Box>
+              </Stack>
+            )}
+          </Stack>
 
-              <Stack direction="row" spacing={2}>
+          <Stack spacing={2} component="section">
+            <Typography variant="h6" component="h2">
+              Documents
+            </Typography>
+
+            {editing ? (
+              <Stack spacing={2}>
+                <Stack
+                  direction="row"
+                  sx={{ alignItems: "center", justifyContent: "space-between" }}
+                >
+                  <Typography>
+                    Photo d'identité :{" "}
+                    {idPhoto
+                      ? `envoyée le ${new Date(idPhoto.uploadedAt).toLocaleDateString("fr-FR")}`
+                      : "aucun fichier"}
+                  </Typography>
+                  <Button component="label" variant="outlined" size="small">
+                    Remplacer
+                    <input
+                      type="file"
+                      hidden
+                      data-testid="id-photo-input"
+                      accept={ID_PHOTO_MIME_TYPES.join(",")}
+                      onChange={handleIdPhotoChange}
+                    />
+                  </Button>
+                </Stack>
+
+                <Stack spacing={1}>
+                  <Typography
+                    id="certificate-content-checklist"
+                    variant="body2"
+                    color="text.secondary"
+                    data-testid="certificate-content-checklist"
+                  >
+                    Votre document doit couvrir : vos stages (ex. « stages conventionnés », « stage
+                    de formation », « stage en entreprise », « les stages nécessités par la
+                    scolarité »…) et l'année scolaire en cours (ex. « vie scolaire », « activités
+                    scolaires et extrascolaires », « enseignement supérieur », « au cours de ses
+                    études »…). Le document varie selon votre assureur, ce qui compte, c'est que ces
+                    deux points y figurent, peu importe la formulation exacte.
+                  </Typography>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={certificateConsentChecked}
+                        onChange={(event) => setCertificateConsentChecked(event.target.checked)}
+                        slotProps={{
+                          input: { "aria-describedby": "certificate-content-checklist" },
+                        }}
+                      />
+                    }
+                    label="Je confirme que mon attestation couvre bien mes stages et l'année scolaire en cours."
+                  />
+                  <Stack
+                    direction="row"
+                    sx={{ alignItems: "center", justifyContent: "space-between" }}
+                  >
+                    <Typography>
+                      Attestation de responsabilité civile scolaire :{" "}
+                      {insuranceCertificate
+                        ? `envoyée le ${new Date(insuranceCertificate.uploadedAt).toLocaleDateString("fr-FR")}`
+                        : "aucun fichier"}
+                    </Typography>
+                    <Button
+                      component="label"
+                      variant="outlined"
+                      size="small"
+                      disabled={!certificateConsentChecked}
+                    >
+                      Remplacer
+                      <input
+                        type="file"
+                        hidden
+                        disabled={!certificateConsentChecked}
+                        data-testid="insurance-certificate-input"
+                        accept={INSURANCE_CERTIFICATE_MIME_TYPES.join(",")}
+                        onChange={handleCertificateChange}
+                      />
+                    </Button>
+                  </Stack>
+                </Stack>
+              </Stack>
+            ) : (
+              <Stack spacing={1}>
+                <Typography>
+                  Photo d'identité :{" "}
+                  {idPhoto
+                    ? `envoyée le ${new Date(idPhoto.uploadedAt).toLocaleDateString("fr-FR")}`
+                    : "aucun fichier"}
+                </Typography>
+                <Typography>
+                  Attestation de responsabilité civile scolaire :{" "}
+                  {insuranceCertificate
+                    ? `envoyée le ${new Date(insuranceCertificate.uploadedAt).toLocaleDateString("fr-FR")}`
+                    : "aucun fichier"}
+                </Typography>
+              </Stack>
+            )}
+          </Stack>
+
+          <Stack direction="row" spacing={2}>
+            {editing ? (
+              <>
                 <Button type="submit" variant="contained" disabled={isSubmitting}>
                   Enregistrer
                 </Button>
-                {!mustComplete && <Button onClick={() => setIsEditing(false)}>Annuler</Button>}
-              </Stack>
-            </Box>
-          ) : (
-            <Stack spacing={1}>
-              <Typography>Promotion : {profile.promotion ?? "non renseigné"}</Typography>
-              <Typography>Téléphone : {profile.phone ?? "non renseigné"}</Typography>
-              <Box>
-                <Typography>
-                  Email personnel : {profile.personalEmail ?? "non renseigné"}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Cette adresse est aussi utilisée pour vous envoyer des notifications par email.
-                </Typography>
-              </Box>
-              <Box>
-                <Button variant="outlined" onClick={() => setIsEditing(true)}>
-                  Modifier
-                </Button>
-              </Box>
-            </Stack>
-          )}
-        </Stack>
-
-        <Stack spacing={2} component="section">
-          <Typography variant="h6" component="h2">
-            Documents
-          </Typography>
-
-          <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
-            <Typography>
-              Photo d'identité :{" "}
-              {idPhoto
-                ? `envoyée le ${new Date(idPhoto.uploadedAt).toLocaleDateString("fr-FR")}`
-                : "aucun fichier"}
-            </Typography>
-            <Button component="label" variant="outlined" size="small">
-              Remplacer
-              <input
-                type="file"
-                hidden
-                data-testid="id-photo-input"
-                accept={ID_PHOTO_MIME_TYPES.join(",")}
-                onChange={handleIdPhotoChange}
-              />
-            </Button>
-          </Stack>
-
-          <Stack spacing={1}>
-            <Typography
-              id="certificate-content-checklist"
-              variant="body2"
-              color="text.secondary"
-              data-testid="certificate-content-checklist"
-            >
-              Votre document doit couvrir : vos stages (ex. « stages conventionnés », « stage de
-              formation », « stage en entreprise », « les stages nécessités par la scolarité »…) et
-              l'année scolaire en cours (ex. « vie scolaire », « activités scolaires et
-              extrascolaires », « enseignement supérieur », « au cours de ses études »…). Le
-              document varie selon votre assureur, ce qui compte, c'est que ces deux points y
-              figurent, peu importe la formulation exacte.
-            </Typography>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={certificateConsentChecked}
-                  onChange={(event) => setCertificateConsentChecked(event.target.checked)}
-                  slotProps={{
-                    input: { "aria-describedby": "certificate-content-checklist" },
-                  }}
-                />
-              }
-              label="Je confirme que mon attestation couvre bien mes stages et l'année scolaire en cours."
-            />
-            <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
-              <Typography>
-                Attestation de responsabilité civile scolaire :{" "}
-                {insuranceCertificate
-                  ? `envoyée le ${new Date(insuranceCertificate.uploadedAt).toLocaleDateString("fr-FR")}`
-                  : "aucun fichier"}
-              </Typography>
-              <Button
-                component="label"
-                variant="outlined"
-                size="small"
-                disabled={!certificateConsentChecked}
-              >
-                Remplacer
-                <input
-                  type="file"
-                  hidden
-                  disabled={!certificateConsentChecked}
-                  data-testid="insurance-certificate-input"
-                  accept={INSURANCE_CERTIFICATE_MIME_TYPES.join(",")}
-                  onChange={handleCertificateChange}
-                />
+                {!mustComplete && (
+                  <Button
+                    onClick={() => {
+                      setIsEditing(false);
+                      setCertificateConsentChecked(false);
+                    }}
+                  >
+                    Annuler
+                  </Button>
+                )}
+              </>
+            ) : (
+              <Button variant="outlined" onClick={() => setIsEditing(true)}>
+                Modifier
               </Button>
-            </Stack>
+            )}
           </Stack>
-        </Stack>
+        </Box>
       </Box>
 
       <Dialog open={pendingAction !== null} onClose={cancelPendingAction}>

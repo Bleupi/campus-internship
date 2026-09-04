@@ -114,11 +114,20 @@ describe("ProfilePage", () => {
     expect(screen.queryByRole("button", { name: /enregistrer/i })).not.toBeInTheDocument();
   });
 
-  it("shows both 'Remplacer' file buttons in read mode", async () => {
+  it("does NOT show 'Remplacer' file buttons in read mode (single edit affordance for the whole page)", async () => {
     getProfileMock.mockResolvedValue(validProfile());
     renderPage();
 
     await screen.findByRole("button", { name: /^modifier$/i });
+    expect(screen.queryAllByText(/remplacer/i).length).toBe(0);
+  });
+
+  it("shows both 'Remplacer' file buttons after clicking the single 'Modifier' affordance", async () => {
+    getProfileMock.mockResolvedValue(validProfile());
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole("button", { name: /^modifier$/i }));
     expect(screen.getAllByText(/remplacer/i).length).toBe(2);
   });
 
@@ -169,13 +178,34 @@ describe("ProfilePage", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  it("resets the certificate consent checkbox after saving identity fields only, not just on cancel", async () => {
+    getProfileMock.mockResolvedValue(validProfile());
+    updateProfileMock.mockResolvedValue(validProfile());
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole("button", { name: /^modifier$/i }));
+    await user.click(screen.getByRole("checkbox", { name: /je confirme que mon attestation/i }));
+    const phoneInput = screen.getByLabelText(/téléphone/i);
+    await user.clear(phoneInput);
+    await user.type(phoneInput, "0611223344");
+    await user.click(screen.getByRole("button", { name: /enregistrer/i }));
+
+    await waitFor(() => expect(updateProfileMock).toHaveBeenCalled());
+    await user.click(await screen.findByRole("button", { name: /^modifier$/i }));
+    expect(
+      screen.getByRole("checkbox", { name: /je confirme que mon attestation/i }),
+    ).not.toBeChecked();
+    expect(screen.getByTestId("insurance-certificate-input")).toBeDisabled();
+  });
+
   it("shows a confirmation dialog before replacing the insurance certificate on a VALID profile", async () => {
     getProfileMock.mockResolvedValue(validProfile());
     uploadInsuranceCertificateMock.mockResolvedValue(validProfile());
     const user = userEvent.setup();
     renderPage();
 
-    await screen.findByRole("button", { name: /^modifier$/i });
+    await user.click(await screen.findByRole("button", { name: /^modifier$/i }));
     await user.click(screen.getByRole("checkbox", { name: /je confirme que mon attestation/i }));
     const certificateInput = screen.getByTestId("insurance-certificate-input");
     const file = new File(["pdf-bytes"], "certificat.pdf", { type: "application/pdf" });
@@ -203,9 +233,10 @@ describe("ProfilePage", () => {
 
   it("shows a content checklist above the upload describing what the attestation must cover", async () => {
     getProfileMock.mockResolvedValue(validProfile());
+    const user = userEvent.setup();
     renderPage();
 
-    await screen.findByRole("button", { name: /^modifier$/i });
+    await user.click(await screen.findByRole("button", { name: /^modifier$/i }));
     const checklist = screen.getByTestId("certificate-content-checklist");
     expect(checklist.textContent).toMatch(/vos stages/i);
     expect(checklist.textContent).toMatch(/stages conventionnés/i);
@@ -215,9 +246,10 @@ describe("ProfilePage", () => {
 
   it("keeps the content checklist and its confirmation checkbox inside the documents section only", async () => {
     getProfileMock.mockResolvedValue(validProfile());
+    const user = userEvent.setup();
     renderPage();
 
-    await screen.findByRole("button", { name: /^modifier$/i });
+    await user.click(await screen.findByRole("button", { name: /^modifier$/i }));
     const documentsHeading = screen.getByRole("heading", { name: /^documents$/i });
     const documentsSection = documentsHeading.closest("section") ?? documentsHeading.parentElement;
     expect(documentsSection?.contains(screen.getByTestId("certificate-content-checklist"))).toBe(
@@ -298,7 +330,7 @@ describe("ProfilePage", () => {
     const user = userEvent.setup();
     renderPage();
 
-    await screen.findByRole("button", { name: /^modifier$/i });
+    await user.click(await screen.findByRole("button", { name: /^modifier$/i }));
     await user.click(screen.getByRole("checkbox", { name: /je confirme que mon attestation/i }));
     const certificateInput = screen.getByTestId("insurance-certificate-input");
     const file = new File(["pdf-bytes"], "certificat.pdf", { type: "application/pdf" });
@@ -320,7 +352,7 @@ describe("ProfilePage", () => {
     const user = userEvent.setup();
     renderPage();
 
-    await screen.findByRole("button", { name: /^modifier$/i });
+    await user.click(await screen.findByRole("button", { name: /^modifier$/i }));
     const idPhotoInput = screen.getByTestId("id-photo-input");
     const file = new File(["png-bytes"], "photo.png", { type: "image/png" });
     await user.upload(idPhotoInput, file);
@@ -396,10 +428,25 @@ describe("ProfilePage", () => {
     getProfileMock.mockResolvedValue(validProfile());
     renderPage();
 
-    expect(await screen.findByRole("heading", { name: /mes informations/i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /identité.*contact/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /^documents$/i })).toBeInTheDocument();
     // A single "Modifier" affordance for the whole page, not one per section.
     expect(screen.getAllByRole("button", { name: /^modifier$/i }).length).toBe(1);
+  });
+
+  it("switches both sections into edit mode together when the single 'Modifier' affordance is clicked", async () => {
+    getProfileMock.mockResolvedValue(validProfile());
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole("button", { name: /^modifier$/i }));
+
+    expect(screen.getByLabelText(/promotion/i)).toBeInTheDocument();
+    expect(screen.getByTestId("certificate-content-checklist")).toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", { name: /je confirme que mon attestation/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryAllByRole("button", { name: /^modifier$/i }).length).toBe(0);
   });
 
   it("shows a note that the personal email is also used for notifications, in the viewing state", async () => {
