@@ -187,6 +187,12 @@ export function ProfilePage() {
     !insuranceCertificate && "votre attestation de responsabilité civile scolaire",
   ].filter((item): item is string => !!item);
 
+  // An untouched, empty phone field must submit as null (a valid "no value"),
+  // not "" (which frenchMobilePhoneSchema deliberately rejects).
+  const phoneField = register("phone", {
+    setValueAs: (value: string) => (value === "" ? null : value),
+  });
+
   return (
     <Container maxWidth="sm">
       <Box sx={{ mt: 8, display: "flex", flexDirection: "column", gap: 3 }}>
@@ -245,7 +251,11 @@ export function ProfilePage() {
                 </TextField>
                 <TextField
                   label="Téléphone"
-                  {...register("phone")}
+                  {...phoneField}
+                  onChange={(event) => {
+                    event.target.value = event.target.value.replace(/[^\d+]/g, "");
+                    phoneField.onChange(event);
+                  }}
                   error={!!errors.phone}
                   helperText={errors.phone?.message}
                 />
@@ -254,7 +264,9 @@ export function ProfilePage() {
                     label="Email personnel"
                     type="email"
                     fullWidth
-                    {...register("personalEmail")}
+                    {...register("personalEmail", {
+                      setValueAs: (value: string) => (value === "" ? null : value),
+                    })}
                     error={!!errors.personalEmail}
                     helperText={errors.personalEmail?.message}
                   />
@@ -315,12 +327,9 @@ export function ProfilePage() {
                     color="text.secondary"
                     data-testid="certificate-content-checklist"
                   >
-                    Votre document doit couvrir : vos stages (ex. « stages conventionnés », « stage
-                    de formation », « stage en entreprise », « les stages nécessités par la
-                    scolarité »…) et l'année scolaire en cours (ex. « vie scolaire », « activités
-                    scolaires et extrascolaires », « enseignement supérieur », « au cours de ses
-                    études »…). Le document varie selon votre assureur, ce qui compte, c'est que ces
-                    deux points y figurent, peu importe la formulation exacte.
+                    Votre document doit couvrir : vos stages et l'année scolaire en cours. Le
+                    document varie selon votre assureur, ce qui compte, c'est que ces deux points y
+                    figurent, peu importe la formulation exacte.
                   </Typography>
                   <FormControlLabel
                     control={

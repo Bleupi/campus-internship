@@ -46,6 +46,24 @@ function validProfile() {
   };
 }
 
+function validProfileWithoutContact() {
+  return {
+    promotion: "L2",
+    phone: null,
+    personalEmail: null,
+    profileStatus: "VALID",
+    profileYear: "2025-2026",
+    files: [
+      { type: "ID_PHOTO", mimeType: "image/png", uploadedAt: "2026-01-01T00:00:00.000Z" },
+      {
+        type: "INSURANCE_CERTIFICATE",
+        mimeType: "application/pdf",
+        uploadedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ],
+  };
+}
+
 function expiredProfile() {
   return {
     promotion: "L2",
@@ -114,6 +132,33 @@ describe("ProfilePage", () => {
     expect(screen.queryByRole("button", { name: /enregistrer/i })).not.toBeInTheDocument();
   });
 
+  it("shows no validation errors when entering edit mode with an unset phone/personalEmail on a VALID profile", async () => {
+    getProfileMock.mockResolvedValue(validProfileWithoutContact());
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole("button", { name: /^modifier$/i }));
+    expect(screen.queryByText(/numéro de mobile français valide/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/invalid email/i)).not.toBeInTheDocument();
+  });
+
+  it("saves a VALID profile whose phone/personalEmail are still unset, without touching those fields", async () => {
+    getProfileMock.mockResolvedValue(validProfileWithoutContact());
+    updateProfileMock.mockResolvedValue(validProfileWithoutContact());
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole("button", { name: /^modifier$/i }));
+    await user.click(screen.getByRole("button", { name: /enregistrer/i }));
+
+    await waitFor(() => expect(updateProfileMock).toHaveBeenCalled());
+    expect(updateProfileMock.mock.calls[0]![0]).toEqual({
+      promotion: "L2",
+      phone: null,
+      personalEmail: null,
+    });
+  });
+
   it("does NOT show 'Remplacer' file buttons in read mode (single edit affordance for the whole page)", async () => {
     getProfileMock.mockResolvedValue(validProfile());
     renderPage();
@@ -160,6 +205,19 @@ describe("ProfilePage", () => {
       phone: "0601020304",
       personalEmail: "etu@gmail.com",
     });
+  });
+
+  it("only allows digits and '+' to be typed into the phone field", async () => {
+    getProfileMock.mockResolvedValue(validProfile());
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole("button", { name: /^modifier$/i }));
+    const phoneInput = screen.getByLabelText(/téléphone/i);
+    await user.clear(phoneInput);
+    await user.type(phoneInput, "+33 (0)6 12a34-56b78");
+
+    expect(phoneInput).toHaveValue("+330612345678");
   });
 
   it("does NOT show a confirmation dialog when only phone/personalEmail are edited on a VALID profile", async () => {
@@ -238,10 +296,9 @@ describe("ProfilePage", () => {
 
     await user.click(await screen.findByRole("button", { name: /^modifier$/i }));
     const checklist = screen.getByTestId("certificate-content-checklist");
-    expect(checklist.textContent).toMatch(/vos stages/i);
-    expect(checklist.textContent).toMatch(/stages conventionnés/i);
-    expect(checklist.textContent).toMatch(/l'année scolaire en cours/i);
-    expect(checklist.textContent).toMatch(/vie scolaire/i);
+    expect(checklist.textContent).toBe(
+      "Votre document doit couvrir : vos stages et l'année scolaire en cours. Le document varie selon votre assureur, ce qui compte, c'est que ces deux points y figurent, peu importe la formulation exacte.",
+    );
   });
 
   it("keeps the content checklist and its confirmation checkbox inside the documents section only", async () => {

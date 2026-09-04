@@ -36,6 +36,14 @@ describe("updateProfileSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("gives a French error message for a malformed personalEmail", () => {
+    const result = updateProfileSchema.safeParse({ personalEmail: "not-an-email" });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]!.message).toBe("Adresse email invalide");
+    }
+  });
+
   it("rejects a personalEmail on the etu.u-paris.fr domain", () => {
     const result = updateProfileSchema.safeParse({
       personalEmail: `etu.dupont${STUDENT_EMAIL_DOMAIN}`,
