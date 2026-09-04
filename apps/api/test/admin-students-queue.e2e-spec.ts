@@ -5,6 +5,7 @@ import * as bcrypt from "bcrypt";
 import cookieParser from "cookie-parser";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
+import { MailerService } from "../src/modules/mailer/mailer.service";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { cookieHeader, cookieMap } from "./helpers/cookies";
 
@@ -19,7 +20,12 @@ describe("Admin certificate-validation queue (e2e) — issue #42", () => {
   let adminCookie: string;
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    // The mailer boundary (ADR-0026) is swapped for a no-op stub — see
+    // admin-students.e2e-spec.ts for why.
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(MailerService)
+      .useValue({ send: jest.fn().mockResolvedValue(undefined) })
+      .compile();
     app = moduleRef.createNestApplication();
     app.use(cookieParser());
     await app.init();
