@@ -1,10 +1,12 @@
 import { useState, type ChangeEvent } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type FieldErrors, type UseFormRegister } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Alert,
   Box,
   Button,
+  Card,
+  CardContent,
   Checkbox,
   Chip,
   Container,
@@ -34,6 +36,9 @@ import { useProfile } from "./useProfile";
 import { useUpdateProfile } from "./useUpdateProfile";
 import { useUploadFile } from "./useUploadFile";
 
+// Issue #68 review: shown for every unset profile field in read mode.
+const NOT_SET_PLACEHOLDER = "non renseigné";
+
 const PROFILE_STATUS_LABELS: Record<string, string> = {
   INCOMPLETE: "Incomplet",
   PENDING_VALIDATION: "En attente de validation",
@@ -54,11 +59,206 @@ const PROFILE_STATUS_COLORS: Record<string, "warning" | "info" | "success" | "er
 type PendingAction =
   { type: "promotion"; values: UpdateProfileRequest } | { type: "certificate"; file: File };
 
-function fileFor(
-  files: { type: FileType; mimeType: string; uploadedAt: string }[],
-  type: FileType,
-) {
+type ProfileFile = { type: FileType; mimeType: string; uploadedAt: string };
+
+function fileFor(files: ProfileFile[], type: FileType) {
   return files.find((file) => file.type === type);
+}
+
+// An untouched, empty field must submit as null (a valid "no value"), not ""
+// (which the shared schemas deliberately reject for phone/personalEmail).
+function emptyToNull(value: string) {
+  return value === "" ? null : value;
+}
+
+function describeFile(file: ProfileFile | undefined) {
+  return file
+    ? `envoyée le ${new Date(file.uploadedAt).toLocaleDateString("fr-FR")}`
+    : "aucun fichier";
+}
+
+function IdentityContactSection({
+  editing,
+  register,
+  errors,
+  phoneField,
+  profile,
+}: {
+  editing: boolean;
+  register: UseFormRegister<UpdateProfileRequest>;
+  errors: FieldErrors<UpdateProfileRequest>;
+  phoneField: ReturnType<UseFormRegister<UpdateProfileRequest>>;
+  profile: { promotion: string | null; phone: string | null; personalEmail: string | null };
+}) {
+  return (
+    <Card variant="outlined" component="section">
+      <CardContent>
+        <Stack spacing={2}>
+          <Typography variant="h6" component="h2">
+            Identité &amp; contact
+          </Typography>
+
+          {editing ? (
+            <Stack spacing={2}>
+              <TextField
+                select
+                label="Promotion"
+                slotProps={{ select: { native: true } }}
+                {...register("promotion")}
+                error={!!errors.promotion}
+                helperText={errors.promotion?.message}
+              >
+                <option value="" />
+                <option value="L2">L2</option>
+                <option value="L3">L3</option>
+              </TextField>
+              <TextField
+                label="Téléphone"
+                {...phoneField}
+                onChange={(event) => {
+                  event.target.value = event.target.value.replace(/[^\d+]/g, "");
+                  phoneField.onChange(event);
+                }}
+                error={!!errors.phone}
+                helperText={errors.phone?.message}
+              />
+              <Box>
+                <TextField
+                  label="Email personnel"
+                  type="email"
+                  fullWidth
+                  {...register("personalEmail", { setValueAs: emptyToNull })}
+                  error={!!errors.personalEmail}
+                  helperText={errors.personalEmail?.message}
+                />
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                  Cette adresse est aussi utilisée pour vous envoyer des notifications par email.
+                </Typography>
+              </Box>
+            </Stack>
+          ) : (
+            <Stack spacing={1}>
+              <Typography>Promotion : {profile.promotion ?? NOT_SET_PLACEHOLDER}</Typography>
+              <Typography>Téléphone : {profile.phone ?? NOT_SET_PLACEHOLDER}</Typography>
+              <Box>
+                <Typography>
+                  Email personnel : {profile.personalEmail ?? NOT_SET_PLACEHOLDER}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Cette adresse est aussi utilisée pour vous envoyer des notifications par email.
+                </Typography>
+              </Box>
+            </Stack>
+          )}
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+function DocumentsSection({
+  editing,
+  idPhoto,
+  insuranceCertificate,
+  certificateConsentChecked,
+  onCertificateConsentChange,
+  onIdPhotoChange,
+  onCertificateChange,
+}: {
+  editing: boolean;
+  idPhoto: ProfileFile | undefined;
+  insuranceCertificate: ProfileFile | undefined;
+  certificateConsentChecked: boolean;
+  onCertificateConsentChange: (checked: boolean) => void;
+  onIdPhotoChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  onCertificateChange: (event: ChangeEvent<HTMLInputElement>) => void;
+}) {
+  return (
+    <Card variant="outlined" component="section">
+      <CardContent>
+        <Stack spacing={2}>
+          <Typography variant="h6" component="h2">
+            Documents
+          </Typography>
+
+          {editing ? (
+            <Stack spacing={2}>
+              <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
+                <Typography>Photo d'identité : {describeFile(idPhoto)}</Typography>
+                <Button component="label" variant="outlined" size="small">
+                  Remplacer
+                  <input
+                    type="file"
+                    hidden
+                    data-testid="id-photo-input"
+                    accept={ID_PHOTO_MIME_TYPES.join(",")}
+                    onChange={onIdPhotoChange}
+                  />
+                </Button>
+              </Stack>
+
+              <Stack spacing={1}>
+                <Typography
+                  id="certificate-content-checklist"
+                  variant="body2"
+                  color="text.secondary"
+                  data-testid="certificate-content-checklist"
+                >
+                  Votre document doit couvrir : vos stages et l'année scolaire en cours. Le document
+                  varie selon votre assureur, ce qui compte, c'est que ces deux points y figurent,
+                  peu importe la formulation exacte.
+                </Typography>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={certificateConsentChecked}
+                      onChange={(event) => onCertificateConsentChange(event.target.checked)}
+                      slotProps={{
+                        input: { "aria-describedby": "certificate-content-checklist" },
+                      }}
+                    />
+                  }
+                  label="Je confirme que mon attestation couvre bien mes stages et l'année scolaire en cours."
+                />
+                <Stack
+                  direction="row"
+                  sx={{ alignItems: "center", justifyContent: "space-between" }}
+                >
+                  <Typography>
+                    Attestation de responsabilité civile scolaire :{" "}
+                    {describeFile(insuranceCertificate)}
+                  </Typography>
+                  <Button
+                    component="label"
+                    variant="outlined"
+                    size="small"
+                    disabled={!certificateConsentChecked}
+                  >
+                    Remplacer
+                    <input
+                      type="file"
+                      hidden
+                      disabled={!certificateConsentChecked}
+                      data-testid="insurance-certificate-input"
+                      accept={INSURANCE_CERTIFICATE_MIME_TYPES.join(",")}
+                      onChange={onCertificateChange}
+                    />
+                  </Button>
+                </Stack>
+              </Stack>
+            </Stack>
+          ) : (
+            <Stack spacing={1}>
+              <Typography>Photo d'identité : {describeFile(idPhoto)}</Typography>
+              <Typography>
+                Attestation de responsabilité civile scolaire : {describeFile(insuranceCertificate)}
+              </Typography>
+            </Stack>
+          )}
+        </Stack>
+      </CardContent>
+    </Card>
+  );
 }
 
 export function ProfilePage() {
@@ -187,11 +387,7 @@ export function ProfilePage() {
     !insuranceCertificate && "votre attestation de responsabilité civile scolaire",
   ].filter((item): item is string => !!item);
 
-  // An untouched, empty phone field must submit as null (a valid "no value"),
-  // not "" (which frenchMobilePhoneSchema deliberately rejects).
-  const phoneField = register("phone", {
-    setValueAs: (value: string) => (value === "" ? null : value),
-  });
+  const phoneField = register("phone", { setValueAs: emptyToNull });
 
   return (
     <Container maxWidth="sm">
@@ -230,165 +426,23 @@ export function ProfilePage() {
           noValidate
           sx={{ display: "flex", flexDirection: "column", gap: 3 }}
         >
-          <Stack spacing={2} component="section">
-            <Typography variant="h6" component="h2">
-              Identité &amp; contact
-            </Typography>
+          <IdentityContactSection
+            editing={editing}
+            register={register}
+            errors={errors}
+            phoneField={phoneField}
+            profile={profile}
+          />
 
-            {editing ? (
-              <Stack spacing={2}>
-                <TextField
-                  select
-                  label="Promotion"
-                  slotProps={{ select: { native: true } }}
-                  {...register("promotion")}
-                  error={!!errors.promotion}
-                  helperText={errors.promotion?.message}
-                >
-                  <option value="" />
-                  <option value="L2">L2</option>
-                  <option value="L3">L3</option>
-                </TextField>
-                <TextField
-                  label="Téléphone"
-                  {...phoneField}
-                  onChange={(event) => {
-                    event.target.value = event.target.value.replace(/[^\d+]/g, "");
-                    phoneField.onChange(event);
-                  }}
-                  error={!!errors.phone}
-                  helperText={errors.phone?.message}
-                />
-                <Box>
-                  <TextField
-                    label="Email personnel"
-                    type="email"
-                    fullWidth
-                    {...register("personalEmail", {
-                      setValueAs: (value: string) => (value === "" ? null : value),
-                    })}
-                    error={!!errors.personalEmail}
-                    helperText={errors.personalEmail?.message}
-                  />
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                    Cette adresse est aussi utilisée pour vous envoyer des notifications par email.
-                  </Typography>
-                </Box>
-              </Stack>
-            ) : (
-              <Stack spacing={1}>
-                <Typography>Promotion : {profile.promotion ?? "non renseigné"}</Typography>
-                <Typography>Téléphone : {profile.phone ?? "non renseigné"}</Typography>
-                <Box>
-                  <Typography>
-                    Email personnel : {profile.personalEmail ?? "non renseigné"}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Cette adresse est aussi utilisée pour vous envoyer des notifications par email.
-                  </Typography>
-                </Box>
-              </Stack>
-            )}
-          </Stack>
-
-          <Stack spacing={2} component="section">
-            <Typography variant="h6" component="h2">
-              Documents
-            </Typography>
-
-            {editing ? (
-              <Stack spacing={2}>
-                <Stack
-                  direction="row"
-                  sx={{ alignItems: "center", justifyContent: "space-between" }}
-                >
-                  <Typography>
-                    Photo d'identité :{" "}
-                    {idPhoto
-                      ? `envoyée le ${new Date(idPhoto.uploadedAt).toLocaleDateString("fr-FR")}`
-                      : "aucun fichier"}
-                  </Typography>
-                  <Button component="label" variant="outlined" size="small">
-                    Remplacer
-                    <input
-                      type="file"
-                      hidden
-                      data-testid="id-photo-input"
-                      accept={ID_PHOTO_MIME_TYPES.join(",")}
-                      onChange={handleIdPhotoChange}
-                    />
-                  </Button>
-                </Stack>
-
-                <Stack spacing={1}>
-                  <Typography
-                    id="certificate-content-checklist"
-                    variant="body2"
-                    color="text.secondary"
-                    data-testid="certificate-content-checklist"
-                  >
-                    Votre document doit couvrir : vos stages et l'année scolaire en cours. Le
-                    document varie selon votre assureur, ce qui compte, c'est que ces deux points y
-                    figurent, peu importe la formulation exacte.
-                  </Typography>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={certificateConsentChecked}
-                        onChange={(event) => setCertificateConsentChecked(event.target.checked)}
-                        slotProps={{
-                          input: { "aria-describedby": "certificate-content-checklist" },
-                        }}
-                      />
-                    }
-                    label="Je confirme que mon attestation couvre bien mes stages et l'année scolaire en cours."
-                  />
-                  <Stack
-                    direction="row"
-                    sx={{ alignItems: "center", justifyContent: "space-between" }}
-                  >
-                    <Typography>
-                      Attestation de responsabilité civile scolaire :{" "}
-                      {insuranceCertificate
-                        ? `envoyée le ${new Date(insuranceCertificate.uploadedAt).toLocaleDateString("fr-FR")}`
-                        : "aucun fichier"}
-                    </Typography>
-                    <Button
-                      component="label"
-                      variant="outlined"
-                      size="small"
-                      disabled={!certificateConsentChecked}
-                    >
-                      Remplacer
-                      <input
-                        type="file"
-                        hidden
-                        disabled={!certificateConsentChecked}
-                        data-testid="insurance-certificate-input"
-                        accept={INSURANCE_CERTIFICATE_MIME_TYPES.join(",")}
-                        onChange={handleCertificateChange}
-                      />
-                    </Button>
-                  </Stack>
-                </Stack>
-              </Stack>
-            ) : (
-              <Stack spacing={1}>
-                <Typography>
-                  Photo d'identité :{" "}
-                  {idPhoto
-                    ? `envoyée le ${new Date(idPhoto.uploadedAt).toLocaleDateString("fr-FR")}`
-                    : "aucun fichier"}
-                </Typography>
-                <Typography>
-                  Attestation de responsabilité civile scolaire :{" "}
-                  {insuranceCertificate
-                    ? `envoyée le ${new Date(insuranceCertificate.uploadedAt).toLocaleDateString("fr-FR")}`
-                    : "aucun fichier"}
-                </Typography>
-              </Stack>
-            )}
-          </Stack>
+          <DocumentsSection
+            editing={editing}
+            idPhoto={idPhoto}
+            insuranceCertificate={insuranceCertificate}
+            certificateConsentChecked={certificateConsentChecked}
+            onCertificateConsentChange={setCertificateConsentChecked}
+            onIdPhotoChange={handleIdPhotoChange}
+            onCertificateChange={handleCertificateChange}
+          />
 
           <Stack direction="row" spacing={2}>
             {editing ? (
