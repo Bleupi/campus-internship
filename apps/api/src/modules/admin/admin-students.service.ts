@@ -37,7 +37,11 @@ export class AdminStudentsService {
     await this.notifyStudent(
       profile,
       "Votre profil a été validé",
-      "Votre certificat d'assurance a été validé.",
+      this.composeEmail(
+        profile.user.firstName,
+        "Votre certificat d'assurance a été vérifié et votre profil de stage est validé par l'administration.",
+        "Vous pouvez le consulter à tout moment depuis votre espace étudiant.",
+      ),
     );
     return { studentId, profileStatus: "VALID" };
   }
@@ -56,7 +60,11 @@ export class AdminStudentsService {
     await this.notifyStudent(
       profile,
       "Votre profil a été rejeté",
-      `Votre profil a été rejeté : ${reason}`,
+      this.composeEmail(
+        profile.user.firstName,
+        `Votre profil de stage a été examiné par l'administration et n'a pas pu être validé, pour le motif suivant :\n\n${reason}`,
+        "Merci de mettre à jour votre profil et de soumettre à nouveau votre certificat d'assurance depuis votre espace étudiant.",
+      ),
     );
     return { studentId, profileStatus: "INCOMPLETE" };
   }
@@ -104,11 +112,25 @@ export class AdminStudentsService {
   // updateMany/throwForFailedTransition.
   private async getNotificationTarget(
     studentId: string,
-  ): Promise<{ personalEmail: string | null; user: { email: string } }> {
+  ): Promise<{ personalEmail: string | null; user: { email: string; firstName: string } }> {
     return this.prisma.studentProfile.findUniqueOrThrow({
       where: { id: studentId },
-      select: { personalEmail: true, user: { select: { email: true } } },
+      select: { personalEmail: true, user: { select: { email: true, firstName: true } } },
     });
+  }
+
+  // Shared plain-text structure for every student-facing email: a
+  // personalized greeting, one or more body paragraphs (the reason, for a
+  // refusal, is just another paragraph — never the whole message on its
+  // own), and a fixed signature. Kept in the caller (not MailerService,
+  // which stays content-agnostic per ADR-0026) since deciding what a
+  // notification says is business logic, not transport.
+  private composeEmail(firstName: string, ...paragraphs: string[]): string {
+    return [
+      `Bonjour ${firstName},`,
+      ...paragraphs,
+      "Cordialement,\nL'équipe de gestion des stages",
+    ].join("\n\n");
   }
 
   // BR-11: the student is notified by real email on validation/refusal — to
