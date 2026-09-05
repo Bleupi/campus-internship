@@ -29,3 +29,4 @@ Every structuring decision is recorded here as an ADR. Format: lightweight [MADR
 | [0023](0023-profile-status-conditional-update.md) | Status-conditioned `updateMany` for `StudentProfile` concurrency | Accepted |
 | [0024](0024-certificate-proxy-stream.md) | Certificate download: proxied stream, never a presigned URL | Accepted |
 | [0025](0025-personnel-account-provisioning.md) | Personnel (ADMIN/REFERENT) accounts: provisioned out-of-band, no institutional email domain | Accepted |
+| [0026](0026-scaleway-transactional-email.md) | Email provider: Scaleway Transactional Email | Accepted |
