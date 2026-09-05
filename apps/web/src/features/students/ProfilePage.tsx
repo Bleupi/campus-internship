@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from "react";
+import { Fragment, useState, type ChangeEvent } from "react";
 import { useForm, type FieldErrors, type UseFormRegister } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -66,8 +66,13 @@ function fileFor(files: ProfileFile[], type: FileType) {
 }
 
 // An untouched, empty field must submit as null (a valid "no value"), not ""
-// (which the shared schemas deliberately reject for phone/personalEmail).
-function emptyToNull(value: string) {
+// (which the shared schema deliberately rejects for phone/personalEmail).
+// Applied in the resolver below rather than via each field's `setValueAs`:
+// react-hook-form only runs `setValueAs` for fields the user actually typed
+// into — a field seeded empty by the profile's initial `values` and never
+// touched reaches the resolver as "" regardless, which the schema then
+// rejects (surfacing a "invalid phone/email" error the student never caused).
+function emptyToNull(value: string | null | undefined) {
   return value === "" ? null : value;
 }
 
@@ -122,34 +127,27 @@ function IdentityContactSection({
                 error={!!errors.phone}
                 helperText={errors.phone?.message}
               />
-              <Box>
-                <TextField
-                  label="Email personnel"
-                  type="email"
-                  fullWidth
-                  {...register("personalEmail", { setValueAs: emptyToNull })}
-                  error={!!errors.personalEmail}
-                  helperText={errors.personalEmail?.message}
-                />
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                  Cette adresse est aussi utilisée pour vous envoyer des notifications par email.
-                </Typography>
-              </Box>
+              <TextField
+                label="Email personnel"
+                type="email"
+                fullWidth
+                {...register("personalEmail")}
+                error={!!errors.personalEmail}
+                helperText={errors.personalEmail?.message}
+              />
             </Stack>
           ) : (
             <Stack spacing={1}>
               <Typography>Promotion : {profile.promotion ?? NOT_SET_PLACEHOLDER}</Typography>
               <Typography>Téléphone : {profile.phone ?? NOT_SET_PLACEHOLDER}</Typography>
-              <Box>
-                <Typography>
-                  Email personnel : {profile.personalEmail ?? NOT_SET_PLACEHOLDER}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Cette adresse est aussi utilisée pour vous envoyer des notifications par email.
-                </Typography>
-              </Box>
+              <Typography>
+                Email personnel : {profile.personalEmail ?? NOT_SET_PLACEHOLDER}
+              </Typography>
             </Stack>
           )}
+          <Typography variant="body2" color="text.secondary" sx={{ mt: -1 }}>
+            Cette adresse est aussi utilisée pour vous envoyer des notifications par email.
+          </Typography>
         </Stack>
       </CardContent>
     </Card>
@@ -208,6 +206,25 @@ function DocumentsSection({
                   varie selon votre assureur, ce qui compte, c'est que ces deux points y figurent,
                   peu importe la formulation exacte.
                 </Typography>
+                <Stack
+                  direction="row"
+                  sx={{ alignItems: "center", justifyContent: "space-between" }}
+                >
+                  <Typography>
+                    Attestation de responsabilité civile scolaire :{" "}
+                    {describeFile(insuranceCertificate)}
+                  </Typography>
+                  <Button component="label" variant="outlined" size="small">
+                    Remplacer
+                    <input
+                      type="file"
+                      hidden
+                      data-testid="insurance-certificate-input"
+                      accept={INSURANCE_CERTIFICATE_MIME_TYPES.join(",")}
+                      onChange={onCertificateChange}
+                    />
+                  </Button>
+                </Stack>
                 <FormControlLabel
                   control={
                     <Checkbox
@@ -220,31 +237,6 @@ function DocumentsSection({
                   }
                   label="Je confirme que mon attestation couvre bien mes stages et l'année scolaire en cours."
                 />
-                <Stack
-                  direction="row"
-                  sx={{ alignItems: "center", justifyContent: "space-between" }}
-                >
-                  <Typography>
-                    Attestation de responsabilité civile scolaire :{" "}
-                    {describeFile(insuranceCertificate)}
-                  </Typography>
-                  <Button
-                    component="label"
-                    variant="outlined"
-                    size="small"
-                    disabled={!certificateConsentChecked}
-                  >
-                    Remplacer
-                    <input
-                      type="file"
-                      hidden
-                      disabled={!certificateConsentChecked}
-                      data-testid="insurance-certificate-input"
-                      accept={INSURANCE_CERTIFICATE_MIME_TYPES.join(",")}
-                      onChange={onCertificateChange}
-                    />
-                  </Button>
-                </Stack>
               </Stack>
             </Stack>
           ) : (
@@ -272,6 +264,14 @@ export function ProfilePage() {
   const [serverError, setServerError] = useState<string | null>(null);
   // Issue #65: nudge, not a verifiable guarantee — client-side only, never persisted.
   const [certificateConsentChecked, setCertificateConsentChecked] = useState(false);
+  // Tracks "a new certificate was uploaded during this edit session" — distinct from the
+  // checkbox itself, which resets after every upload and can otherwise be freely toggled.
+  // Uploading is never gated on this; only saving the rest of the form is.
+  const [certificateReplacedThisSession, setCertificateReplacedThisSession] = useState(false);
+  // Uploading a new certificate is never blocked by the checkbox — only
+  // saving the rest of the form is, until the student re-confirms it.
+  const certificateConfirmationPending =
+    certificateReplacedThisSession && !certificateConsentChecked;
 
   // BR-06: EXPIRED is a hard-block state too (lazy yearly rollover at
   // login) — same forced edit form as INCOMPLETE, see ProfilePage.test.tsx.
@@ -283,7 +283,16 @@ export function ProfilePage() {
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<UpdateProfileRequest>({
-    resolver: zodResolver(updateProfileSchema),
+    resolver: (values, context, options) =>
+      zodResolver(updateProfileSchema)(
+        {
+          ...values,
+          phone: emptyToNull(values.phone),
+          personalEmail: emptyToNull(values.personalEmail),
+        },
+        context,
+        options,
+      ),
     values: profile
       ? {
           promotion: profile.promotion ?? undefined,
@@ -312,12 +321,16 @@ export function ProfilePage() {
       onSuccess: () => {
         setIsEditing(false);
         setCertificateConsentChecked(false);
+        setCertificateReplacedThisSession(false);
       },
       onError: () => setServerError("Une erreur est survenue, merci de réessayer."),
     });
   };
 
   const onSubmit = handleSubmit((values) => {
+    // Belt-and-suspenders: the Enregistrer button is already disabled while this
+    // is true, but onSubmit shouldn't trust a UI affordance to enforce the rule.
+    if (certificateConfirmationPending) return;
     const promotionChanged =
       values.promotion !== undefined && values.promotion !== profile.promotion;
     if (profile.profileStatus === "VALID" && promotionChanged) {
@@ -342,7 +355,10 @@ export function ProfilePage() {
     uploadInsuranceCertificate.mutate(file, {
       // Only reset consent on success: an unrelated upload failure shouldn't force the
       // student to re-tick the checkbox just to retry the same file.
-      onSuccess: () => setCertificateConsentChecked(false),
+      onSuccess: () => {
+        setCertificateConsentChecked(false);
+        setCertificateReplacedThisSession(true);
+      },
       onError: () => setServerError("Une erreur est survenue, merci de réessayer."),
     });
   };
@@ -350,7 +366,7 @@ export function ProfilePage() {
   const handleCertificateChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file || !certificateConsentChecked) return;
+    if (!file) return;
     if (profile.profileStatus === "VALID") {
       setPendingAction({ type: "certificate", file });
       return;
@@ -359,16 +375,14 @@ export function ProfilePage() {
   };
 
   const cancelPendingAction = () => {
-    // A canceled certificate replacement must not carry a stale "confirmed" consent
-    // over to a different file picked afterwards.
-    if (pendingAction?.type === "certificate") setCertificateConsentChecked(false);
+    // Canceling means the candidate file was never adopted — the live certificate
+    // (and whatever consent state it already had) is unaffected either way.
     setPendingAction(null);
   };
 
   const confirmPendingAction = () => {
     if (!pendingAction) return;
     if (pendingAction.type === "promotion") {
-      setServerError(null);
       applyUpdate(pendingAction.values);
     } else {
       submitCertificate(pendingAction.file);
@@ -387,7 +401,7 @@ export function ProfilePage() {
     !insuranceCertificate && "votre attestation de responsabilité civile scolaire",
   ].filter((item): item is string => !!item);
 
-  const phoneField = register("phone", { setValueAs: emptyToNull });
+  const phoneField = register("phone");
 
   return (
     <Container maxWidth="sm">
@@ -444,27 +458,53 @@ export function ProfilePage() {
             onCertificateChange={handleCertificateChange}
           />
 
-          <Stack direction="row" spacing={2}>
-            {editing ? (
-              <>
-                <Button type="submit" variant="contained" disabled={isSubmitting}>
-                  Enregistrer
-                </Button>
-                {!mustComplete && (
+          <Stack spacing={1}>
+            <Stack direction="row" spacing={2}>
+              {editing ? (
+                <Fragment key="editing-actions">
                   <Button
-                    onClick={() => {
-                      setIsEditing(false);
-                      setCertificateConsentChecked(false);
-                    }}
+                    type="submit"
+                    variant="contained"
+                    disabled={isSubmitting || certificateConfirmationPending}
                   >
-                    Annuler
+                    Enregistrer
                   </Button>
-                )}
-              </>
-            ) : (
-              <Button variant="outlined" onClick={() => setIsEditing(true)}>
-                Modifier
-              </Button>
+                  {!mustComplete && (
+                    <Button
+                      onClick={() => {
+                        setIsEditing(false);
+                        setCertificateConsentChecked(false);
+                        setCertificateReplacedThisSession(false);
+                      }}
+                    >
+                      Annuler
+                    </Button>
+                  )}
+                </Fragment>
+              ) : (
+                // A distinct `key` (vs. the "editing-actions" fragment above) forces React to
+                // unmount this button rather than mutate the same DOM node in place. Without it,
+                // clicking Modifier reused this exact button element for "Enregistrer": React
+                // flipped its `type` from "button" to "submit" while the browser's click was still
+                // being processed, so the click's default action fired as a real form submission —
+                // silently saving the untouched profile and bouncing straight back to read mode.
+                <Button
+                  key="modifier-button"
+                  variant="outlined"
+                  onClick={() => {
+                    setIsEditing(true);
+                    setCertificateReplacedThisSession(false);
+                  }}
+                >
+                  Modifier
+                </Button>
+              )}
+            </Stack>
+            {certificateConfirmationPending && (
+              <Typography variant="body2" color="error">
+                Confirmez que votre nouvelle attestation couvre bien vos stages et l'année scolaire
+                en cours avant d'enregistrer.
+              </Typography>
             )}
           </Stack>
         </Box>

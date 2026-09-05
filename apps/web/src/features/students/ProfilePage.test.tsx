@@ -254,7 +254,6 @@ describe("ProfilePage", () => {
     expect(
       screen.getByRole("checkbox", { name: /je confirme que mon attestation/i }),
     ).not.toBeChecked();
-    expect(screen.getByTestId("insurance-certificate-input")).toBeDisabled();
   });
 
   it("shows a confirmation dialog before replacing the insurance certificate on a VALID profile", async () => {
@@ -264,7 +263,6 @@ describe("ProfilePage", () => {
     renderPage();
 
     await user.click(await screen.findByRole("button", { name: /^modifier$/i }));
-    await user.click(screen.getByRole("checkbox", { name: /je confirme que mon attestation/i }));
     const certificateInput = screen.getByTestId("insurance-certificate-input");
     const file = new File(["pdf-bytes"], "certificat.pdf", { type: "application/pdf" });
     await user.upload(certificateInput, file);
@@ -319,27 +317,52 @@ describe("ProfilePage", () => {
     ).toBe(true);
   });
 
-  it("disables the certificate upload until the confirmation checkbox is checked", async () => {
+  it("never disables the certificate upload — an unchecked confirmation checkbox blocks saving, not uploading", async () => {
     getProfileMock.mockResolvedValue(incompleteProfile());
+    uploadInsuranceCertificateMock.mockResolvedValue(incompleteProfile());
     const user = userEvent.setup();
     renderPage();
 
     await screen.findByRole("button", { name: /enregistrer/i });
     const checkbox = screen.getByRole("checkbox", { name: /je confirme que mon attestation/i });
     expect(checkbox).not.toBeChecked();
-    expect(screen.getByTestId("insurance-certificate-input")).toBeDisabled();
+    expect(screen.getByTestId("insurance-certificate-input")).not.toBeDisabled();
 
     const certificateInput = screen.getByTestId("insurance-certificate-input");
     const file = new File(["pdf-bytes"], "certificat.pdf", { type: "application/pdf" });
     await user.upload(certificateInput, file);
-    expect(uploadInsuranceCertificateMock).not.toHaveBeenCalled();
 
-    await user.click(checkbox);
-    expect(screen.getByTestId("insurance-certificate-input")).not.toBeDisabled();
+    await waitFor(() => expect(uploadInsuranceCertificateMock).toHaveBeenCalled());
+  });
 
+  it("blocks saving after a certificate upload until the confirmation checkbox is (re-)checked", async () => {
+    getProfileMock.mockResolvedValue(incompleteProfile());
     uploadInsuranceCertificateMock.mockResolvedValue(incompleteProfile());
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByRole("button", { name: /enregistrer/i });
+    const certificateInput = screen.getByTestId("insurance-certificate-input");
+    const file = new File(["pdf-bytes"], "certificat.pdf", { type: "application/pdf" });
     await user.upload(certificateInput, file);
     await waitFor(() => expect(uploadInsuranceCertificateMock).toHaveBeenCalled());
+
+    expect(screen.getByRole("button", { name: /enregistrer/i })).toBeDisabled();
+    expect(screen.getByText(/confirmez que votre nouvelle attestation/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("checkbox", { name: /je confirme que mon attestation/i }));
+    expect(screen.getByRole("button", { name: /enregistrer/i })).not.toBeDisabled();
+  });
+
+  it("does not block saving when no certificate was uploaded this session, even with the checkbox unchecked", async () => {
+    getProfileMock.mockResolvedValue(incompleteProfile());
+    renderPage();
+
+    await screen.findByRole("button", { name: /enregistrer/i });
+    expect(
+      screen.getByRole("checkbox", { name: /je confirme que mon attestation/i }),
+    ).not.toBeChecked();
+    expect(screen.getByRole("button", { name: /enregistrer/i })).not.toBeDisabled();
   });
 
   it("resets the confirmation checkbox after a certificate upload, requiring re-confirmation next time", async () => {
@@ -379,10 +402,9 @@ describe("ProfilePage", () => {
     expect(
       screen.getByRole("checkbox", { name: /je confirme que mon attestation/i }),
     ).toBeChecked();
-    expect(screen.getByTestId("insurance-certificate-input")).not.toBeDisabled();
   });
 
-  it("resets the confirmation checkbox when a VALID-profile certificate replacement is canceled", async () => {
+  it("leaves the confirmation checkbox untouched when a VALID-profile certificate replacement is canceled — the candidate file was never adopted", async () => {
     getProfileMock.mockResolvedValue(validProfile());
     const user = userEvent.setup();
     renderPage();
@@ -399,8 +421,35 @@ describe("ProfilePage", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(
       screen.getByRole("checkbox", { name: /je confirme que mon attestation/i }),
-    ).not.toBeChecked();
+    ).toBeChecked();
     expect(uploadInsuranceCertificateMock).not.toHaveBeenCalled();
+  });
+
+  it("does not re-block saving when a later certificate replacement is canceled after an earlier one was already confirmed", async () => {
+    getProfileMock.mockResolvedValue(validProfile());
+    uploadInsuranceCertificateMock.mockResolvedValue(validProfile());
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole("button", { name: /^modifier$/i }));
+    const certificateInput = screen.getByTestId("insurance-certificate-input");
+    const fileA = new File(["pdf-bytes-a"], "certificat-a.pdf", { type: "application/pdf" });
+    await user.upload(certificateInput, fileA);
+    await user.click(await screen.findByRole("button", { name: /confirmer/i }));
+    await waitFor(() => expect(uploadInsuranceCertificateMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    await user.click(screen.getByRole("checkbox", { name: /je confirme que mon attestation/i }));
+    expect(screen.getByRole("button", { name: /enregistrer/i })).not.toBeDisabled();
+
+    // Picks a different file, then backs out — certificate A stays live and already confirmed.
+    const fileB = new File(["pdf-bytes-b"], "certificat-b.pdf", { type: "application/pdf" });
+    await user.upload(certificateInput, fileB);
+    await screen.findByRole("dialog");
+    await user.click(screen.getByRole("button", { name: /annuler/i }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /enregistrer/i })).not.toBeDisabled();
   });
 
   it("never shows a confirmation dialog for an id photo replacement, even on a VALID profile", async () => {
@@ -536,5 +585,55 @@ describe("ProfilePage", () => {
 
     await screen.findByRole("button", { name: /enregistrer/i });
     expect(container.textContent).not.toMatch(/—/);
+  });
+
+  it("saves an INCOMPLETE profile's untouched phone/personalEmail as null, not the empty string rejected by the schema", async () => {
+    getProfileMock.mockResolvedValue(incompleteProfile());
+    updateProfileMock.mockResolvedValue({ ...incompleteProfile(), promotion: "L2" });
+    const user = userEvent.setup();
+    renderPage();
+
+    // The form is already in edit mode on mount here (BR-06 forced edit) —
+    // unlike a VALID profile, the phone/personalEmail TextFields exist from
+    // the very first render, before react-hook-form's `values`-driven sync
+    // has settled. Only `promotion` is touched; phone/personalEmail are left
+    // exactly as seeded (empty).
+    await user.selectOptions(await screen.findByLabelText(/promotion/i), "L2");
+    await user.click(screen.getByRole("button", { name: /enregistrer/i }));
+
+    await waitFor(() => expect(updateProfileMock).toHaveBeenCalled());
+    expect(updateProfileMock.mock.calls[0]![0]).toEqual({
+      promotion: "L2",
+      phone: null,
+      personalEmail: null,
+    });
+    expect(screen.queryByText(/numéro de mobile français valide/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/adresse email invalide/i)).not.toBeInTheDocument();
+  });
+
+  it("lets a student re-enter edit mode (Modifier) after saving identity fields on a still-INCOMPLETE profile", async () => {
+    getProfileMock.mockResolvedValue(incompleteProfile());
+    const updatedProfile = { ...incompleteProfile(), promotion: "L2" };
+    updateProfileMock.mockResolvedValue(updatedProfile);
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.selectOptions(await screen.findByLabelText(/promotion/i), "L2");
+    await user.click(screen.getByRole("button", { name: /enregistrer/i }));
+    await waitFor(() => expect(updateProfileMock).toHaveBeenCalled());
+
+    getProfileMock.mockResolvedValue(updatedProfile);
+    expect(await screen.findByRole("button", { name: /^modifier$/i })).toBeInTheDocument();
+  });
+
+  it("clicking Modifier alone does not submit the form (the button swaps to a type=submit Enregistrer at the same position)", async () => {
+    getProfileMock.mockResolvedValue(validProfile());
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole("button", { name: /^modifier$/i }));
+
+    expect(updateProfileMock).not.toHaveBeenCalled();
+    expect(await screen.findByRole("button", { name: /enregistrer/i })).toBeInTheDocument();
   });
 });
