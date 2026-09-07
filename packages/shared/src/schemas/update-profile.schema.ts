@@ -12,7 +12,7 @@ export const updateProfileSchema = z.object({
   personalEmail: z
     .string()
     .trim()
-    .email()
+    .email({ message: "Adresse email invalide" })
     .nullable()
     .optional()
     .refine((value) => value == null || !value.toLowerCase().endsWith(STUDENT_EMAIL_DOMAIN), {
