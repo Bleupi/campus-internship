@@ -29,8 +29,8 @@ export const envSchema = z
     // Scaleway Transactional Email (ADR-0026) — region is fixed (fr-par is
     // currently the only one Scaleway TEM offers), so only credentials and
     // the verified sender identity are configurable.
-    MAILER_SCW_SECRET_KEY: z.string(),
-    MAILER_SCW_PROJECT_ID: z.string(),
+    MAILER_SCW_SECRET_KEY: z.string().min(1),
+    MAILER_SCW_PROJECT_ID: z.string().min(1),
     MAILER_FROM_EMAIL: z.string().email(),
     MAILER_FROM_NAME: z.string().default("Gestion des stages"),
   })
