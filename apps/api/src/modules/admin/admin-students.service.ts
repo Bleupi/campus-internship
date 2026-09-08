@@ -92,7 +92,7 @@ export class AdminStudentsService {
         profile.user.firstName,
         adminName,
         `Votre profil de stage a été examiné par ${adminName}, ${ADMIN_TITLE}, et n'a pas pu être validé, pour le motif suivant :\n\n${reason}`,
-        "Merci de mettre à jour votre profil et de soumettre à nouveau votre certificat d'assurance depuis votre espace étudiant.",
+        "Merci de mettre à jour votre profil et de soumettre à nouveau votre attestation de responsabilité civile scolaire avec mention stage depuis votre espace étudiant.",
       ),
     );
     return { studentId, profileStatus: "INCOMPLETE" };
@@ -109,7 +109,9 @@ export class AdminStudentsService {
       orderBy: { uploadedAt: "desc" },
     });
     if (!file) {
-      throw new NotFoundException("Aucun certificat d'assurance actuel pour cet étudiant");
+      throw new NotFoundException(
+        "Aucune attestation de responsabilité civile scolaire actuelle pour cet étudiant",
+      );
     }
 
     const stream = await this.filesService.download(file.bucketKey);

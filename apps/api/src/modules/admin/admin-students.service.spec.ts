@@ -10,7 +10,7 @@ const STUDENT_ID = "profile-1";
 const UNIVERSITY_EMAIL = "etudiant@etu.u-pariscite.fr";
 const PERSONAL_EMAIL = "perso@example.com";
 const STUDENT_FIRST_NAME = "Camille";
-const REFUSAL_REASON = "Certificat illisible";
+const REFUSAL_REASON = "Attestation illisible";
 const ADMIN = { firstName: "Jean", lastName: "Martin" };
 
 describe("AdminStudentsService", () => {
