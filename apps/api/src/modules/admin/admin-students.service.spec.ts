@@ -1,12 +1,17 @@
 import { Readable } from "node:stream";
-import { ConflictException, NotFoundException } from "@nestjs/common";
+import { ConflictException, Logger, NotFoundException } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import { PrismaService } from "../../prisma/prisma.service";
 import { FilesService } from "../files/files.service";
+import { MailerService } from "../mailer/mailer.service";
 import { AdminStudentsService } from "./admin-students.service";
 
 const STUDENT_ID = "profile-1";
-const USER_ID = "user-1";
+const UNIVERSITY_EMAIL = "etudiant@etu.u-pariscite.fr";
+const PERSONAL_EMAIL = "perso@example.com";
+const STUDENT_FIRST_NAME = "Camille";
+const REFUSAL_REASON = "Attestation illisible";
+const ADMIN = { firstName: "Jean", lastName: "Martin" };
 
 describe("AdminStudentsService", () => {
   let service: AdminStudentsService;
@@ -21,6 +26,7 @@ describe("AdminStudentsService", () => {
     };
   };
   let filesService: { download: jest.Mock };
+  let mailerService: { send: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
@@ -34,12 +40,14 @@ describe("AdminStudentsService", () => {
       },
     };
     filesService = { download: jest.fn() };
+    mailerService = { send: jest.fn().mockResolvedValue(undefined) };
 
     const module = await Test.createTestingModule({
       providers: [
         AdminStudentsService,
         { provide: PrismaService, useValue: prisma },
         { provide: FilesService, useValue: filesService },
+        { provide: MailerService, useValue: mailerService },
       ],
     }).compile();
 
@@ -49,14 +57,91 @@ describe("AdminStudentsService", () => {
   describe("validateProfile — ADR-0004: PENDING_VALIDATION -> VALID", () => {
     it("flips PENDING_VALIDATION to VALID via a status-conditioned updateMany", async () => {
       prisma.studentProfile.updateMany.mockResolvedValue({ count: 1 });
-      prisma.studentProfile.findUniqueOrThrow.mockResolvedValue({ userId: USER_ID });
+      prisma.studentProfile.findUniqueOrThrow.mockResolvedValue({
+        personalEmail: null,
+        user: { email: UNIVERSITY_EMAIL, firstName: STUDENT_FIRST_NAME },
+      });
 
-      const result = await service.validateProfile(STUDENT_ID);
+      const result = await service.validateProfile(STUDENT_ID, ADMIN);
 
       expect(prisma.studentProfile.updateMany).toHaveBeenCalledWith({
         where: { id: STUDENT_ID, profileStatus: { in: ["PENDING_VALIDATION"] } },
         data: { profileStatus: "VALID" },
       });
+      expect(result).toEqual({ studentId: STUDENT_ID, profileStatus: "VALID" });
+    });
+
+    it("BR-11: emails the university address only, no cc, when no personal address is on file", async () => {
+      prisma.studentProfile.updateMany.mockResolvedValue({ count: 1 });
+      prisma.studentProfile.findUniqueOrThrow.mockResolvedValue({
+        personalEmail: null,
+        user: { email: UNIVERSITY_EMAIL, firstName: STUDENT_FIRST_NAME },
+      });
+
+      await service.validateProfile(STUDENT_ID, ADMIN);
+
+      expect(mailerService.send).toHaveBeenCalledTimes(1);
+      const input = mailerService.send.mock.calls[0][0];
+      expect(input.to).toEqual({ email: UNIVERSITY_EMAIL });
+      expect(input.cc).toBeUndefined();
+    });
+
+    it("BR-11: also cc's the personal address when one is on file", async () => {
+      prisma.studentProfile.updateMany.mockResolvedValue({ count: 1 });
+      prisma.studentProfile.findUniqueOrThrow.mockResolvedValue({
+        personalEmail: PERSONAL_EMAIL,
+        user: { email: UNIVERSITY_EMAIL, firstName: STUDENT_FIRST_NAME },
+      });
+
+      await service.validateProfile(STUDENT_ID, ADMIN);
+
+      const input = mailerService.send.mock.calls[0][0];
+      expect(input.to).toEqual({ email: UNIVERSITY_EMAIL });
+      expect(input.cc).toEqual({ email: PERSONAL_EMAIL });
+    });
+
+    it("structures the email with a personalized greeting and a signature, not just the raw status", async () => {
+      prisma.studentProfile.updateMany.mockResolvedValue({ count: 1 });
+      prisma.studentProfile.findUniqueOrThrow.mockResolvedValue({
+        personalEmail: null,
+        user: { email: UNIVERSITY_EMAIL, firstName: STUDENT_FIRST_NAME },
+      });
+
+      await service.validateProfile(STUDENT_ID, ADMIN);
+
+      const input = mailerService.send.mock.calls[0][0];
+      expect(input.subject).toBe("Votre profil a été validé");
+      expect(input.text.startsWith(`Bonjour ${STUDENT_FIRST_NAME},`)).toBe(true);
+      expect(input.text.endsWith("Cordialement,\nMARTIN Jean")).toBe(true);
+    });
+
+    it("BR-11: names the validating admin, with their function, in the body — not 'l'administration'", async () => {
+      prisma.studentProfile.updateMany.mockResolvedValue({ count: 1 });
+      prisma.studentProfile.findUniqueOrThrow.mockResolvedValue({
+        personalEmail: null,
+        user: { email: UNIVERSITY_EMAIL, firstName: STUDENT_FIRST_NAME },
+      });
+
+      await service.validateProfile(STUDENT_ID, ADMIN);
+
+      const input = mailerService.send.mock.calls[0][0];
+      expect(input.text).toContain("validé par MARTIN Jean, responsable de stages L2 et L3 APA-S.");
+      expect(input.text).not.toContain("l'administration");
+      // The function title appears only in the body sentence, never in the signature.
+      expect(input.text).not.toContain("Cordialement,\nMARTIN Jean, responsable");
+    });
+
+    it("still returns success when the mailer send fails — the status change already committed", async () => {
+      jest.spyOn(Logger.prototype, "error").mockImplementation(() => undefined);
+      prisma.studentProfile.updateMany.mockResolvedValue({ count: 1 });
+      prisma.studentProfile.findUniqueOrThrow.mockResolvedValue({
+        personalEmail: null,
+        user: { email: UNIVERSITY_EMAIL, firstName: STUDENT_FIRST_NAME },
+      });
+      mailerService.send.mockRejectedValue(new Error("Scaleway TEM send failed: 401"));
+
+      const result = await service.validateProfile(STUDENT_ID, ADMIN);
+
       expect(result).toEqual({ studentId: STUDENT_ID, profileStatus: "VALID" });
     });
 
@@ -67,7 +152,9 @@ describe("AdminStudentsService", () => {
         profileStatus: "VALID",
       });
 
-      await expect(service.validateProfile(STUDENT_ID)).rejects.toBeInstanceOf(ConflictException);
+      await expect(service.validateProfile(STUDENT_ID, ADMIN)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
       expect(prisma.studentProfile.findUniqueOrThrow).not.toHaveBeenCalled();
     });
 
@@ -75,21 +162,104 @@ describe("AdminStudentsService", () => {
       prisma.studentProfile.updateMany.mockResolvedValue({ count: 0 });
       prisma.studentProfile.findUnique.mockResolvedValue(null);
 
-      await expect(service.validateProfile(STUDENT_ID)).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.validateProfile(STUDENT_ID, ADMIN)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 
   describe("rejectProfile — ADR-0004: PENDING_VALIDATION/VALID -> INCOMPLETE", () => {
     it("flips PENDING_VALIDATION or VALID to INCOMPLETE via a status-conditioned updateMany", async () => {
       prisma.studentProfile.updateMany.mockResolvedValue({ count: 1 });
-      prisma.studentProfile.findUniqueOrThrow.mockResolvedValue({ userId: USER_ID });
+      prisma.studentProfile.findUniqueOrThrow.mockResolvedValue({
+        personalEmail: null,
+        user: { email: UNIVERSITY_EMAIL, firstName: STUDENT_FIRST_NAME },
+      });
 
-      const result = await service.rejectProfile(STUDENT_ID, "Certificat illisible");
+      const result = await service.rejectProfile(STUDENT_ID, REFUSAL_REASON, ADMIN);
 
       expect(prisma.studentProfile.updateMany).toHaveBeenCalledWith({
         where: { id: STUDENT_ID, profileStatus: { in: ["PENDING_VALIDATION", "VALID"] } },
         data: { profileStatus: "INCOMPLETE" },
       });
+      expect(result).toEqual({ studentId: STUDENT_ID, profileStatus: "INCOMPLETE" });
+    });
+
+    it("BR-11: emails the university address with the refusal reason in the body", async () => {
+      prisma.studentProfile.updateMany.mockResolvedValue({ count: 1 });
+      prisma.studentProfile.findUniqueOrThrow.mockResolvedValue({
+        personalEmail: null,
+        user: { email: UNIVERSITY_EMAIL, firstName: STUDENT_FIRST_NAME },
+      });
+
+      await service.rejectProfile(STUDENT_ID, REFUSAL_REASON, ADMIN);
+
+      expect(mailerService.send).toHaveBeenCalledTimes(1);
+      const input = mailerService.send.mock.calls[0][0];
+      expect(input.to).toEqual({ email: UNIVERSITY_EMAIL });
+      expect(input.cc).toBeUndefined();
+      expect(input.text).toContain(REFUSAL_REASON);
+    });
+
+    it("BR-11: also cc's the personal address when one is on file", async () => {
+      prisma.studentProfile.updateMany.mockResolvedValue({ count: 1 });
+      prisma.studentProfile.findUniqueOrThrow.mockResolvedValue({
+        personalEmail: PERSONAL_EMAIL,
+        user: { email: UNIVERSITY_EMAIL, firstName: STUDENT_FIRST_NAME },
+      });
+
+      await service.rejectProfile(STUDENT_ID, REFUSAL_REASON, ADMIN);
+
+      const input = mailerService.send.mock.calls[0][0];
+      expect(input.cc).toEqual({ email: PERSONAL_EMAIL });
+    });
+
+    it("structures the reason as one paragraph among a greeting, an intro, next steps, and a signature — not the whole email", async () => {
+      prisma.studentProfile.updateMany.mockResolvedValue({ count: 1 });
+      prisma.studentProfile.findUniqueOrThrow.mockResolvedValue({
+        personalEmail: null,
+        user: { email: UNIVERSITY_EMAIL, firstName: STUDENT_FIRST_NAME },
+      });
+
+      await service.rejectProfile(STUDENT_ID, REFUSAL_REASON, ADMIN);
+
+      const input = mailerService.send.mock.calls[0][0];
+      expect(input.subject).toBe("Votre profil a été refusé");
+      expect(input.text.startsWith(`Bonjour ${STUDENT_FIRST_NAME},`)).toBe(true);
+      expect(input.text).toContain(`pour le motif suivant :\n\n${REFUSAL_REASON}`);
+      expect(input.text).toContain("Merci de mettre à jour votre profil");
+      expect(input.text.endsWith("Cordialement,\nMARTIN Jean")).toBe(true);
+    });
+
+    it("BR-11: names the refusing admin, with their function, in the body — not 'l'administration'", async () => {
+      prisma.studentProfile.updateMany.mockResolvedValue({ count: 1 });
+      prisma.studentProfile.findUniqueOrThrow.mockResolvedValue({
+        personalEmail: null,
+        user: { email: UNIVERSITY_EMAIL, firstName: STUDENT_FIRST_NAME },
+      });
+
+      await service.rejectProfile(STUDENT_ID, REFUSAL_REASON, ADMIN);
+
+      const input = mailerService.send.mock.calls[0][0];
+      expect(input.text).toContain(
+        "examiné par MARTIN Jean, responsable de stages L2 et L3 APA-S,",
+      );
+      expect(input.text).not.toContain("l'administration");
+      // The function title appears only in the body sentence, never in the signature.
+      expect(input.text).not.toContain("Cordialement,\nMARTIN Jean, responsable");
+    });
+
+    it("still returns success when the mailer send fails — the status change already committed", async () => {
+      jest.spyOn(Logger.prototype, "error").mockImplementation(() => undefined);
+      prisma.studentProfile.updateMany.mockResolvedValue({ count: 1 });
+      prisma.studentProfile.findUniqueOrThrow.mockResolvedValue({
+        personalEmail: null,
+        user: { email: UNIVERSITY_EMAIL, firstName: STUDENT_FIRST_NAME },
+      });
+      mailerService.send.mockRejectedValue(new Error("Scaleway TEM send failed: 401"));
+
+      const result = await service.rejectProfile(STUDENT_ID, REFUSAL_REASON, ADMIN);
+
       expect(result).toEqual({ studentId: STUDENT_ID, profileStatus: "INCOMPLETE" });
     });
 
@@ -100,9 +270,9 @@ describe("AdminStudentsService", () => {
         profileStatus: "INCOMPLETE",
       });
 
-      await expect(
-        service.rejectProfile(STUDENT_ID, "Certificat illisible"),
-      ).rejects.toBeInstanceOf(ConflictException);
+      await expect(service.rejectProfile(STUDENT_ID, REFUSAL_REASON, ADMIN)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
       expect(prisma.studentProfile.findUniqueOrThrow).not.toHaveBeenCalled();
     });
 
@@ -110,9 +280,9 @@ describe("AdminStudentsService", () => {
       prisma.studentProfile.updateMany.mockResolvedValue({ count: 0 });
       prisma.studentProfile.findUnique.mockResolvedValue(null);
 
-      await expect(
-        service.rejectProfile(STUDENT_ID, "Certificat illisible"),
-      ).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.rejectProfile(STUDENT_ID, REFUSAL_REASON, ADMIN)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 

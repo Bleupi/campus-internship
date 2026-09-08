@@ -201,6 +201,9 @@ jobs:
             -e S3_SECRET_ACCESS_KEY="minioadmin" \
             -e S3_FORCE_PATH_STYLE="true" \
             -e API_PORT=3000 \
+            -e MAILER_SCW_SECRET_KEY="ci-smoke-test-not-a-real-key" \
+            -e MAILER_SCW_PROJECT_ID="ci-smoke-test-not-a-real-project" \
+            -e MAILER_FROM_EMAIL="no-reply@example.org" \
             campus-internship-api:ci)"
 
           cleanup() {

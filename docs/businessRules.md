@@ -41,6 +41,8 @@
 
 **BR-07 — Notifications.** On submission, the admin is notified. On validation/refusal, the student is notified; a refusal email must include the refusal reason.
 
+**BR-11 — Profile validation/refusal email.** On `StudentProfile` validation or refusal, the student is sent a real email — to their institutional address always, and additionally cc'd to their personal address when one is on file. A refusal email's body includes the refusal reason. The body of both emails names the acting admin (the authenticated caller of the validate/reject route) as `"NOM Prénom, <function>"` — never as "l'administration" — and the signature repeats `"NOM Prénom"` alone, without the function. The function string is a single hardcoded value today (one admin in V1); see the `TODO` beside `ADMIN_TITLE` in `admin-students.service.ts` and `docs/ROADMAP_V2.md` for turning it into a real field once a second admin exists. Distinct from BR-07, which governs `Stage` notifications, not `StudentProfile`.
+
 **BR-08 — Snapshot immutability.** On `VALIDATED`/`REFUSED`, a Zod-validated, versioned snapshot of all stage information is frozen. Subsequent edits to related data (organism name, tutor, etc.) do **not** affect archived stages. Reporting FKs are kept but are not the display source.
 
 **BR-10 — Insurance certificate content is a manual visual check.** The admin's validate/reject judgment on an `INSURANCE_CERTIFICATE`'s content — that its coverage extends to internships specifically, and overlaps the current school year (see `CONTEXT.md` for the inconsistent phrasing insurers actually use for both) — is a manual, visual check in V1. No automated text extraction/OCR reads the document; that is parked in `docs/ROADMAP_V2.md`, not built unless explicitly requested.
