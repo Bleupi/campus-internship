@@ -108,6 +108,17 @@ describe("StudentsService", () => {
       ]);
       expect(JSON.stringify(result)).not.toContain("bucketKey");
     });
+
+    it("issue #66: surfaces the profile's refusalReason on the response", async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue(
+        baseProfile({ refusalReason: "Attestation illisible" }),
+      );
+      prisma.fileObject.findMany.mockResolvedValue([]);
+
+      const result = await service.getProfile(USER_ID);
+
+      expect(result.refusalReason).toBe("Attestation illisible");
+    });
   });
 
   describe("updateProfile — completion transition (INCOMPLETE -> PENDING_VALIDATION)", () => {
@@ -137,6 +148,38 @@ describe("StudentsService", () => {
       expect(data.profileStatus).toBe("PENDING_VALIDATION");
       expect(data.profileYear).toEqual(expect.any(String));
       expect(data.profileYear).toMatch(/^\d{4}-\d{4}$/);
+    });
+
+    it("issue #66: clears a rejected profile's refusalReason on resubmission", async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue(
+        baseProfile({ refusalReason: "Attestation illisible" }),
+      );
+      prisma.fileObject.findMany.mockResolvedValue([idPhotoFile(), certificateFile()]);
+      prisma.studentProfile.update.mockImplementation(({ data }) =>
+        Promise.resolve(baseProfile({ ...data })),
+      );
+
+      await service.updateProfile(USER_ID, { promotion: "L3" });
+
+      const data = prisma.studentProfile.update.mock.calls[0][0].data;
+      expect(data.profileStatus).toBe("PENDING_VALIDATION");
+      expect(data.refusalReason).toBeNull();
+    });
+
+    it("issue #66: does not touch refusalReason when the profile stays INCOMPLETE (still missing pieces)", async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue(
+        baseProfile({ refusalReason: "Attestation illisible" }),
+      );
+      prisma.fileObject.findMany.mockResolvedValue([]);
+      prisma.studentProfile.update.mockImplementation(({ data }) =>
+        Promise.resolve(baseProfile({ ...data })),
+      );
+
+      await service.updateProfile(USER_ID, { promotion: "L2" });
+
+      const data = prisma.studentProfile.update.mock.calls[0][0].data;
+      expect(data.profileStatus).toBeUndefined();
+      expect(data.refusalReason).toBeUndefined();
     });
   });
 

@@ -72,6 +72,10 @@ model StudentProfile {
   promotion     Promotion?
   profileStatus ProfileStatus @default(INCOMPLETE)
   profileYear   String?
+  // Issue #66: latest refusal reason only, no history. Set on reject, cleared
+  // whenever the profile leaves INCOMPLETE (rejected state) via resubmission
+  // or a direct admin validation.
+  refusalReason String?
 
   files               FileObject[]
   referentAssignments ReferentAssignment[]

@@ -17,6 +17,9 @@ export interface StudentProfileResponse {
   personalEmail: string | null;
   profileStatus: ProfileStatus;
   profileYear: string | null;
+  // Issue #66: latest refusal reason only; null once the profile leaves the
+  // rejected state (resubmission or direct validation), or if never refused.
+  refusalReason: string | null;
   files: StudentFileMetadata[];
 }
 

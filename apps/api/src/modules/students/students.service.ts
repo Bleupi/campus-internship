@@ -120,6 +120,11 @@ export class StudentsService {
       next === "PENDING_VALIDATION"
     ) {
       data.profileYear = getCurrentSchoolYear();
+      // Issue #66: resubmission is how a rejected (INCOMPLETE) profile
+      // leaves that state on the student side — the reason it described no
+      // longer applies. EXPIRED never carries a refusalReason, so this is a
+      // no-op there.
+      data.refusalReason = null;
     }
   }
 
@@ -188,6 +193,7 @@ export class StudentsService {
       personalEmail: profile.personalEmail,
       profileStatus: profile.profileStatus as ProfileStatus,
       profileYear: profile.profileYear,
+      refusalReason: profile.refusalReason,
       files: files.map((file) => ({
         type: file.type as FileType,
         mimeType: file.mimeType,

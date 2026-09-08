@@ -24,7 +24,27 @@ function incompleteProfile() {
     personalEmail: null,
     profileStatus: "INCOMPLETE",
     profileYear: null,
+    refusalReason: null,
     files: [],
+  };
+}
+
+function rejectedProfile() {
+  return {
+    promotion: "L2",
+    phone: "0601020304",
+    personalEmail: "etu@gmail.com",
+    profileStatus: "INCOMPLETE",
+    profileYear: null,
+    refusalReason: "Attestation illisible",
+    files: [
+      { type: "ID_PHOTO", mimeType: "image/png", uploadedAt: "2026-01-01T00:00:00.000Z" },
+      {
+        type: "INSURANCE_CERTIFICATE",
+        mimeType: "application/pdf",
+        uploadedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ],
   };
 }
 
@@ -35,6 +55,7 @@ function validProfile() {
     personalEmail: "etu@gmail.com",
     profileStatus: "VALID",
     profileYear: "2025-2026",
+    refusalReason: null,
     files: [
       { type: "ID_PHOTO", mimeType: "image/png", uploadedAt: "2026-01-01T00:00:00.000Z" },
       {
@@ -53,6 +74,7 @@ function validProfileWithoutContact() {
     personalEmail: null,
     profileStatus: "VALID",
     profileYear: "2025-2026",
+    refusalReason: null,
     files: [
       { type: "ID_PHOTO", mimeType: "image/png", uploadedAt: "2026-01-01T00:00:00.000Z" },
       {
@@ -71,6 +93,7 @@ function expiredProfile() {
     personalEmail: "etu@gmail.com",
     profileStatus: "EXPIRED",
     profileYear: "2024-2025",
+    refusalReason: null,
     files: [
       { type: "ID_PHOTO", mimeType: "image/png", uploadedAt: "2026-01-01T00:00:00.000Z" },
       {
@@ -89,7 +112,20 @@ function partiallyIncompleteProfile() {
     personalEmail: null,
     profileStatus: "INCOMPLETE",
     profileYear: null,
+    refusalReason: null,
     files: [{ type: "ID_PHOTO", mimeType: "image/png", uploadedAt: "2026-01-01T00:00:00.000Z" }],
+  };
+}
+
+function rejectedAndIncompleteProfile() {
+  return {
+    promotion: null,
+    phone: null,
+    personalEmail: null,
+    profileStatus: "INCOMPLETE",
+    profileYear: null,
+    refusalReason: "Photo d'identité illisible",
+    files: [],
   };
 }
 
@@ -503,6 +539,30 @@ describe("ProfilePage", () => {
     expect(alert.textContent).not.toMatch(/votre promotion/i);
     expect(alert.textContent).not.toMatch(/votre photo d'identité/i);
     expect(alert.textContent).toMatch(/votre attestation de responsabilité civile scolaire/i);
+  });
+
+  it("issue #66: shows the refusal reason as its own banner when the profile was rejected with a reason", async () => {
+    getProfileMock.mockResolvedValue(rejectedProfile());
+    renderPage();
+
+    const banner = await screen.findByTestId("refusal-reason-banner");
+    expect(banner.textContent).toMatch(/attestation illisible/i);
+  });
+
+  it("issue #66: never shows the refusal banner alongside the generic incomplete-profile message", async () => {
+    getProfileMock.mockResolvedValue(rejectedAndIncompleteProfile());
+    renderPage();
+
+    expect(await screen.findByTestId("refusal-reason-banner")).toBeInTheDocument();
+    expect(screen.queryByText(/votre profil est incomplet/i)).not.toBeInTheDocument();
+  });
+
+  it("issue #66: shows the generic incomplete-profile message, not a refusal banner, for a never-submitted profile", async () => {
+    getProfileMock.mockResolvedValue(incompleteProfile());
+    renderPage();
+
+    expect(await screen.findByText(/votre profil est incomplet/i)).toBeInTheDocument();
+    expect(screen.queryByTestId("refusal-reason-banner")).not.toBeInTheDocument();
   });
 
   it("starts in edit mode (form visible, no 'Modifier' button) when the profile is EXPIRED (BR-06)", async () => {

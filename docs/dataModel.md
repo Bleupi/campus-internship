@@ -98,6 +98,7 @@ model StudentProfile {
   promotion     Promotion?                  // null until profile completion (issue #9/#10); signup creates a bare login only
   profileStatus ProfileStatus @default(INCOMPLETE)
   profileYear   String?                     // school year the profile is up-to-date for, e.g. "2024-2025"
+  refusalReason String?                     // latest reason only, no history (issue #66); set on reject, cleared on resubmission or direct validation — same shape as Stage.refusalReason
 
   files               FileObject[]          // id photo + insurance certificate(s), see Files
   referentAssignments ReferentAssignment[]
