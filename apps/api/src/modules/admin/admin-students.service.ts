@@ -10,6 +10,24 @@ const VALIDATABLE_STATUSES: ProfileStatus[] = ["PENDING_VALIDATION"];
 const REJECTABLE_STATUSES: ProfileStatus[] = ["PENDING_VALIDATION", "VALID"];
 const CERTIFICATE_TYPE = "INSURANCE_CERTIFICATE" satisfies FileType;
 
+// TODO(#67 follow-up, see docs/ROADMAP_V2.md "Admin function/title as a
+// field"): hardcoded because there is a single admin today. Move this to a
+// real field on the acting admin before a second admin is onboarded, so we
+// never silently email a student the wrong title.
+const ADMIN_TITLE = "responsable de stages L2 et L3 APA-S";
+
+interface ActingAdmin {
+  firstName: string;
+  lastName: string;
+}
+
+// BR-11: "NOM Prénom" — last name uppercased, first name as stored, space
+// separated, no comma. Used identically in the body mention and the
+// signature; only the body mention also carries ADMIN_TITLE.
+function adminDisplayName(admin: ActingAdmin): string {
+  return `${admin.lastName.toUpperCase()} ${admin.firstName}`;
+}
+
 @Injectable()
 export class AdminStudentsService {
   private readonly logger = new Logger(AdminStudentsService.name);
@@ -24,7 +42,10 @@ export class AdminStudentsService {
   // the `updateMany` WHERE clause (not a separate read-then-write) so two
   // concurrent admin actions on the same profile can't both pass a
   // stale in-memory check and race each other to a silent last-write-wins.
-  async validateProfile(studentId: string): Promise<AdminProfileTransitionResponse> {
+  async validateProfile(
+    studentId: string,
+    admin: ActingAdmin,
+  ): Promise<AdminProfileTransitionResponse> {
     const { count } = await this.prisma.studentProfile.updateMany({
       where: { id: studentId, profileStatus: { in: VALIDATABLE_STATUSES } },
       data: { profileStatus: "VALID" satisfies ProfileStatus },
@@ -34,12 +55,14 @@ export class AdminStudentsService {
     }
 
     const profile = await this.getNotificationTarget(studentId);
+    const adminName = adminDisplayName(admin);
     await this.notifyStudent(
       profile,
       "Votre profil a été validé",
       this.composeEmail(
         profile.user.firstName,
-        "Votre certificat d'assurance a été vérifié et votre profil de stage est validé par l'administration.",
+        adminName,
+        `Votre attestation d'assurance de responsabilité civile avec mention stage a été vérifiée et votre profil de stage est validé par ${adminName}, ${ADMIN_TITLE}.`,
         "Vous pouvez le consulter à tout moment depuis votre espace étudiant.",
       ),
     );
@@ -47,7 +70,11 @@ export class AdminStudentsService {
   }
 
   // ADR-0004: PENDING_VALIDATION or VALID -> INCOMPLETE, with a reason.
-  async rejectProfile(studentId: string, reason: string): Promise<AdminProfileTransitionResponse> {
+  async rejectProfile(
+    studentId: string,
+    reason: string,
+    admin: ActingAdmin,
+  ): Promise<AdminProfileTransitionResponse> {
     const { count } = await this.prisma.studentProfile.updateMany({
       where: { id: studentId, profileStatus: { in: REJECTABLE_STATUSES } },
       data: { profileStatus: "INCOMPLETE" satisfies ProfileStatus },
@@ -57,12 +84,14 @@ export class AdminStudentsService {
     }
 
     const profile = await this.getNotificationTarget(studentId);
+    const adminName = adminDisplayName(admin);
     await this.notifyStudent(
       profile,
-      "Votre profil a été rejeté",
+      "Votre profil a été refusé",
       this.composeEmail(
         profile.user.firstName,
-        `Votre profil de stage a été examiné par l'administration et n'a pas pu être validé, pour le motif suivant :\n\n${reason}`,
+        adminName,
+        `Votre profil de stage a été examiné par ${adminName}, ${ADMIN_TITLE}, et n'a pas pu être validé, pour le motif suivant :\n\n${reason}`,
         "Merci de mettre à jour votre profil et de soumettre à nouveau votre certificat d'assurance depuis votre espace étudiant.",
       ),
     );
@@ -122,15 +151,19 @@ export class AdminStudentsService {
   // Shared plain-text structure for every student-facing email: a
   // personalized greeting, one or more body paragraphs (the reason, for a
   // refusal, is just another paragraph — never the whole message on its
-  // own), and a fixed signature. Kept in the caller (not MailerService,
-  // which stays content-agnostic per ADR-0026) since deciding what a
-  // notification says is business logic, not transport.
-  private composeEmail(firstName: string, ...paragraphs: string[]): string {
-    return [
-      `Bonjour ${firstName},`,
-      ...paragraphs,
-      "Cordialement,\nL'équipe de gestion des stages",
-    ].join("\n\n");
+  // own), and a signature. Kept in the caller (not MailerService, which
+  // stays content-agnostic per ADR-0026) since deciding what a notification
+  // says is business logic, not transport. BR-11: the signature is the
+  // acting admin's "NOM Prénom" only — never their function/title, which
+  // (when present) is confined to a body paragraph instead.
+  private composeEmail(
+    studentFirstName: string,
+    signatureName: string,
+    ...paragraphs: string[]
+  ): string {
+    return [`Bonjour ${studentFirstName},`, ...paragraphs, `Cordialement,\n${signatureName}`].join(
+      "\n\n",
+    );
   }
 
   // BR-11: the student is notified by real email on validation/refusal — to

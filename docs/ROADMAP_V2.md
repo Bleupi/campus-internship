@@ -51,6 +51,10 @@ Assist the admin's certificate-validation queue review (see the admin certificat
 
 Be proactively informed when a student notification email fails to deliver or a recipient address gets blocklisted, instead of having to check the email provider's own dashboard. V1 (issue #60) relies entirely on the provider's native activity/delivery view for this — no in-app handling of delivery events. Revisit if that manual check proves insufficient in practice (missed failures, or volume grows enough that checking a dashboard by hand stops scaling).
 
+## Admin function/title as a field
+
+BR-11's validation/refusal emails name the acting admin with a function/title appositive (e.g. "DUPONT Jean, responsable de stages L2 et L3 APA-S"), currently the single hardcoded `ADMIN_TITLE` constant in `admin-students.service.ts` (issue #67). This is fine with one admin; it silently mislabels a second admin. Add a real field (e.g. on a future `AdminProfile`, see the deferral above) and thread it through instead of the constant before a second admin is onboarded.
+
 ## Production file deletion
 
 No path exists to remove a `FileObject`'s underlying bucket content in production (e.g. when an admin needs to purge a file, or a GDPR-style erasure request). Distinct from the dev-cleanup item above: this is a real, audited deletion capability, not a test-teardown convenience. Needs its own design pass: whether it's triggered automatically (e.g. old object removed on re-upload) or only ever by an explicit admin action, whether the `FileObject` row is hard- or soft-deleted, and how it's authorized/audited.
