@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { UnauthorizedException } from "@nestjs/common";
+import { Logger, UnauthorizedException } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
@@ -183,6 +183,29 @@ describe("AuthService", () => {
       await expect(
         service.login({ email: "ghost@etu.u-paris.fr", password: "whatever-they-typed" }),
       ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
+    it("logs a diagnostic warning distinguishing 'no user' from 'password mismatch' (issue #75), without ever logging the password", async () => {
+      const warnSpy = jest.spyOn(Logger.prototype, "warn").mockImplementation();
+
+      prisma.user.findUnique.mockResolvedValueOnce(null);
+      await expect(
+        service.login({ email: "ghost@etu.u-paris.fr", password: "super-secret-value" }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("no user"));
+
+      const bcrypt = await import("bcrypt");
+      const passwordHash = await bcrypt.hash("the-real-password-is-long-enough", 10);
+      prisma.user.findUnique.mockResolvedValueOnce({ ...baseUser, passwordHash });
+      await expect(
+        service.login({ email: baseUser.email, password: "super-secret-value" }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("password mismatch"));
+
+      const loggedText = warnSpy.mock.calls.map((call) => call[0]).join(" ");
+      expect(loggedText).not.toContain("super-secret-value");
+
+      warnSpy.mockRestore();
     });
 
     it("throws UnauthorizedException for a wrong password", async () => {
