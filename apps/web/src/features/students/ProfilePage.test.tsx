@@ -256,6 +256,31 @@ describe("ProfilePage", () => {
     ).not.toBeChecked();
   });
 
+  it("resets certificate-confirmation state on explicit Annuler, not just on save, for the next edit session", async () => {
+    getProfileMock.mockResolvedValue(validProfile());
+    uploadInsuranceCertificateMock.mockResolvedValue(validProfile());
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole("button", { name: /^modifier$/i }));
+    const certificateInput = screen.getByTestId("insurance-certificate-input");
+    const file = new File(["pdf-bytes"], "certificat.pdf", { type: "application/pdf" });
+    await user.upload(certificateInput, file);
+    await user.click(await screen.findByRole("button", { name: /confirmer/i }));
+    await waitFor(() => expect(uploadInsuranceCertificateMock).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /enregistrer/i })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: /^annuler$/i }));
+    await user.click(await screen.findByRole("button", { name: /^modifier$/i }));
+
+    expect(
+      screen.getByRole("checkbox", { name: /je confirme que mon attestation/i }),
+    ).not.toBeChecked();
+    expect(screen.getByRole("button", { name: /enregistrer/i })).not.toBeDisabled();
+    expect(screen.queryByText(/confirmez que votre nouvelle attestation/i)).not.toBeInTheDocument();
+  });
+
   it("shows a confirmation dialog before replacing the insurance certificate on a VALID profile", async () => {
     getProfileMock.mockResolvedValue(validProfile());
     uploadInsuranceCertificateMock.mockResolvedValue(validProfile());
@@ -450,6 +475,35 @@ describe("ProfilePage", () => {
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(screen.getByRole("button", { name: /enregistrer/i })).not.toBeDisabled();
+  });
+
+  it("issue #72: clears the stale certificate-confirmation warning when a certificate upload flips profileStatus out of forced edit mode mid-session", async () => {
+    // Forced edit mode (INCOMPLETE): editing starts true via mustComplete,
+    // not via an explicit Modifier click, so there's no "Annuler" path to
+    // reset consent state.
+    getProfileMock.mockResolvedValue(incompleteProfile());
+    // The upload's response becomes the new cached profile (useUploadFile's
+    // onSuccess writes it via setQueryData) — simulating a refetch that no
+    // longer blocks navigation while isEditing is still null.
+    uploadInsuranceCertificateMock.mockResolvedValue({
+      ...incompleteProfile(),
+      profileStatus: "PENDING_VALIDATION",
+    });
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByRole("button", { name: /enregistrer/i });
+    const certificateInput = screen.getByTestId("insurance-certificate-input");
+    const file = new File(["pdf-bytes"], "certificat.pdf", { type: "application/pdf" });
+    await user.upload(certificateInput, file);
+    await waitFor(() => expect(uploadInsuranceCertificateMock).toHaveBeenCalled());
+
+    // The profile no longer blocks navigation, so the view drops back to
+    // read-only (Modifier button reappears) — the warning must not survive
+    // that transition, since read-only mode has no checkbox or Enregistrer
+    // button to satisfy or dismiss it.
+    await screen.findByRole("button", { name: /^modifier$/i });
+    expect(screen.queryByText(/confirmez que votre nouvelle attestation/i)).not.toBeInTheDocument();
   });
 
   it("never shows a confirmation dialog for an id photo replacement, even on a VALID profile", async () => {

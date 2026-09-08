@@ -1,4 +1,4 @@
-import { Fragment, useState, type ChangeEvent } from "react";
+import { Fragment, useEffect, useState, type ChangeEvent } from "react";
 import { useForm, type FieldErrors, type UseFormRegister } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -268,15 +268,30 @@ export function ProfilePage() {
   // checkbox itself, which resets after every upload and can otherwise be freely toggled.
   // Uploading is never gated on this; only saving the rest of the form is.
   const [certificateReplacedThisSession, setCertificateReplacedThisSession] = useState(false);
-  // Uploading a new certificate is never blocked by the checkbox — only
-  // saving the rest of the form is, until the student re-confirms it.
-  const certificateConfirmationPending =
-    certificateReplacedThisSession && !certificateConsentChecked;
 
   // BR-06: EXPIRED is a hard-block state too (lazy yearly rollover at
   // login) — same forced edit form as INCOMPLETE, see ProfilePage.test.tsx.
   const mustComplete = !!profile && blocksNavigation(profile.profileStatus);
   const editing = isEditing ?? mustComplete;
+
+  // Issue #72: gated on `editing` here, not just at the warning's render site — so any
+  // future consumer of this flag can't reintroduce the stale-warning bug by skipping that
+  // gate. Uploading a new certificate is never blocked by the checkbox — only saving the
+  // rest of the form is, until the student re-confirms it.
+  const certificateConfirmationPending =
+    editing && certificateReplacedThisSession && !certificateConsentChecked;
+
+  // Issue #72: the single reset point for every path out of edit mode, including
+  // `mustComplete` flipping false out from under a forced (never explicitly
+  // clicked into) edit session — not just the explicit save/cancel paths, which
+  // left this state (and the warning it drives) stuck once read-only mode had no
+  // checkbox or Enregistrer button left to clear it.
+  useEffect(() => {
+    if (!editing) {
+      setCertificateConsentChecked(false);
+      setCertificateReplacedThisSession(false);
+    }
+  }, [editing]);
 
   const {
     register,
@@ -318,11 +333,9 @@ export function ProfilePage() {
   const applyUpdate = (values: UpdateProfileRequest) => {
     setServerError(null);
     updateProfile.mutate(values, {
-      onSuccess: () => {
-        setIsEditing(false);
-        setCertificateConsentChecked(false);
-        setCertificateReplacedThisSession(false);
-      },
+      // Consent-state reset lives in the editing-transition effect above, so it
+      // also covers the implicit (non-explicit-cancel) paths out of edit mode.
+      onSuccess: () => setIsEditing(false),
       onError: () => setServerError("Une erreur est survenue, merci de réessayer."),
     });
   };
@@ -469,17 +482,7 @@ export function ProfilePage() {
                   >
                     Enregistrer
                   </Button>
-                  {!mustComplete && (
-                    <Button
-                      onClick={() => {
-                        setIsEditing(false);
-                        setCertificateConsentChecked(false);
-                        setCertificateReplacedThisSession(false);
-                      }}
-                    >
-                      Annuler
-                    </Button>
-                  )}
+                  {!mustComplete && <Button onClick={() => setIsEditing(false)}>Annuler</Button>}
                 </Fragment>
               ) : (
                 // A distinct `key` (vs. the "editing-actions" fragment above) forces React to
@@ -488,14 +491,7 @@ export function ProfilePage() {
                 // flipped its `type` from "button" to "submit" while the browser's click was still
                 // being processed, so the click's default action fired as a real form submission —
                 // silently saving the untouched profile and bouncing straight back to read mode.
-                <Button
-                  key="modifier-button"
-                  variant="outlined"
-                  onClick={() => {
-                    setIsEditing(true);
-                    setCertificateReplacedThisSession(false);
-                  }}
-                >
+                <Button key="modifier-button" variant="outlined" onClick={() => setIsEditing(true)}>
                   Modifier
                 </Button>
               )}
