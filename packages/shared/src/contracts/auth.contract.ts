@@ -1,10 +1,14 @@
 import type { z } from "zod";
 import type { ProfileStatus, Role } from "../enums";
+import type { forgotPasswordSchema } from "../schemas/forgot-password.schema";
 import type { loginSchema } from "../schemas/login.schema";
+import type { resetPasswordSchema } from "../schemas/reset-password.schema";
 import type { signupSchema } from "../schemas/signup.schema";
 
 export type SignupRequest = z.infer<typeof signupSchema>;
 export type LoginRequest = z.infer<typeof loginSchema>;
+export type ForgotPasswordRequest = z.infer<typeof forgotPasswordSchema>;
+export type ResetPasswordRequest = z.infer<typeof resetPasswordSchema>;
 
 export interface AuthUser {
   id: string;
@@ -30,3 +34,14 @@ export interface MeResponse {
 }
 
 export type RefreshResponse = MeResponse;
+
+// BR-13: both bodies are deliberately generic — forgot-password's is
+// identical whether or not the email matched an account (anti-enumeration),
+// and reset-password's confirms success without ever issuing a session.
+export interface ForgotPasswordResponse {
+  message: string;
+}
+
+export interface ResetPasswordResponse {
+  message: string;
+}

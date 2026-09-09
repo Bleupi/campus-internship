@@ -29,14 +29,31 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  studentProfile  StudentProfile?
-  referentProfile ReferentProfile?
-  refreshTokens   RefreshToken[]
+  studentProfile      StudentProfile?
+  referentProfile     ReferentProfile?
+  refreshTokens       RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
 }
 
 // Access+refresh JWT auth (ADR-0018). Only the SHA-256 hash of the raw
 // refresh token is stored; one row per login session (multi-device).
 model RefreshToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  @@index([userId])
+}
+
+// BR-13: self-service password reset. Same opaque-token-hashed-with-SHA-256
+// pattern as RefreshToken, in its own table — different lifetime (20 minutes
+// vs. session-length), different single-active-per-account semantics, and a
+// different consumer (/auth/reset-password vs. /auth/refresh).
+model PasswordResetToken {
   id        String   @id @default(uuid())
   tokenHash String   @unique
   expiresAt DateTime

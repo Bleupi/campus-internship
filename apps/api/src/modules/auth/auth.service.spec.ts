@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
-import { Logger, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, Logger, UnauthorizedException } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { MailerService } from "../mailer/mailer.service";
 import { AuthService } from "./auth.service";
 
 function sha256(value: string): string {
@@ -23,13 +24,21 @@ const baseUser = {
 
 describe("AuthService", () => {
   let service: AuthService;
+  let mailerService: { send: jest.Mock };
   let prisma: {
     user: {
       create: jest.Mock;
       findUnique: jest.Mock;
       findUniqueOrThrow: jest.Mock;
+      update: jest.Mock;
     };
     refreshToken: {
+      create: jest.Mock;
+      findUnique: jest.Mock;
+      delete: jest.Mock;
+      deleteMany: jest.Mock;
+    };
+    passwordResetToken: {
       create: jest.Mock;
       findUnique: jest.Mock;
       delete: jest.Mock;
@@ -47,8 +56,15 @@ describe("AuthService", () => {
         create: jest.fn(),
         findUnique: jest.fn(),
         findUniqueOrThrow: jest.fn(),
+        update: jest.fn(),
       },
       refreshToken: {
+        create: jest.fn(),
+        findUnique: jest.fn(),
+        delete: jest.fn(),
+        deleteMany: jest.fn(),
+      },
+      passwordResetToken: {
         create: jest.fn(),
         findUnique: jest.fn(),
         delete: jest.fn(),
@@ -60,10 +76,13 @@ describe("AuthService", () => {
       $transaction: jest.fn((arg) => (typeof arg === "function" ? arg(prisma) : Promise.all(arg))),
     };
 
+    mailerService = { send: jest.fn().mockResolvedValue(undefined) };
+
     const module = await Test.createTestingModule({
       providers: [
         AuthService,
         { provide: PrismaService, useValue: prisma },
+        { provide: MailerService, useValue: mailerService },
         {
           provide: JwtService,
           useValue: { sign: jest.fn().mockReturnValue("signed.jwt.token") },
@@ -74,6 +93,7 @@ describe("AuthService", () => {
             get: jest.fn((key: string) => {
               if (key === "JWT_REFRESH_TTL") return "7d";
               if (key === "JWT_ACCESS_TTL") return "15m";
+              if (key === "WEB_APP_URL") return "http://localhost:5173";
               return undefined;
             }),
           },
@@ -416,6 +436,176 @@ describe("AuthService", () => {
       prisma.refreshToken.deleteMany.mockResolvedValue({ count: 0 });
 
       await expect(service.logout("already-used-token")).resolves.toBeUndefined();
+    });
+  });
+
+  describe("forgotPassword — BR-13", () => {
+    it("does nothing for an unknown email: no PasswordResetToken row, no email sent", async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await service.forgotPassword("ghost@etu.u-paris.fr");
+
+      expect(prisma.passwordResetToken.create).not.toHaveBeenCalled();
+      expect(mailerService.send).not.toHaveBeenCalled();
+    });
+
+    it("creates a hashed PasswordResetToken with an expiry ~20 minutes out for a known email", async () => {
+      jest.useFakeTimers().setSystemTime(new Date("2026-03-15T00:00:00.000Z"));
+      prisma.user.findUnique.mockResolvedValue(baseUser);
+      prisma.passwordResetToken.deleteMany.mockResolvedValue({ count: 0 });
+      prisma.passwordResetToken.create.mockResolvedValue({});
+
+      await service.forgotPassword(baseUser.email);
+
+      expect(prisma.passwordResetToken.create).toHaveBeenCalledTimes(1);
+      const createArgs = prisma.passwordResetToken.create.mock.calls[0][0];
+      expect(createArgs.data.userId).toBe(baseUser.id);
+      expect(createArgs.data.tokenHash).toMatch(/^[a-f0-9]{64}$/);
+      expect(createArgs.data.expiresAt.getTime() - Date.now()).toBe(20 * 60 * 1000);
+
+      jest.useRealTimers();
+    });
+
+    it("invalidates (deletes) any prior token for the account before creating the new one", async () => {
+      prisma.user.findUnique.mockResolvedValue(baseUser);
+      prisma.passwordResetToken.deleteMany.mockResolvedValue({ count: 1 });
+      prisma.passwordResetToken.create.mockResolvedValue({});
+
+      await service.forgotPassword(baseUser.email);
+
+      expect(prisma.passwordResetToken.deleteMany).toHaveBeenCalledWith({
+        where: { userId: baseUser.id },
+      });
+      const [deleteOrder] = prisma.passwordResetToken.deleteMany.mock.invocationCallOrder;
+      const [createOrder] = prisma.passwordResetToken.create.mock.invocationCallOrder;
+      expect(deleteOrder).toBeDefined();
+      expect(createOrder).toBeDefined();
+      expect(deleteOrder as number).toBeLessThan(createOrder as number);
+    });
+
+    it("sends the reset email to user.email only, never to a StudentProfile.personalEmail on file", async () => {
+      prisma.user.findUnique.mockResolvedValue(baseUser);
+      prisma.passwordResetToken.deleteMany.mockResolvedValue({ count: 0 });
+      prisma.passwordResetToken.create.mockResolvedValue({});
+
+      await service.forgotPassword(baseUser.email);
+
+      expect(mailerService.send).toHaveBeenCalledTimes(1);
+      const sendArgs = mailerService.send.mock.calls[0][0];
+      expect(sendArgs.to).toEqual({ email: baseUser.email });
+      expect(sendArgs.cc).toBeUndefined();
+    });
+
+    it("does not propagate a MailerService.send() rejection", async () => {
+      prisma.user.findUnique.mockResolvedValue(baseUser);
+      prisma.passwordResetToken.deleteMany.mockResolvedValue({ count: 0 });
+      prisma.passwordResetToken.create.mockResolvedValue({});
+      mailerService.send.mockRejectedValue(new Error("Scaleway TEM is down"));
+
+      await expect(service.forgotPassword(baseUser.email)).resolves.toBeUndefined();
+    });
+  });
+
+  describe("resetPassword — BR-13", () => {
+    const rawToken = "a-raw-reset-token";
+
+    it("updates the password, deletes the token, and revokes every RefreshToken for a valid unexpired token", async () => {
+      prisma.passwordResetToken.findUnique.mockResolvedValue({
+        id: "prt-1",
+        tokenHash: sha256(rawToken),
+        userId: baseUser.id,
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      prisma.user.update.mockResolvedValue(baseUser);
+      prisma.passwordResetToken.delete.mockResolvedValue({});
+      prisma.refreshToken.deleteMany.mockResolvedValue({ count: 2 });
+
+      await service.resetPassword(rawToken, "a-brand-new-password-thats-long");
+
+      const updateArgs = prisma.user.update.mock.calls[0][0];
+      expect(updateArgs.where).toEqual({ id: baseUser.id });
+      expect(updateArgs.data.passwordHash).not.toBe("a-brand-new-password-thats-long");
+      expect(prisma.passwordResetToken.delete).toHaveBeenCalledWith({ where: { id: "prt-1" } });
+      expect(prisma.refreshToken.deleteMany).toHaveBeenCalledWith({
+        where: { userId: baseUser.id },
+      });
+    });
+
+    it("rejects an expired token with a generic BadRequestException", async () => {
+      prisma.passwordResetToken.findUnique.mockResolvedValue({
+        id: "prt-2",
+        tokenHash: sha256(rawToken),
+        userId: baseUser.id,
+        expiresAt: new Date(Date.now() - 60_000),
+      });
+
+      await expect(
+        service.resetPassword(rawToken, "a-brand-new-password-thats-long"),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it("rejects an unknown/already-consumed token with the same generic error as an expired one", async () => {
+      prisma.passwordResetToken.findUnique.mockResolvedValue(null);
+
+      let unknownMessage = "";
+      try {
+        await service.resetPassword("garbage-token", "a-brand-new-password-thats-long");
+      } catch (error) {
+        unknownMessage = (error as BadRequestException).message;
+      }
+
+      prisma.passwordResetToken.findUnique.mockResolvedValue({
+        id: "prt-3",
+        tokenHash: sha256(rawToken),
+        userId: baseUser.id,
+        expiresAt: new Date(Date.now() - 60_000),
+      });
+      let expiredMessage = "";
+      try {
+        await service.resetPassword(rawToken, "a-brand-new-password-thats-long");
+      } catch (error) {
+        expiredMessage = (error as BadRequestException).message;
+      }
+
+      expect(unknownMessage).toBe(expiredMessage);
+      expect(unknownMessage.length).toBeGreaterThan(0);
+    });
+
+    it("sends the confirmation email to user.email only, after a successful reset", async () => {
+      prisma.passwordResetToken.findUnique.mockResolvedValue({
+        id: "prt-4",
+        tokenHash: sha256(rawToken),
+        userId: baseUser.id,
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      prisma.user.update.mockResolvedValue(baseUser);
+      prisma.passwordResetToken.delete.mockResolvedValue({});
+      prisma.refreshToken.deleteMany.mockResolvedValue({ count: 0 });
+
+      await service.resetPassword(rawToken, "a-brand-new-password-thats-long");
+
+      expect(mailerService.send).toHaveBeenCalledTimes(1);
+      const sendArgs = mailerService.send.mock.calls[0][0];
+      expect(sendArgs.to).toEqual({ email: baseUser.email });
+      expect(sendArgs.cc).toBeUndefined();
+    });
+
+    it("does not propagate a MailerService.send() rejection after a successful reset", async () => {
+      prisma.passwordResetToken.findUnique.mockResolvedValue({
+        id: "prt-5",
+        tokenHash: sha256(rawToken),
+        userId: baseUser.id,
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      prisma.user.update.mockResolvedValue(baseUser);
+      prisma.passwordResetToken.delete.mockResolvedValue({});
+      prisma.refreshToken.deleteMany.mockResolvedValue({ count: 0 });
+      mailerService.send.mockRejectedValue(new Error("Scaleway TEM is down"));
+
+      await expect(
+        service.resetPassword(rawToken, "a-brand-new-password-thats-long"),
+      ).resolves.toBeUndefined();
     });
   });
 });

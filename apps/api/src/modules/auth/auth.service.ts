@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import type { StudentProfile, User } from "@prisma/client";
@@ -8,12 +8,17 @@ import ms from "ms";
 import { getCurrentSchoolYear, type AuthUser, type ProfileStatus } from "shared";
 import type { Env } from "../../config/env.schema";
 import { PrismaService } from "../../prisma/prisma.service";
+import { MailerService } from "../mailer/mailer.service";
 import type { LoginDto } from "./dto/login.dto";
 import type { SignupDto } from "./dto/signup.dto";
 
 const BCRYPT_ROUNDS = 10;
 const LOGIN_FAILURE_MESSAGE = "Email ou mot de passe incorrect";
 const REFRESH_FAILURE_MESSAGE = "Session invalide, merci de vous reconnecter";
+// BR-13: unknown, expired, and already-used reset tokens are indistinguishable
+// to the caller — one generic message for all three.
+const RESET_TOKEN_INVALID_MESSAGE = "Lien de réinitialisation invalide ou expiré";
+const RESET_TOKEN_TTL_MS = 20 * 60 * 1000;
 
 // BR-06: lazy yearly reset. Absent from this map, a status is left
 // unchanged — INCOMPLETE has nowhere lower to go, and an already-EXPIRED
@@ -55,6 +60,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService<Env, true>,
+    private readonly mailerService: MailerService,
   ) {}
 
   // A duplicate email (P2002) is left to propagate — the global
@@ -125,6 +131,71 @@ export class AuthService {
     await this.prisma.refreshToken.deleteMany({ where: { tokenHash } });
   }
 
+  // BR-13. Whether or not `email` matches an account, the caller-facing
+  // outcome (via AuthController) is identical — the real work below only
+  // happens when a match exists, silently, so this method never signals
+  // "found" vs. "not found" to its caller either.
+  async forgotPassword(email: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) return;
+
+    // Only one active token per account: a new request invalidates any
+    // still-live one first.
+    await this.prisma.passwordResetToken.deleteMany({ where: { userId: user.id } });
+
+    const rawToken = randomBytes(32).toString("hex");
+    await this.prisma.passwordResetToken.create({
+      data: {
+        tokenHash: hashToken(rawToken),
+        userId: user.id,
+        expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
+      },
+    });
+
+    const webAppUrl = this.configService.get("WEB_APP_URL", { infer: true });
+    const resetUrl = `${webAppUrl}/reset-password?token=${rawToken}`;
+    // Not awaited (unlike resetPassword's confirmation email): awaiting the
+    // outbound Scaleway call here would make a known email measurably
+    // slower to respond to than an unknown one, a timing side channel that
+    // defeats BR-13's anti-enumeration goal even though the response body
+    // stays identical either way. sendMail() already catches its own
+    // errors, so this is safe to leave unawaited.
+    void this.sendMail(
+      user.email,
+      "Réinitialisation de votre mot de passe",
+      this.composeResetEmail(user.firstName, resetUrl),
+    );
+  }
+
+  // BR-13. Missing, expired, and already-consumed tokens are indistinguishable
+  // to the caller: all three throw the same generic BadRequestException.
+  async resetPassword(rawToken: string, newPassword: string): Promise<void> {
+    const tokenHash = hashToken(rawToken);
+    const stored = await this.prisma.passwordResetToken.findUnique({ where: { tokenHash } });
+
+    if (!stored || stored.expiresAt < new Date()) {
+      throw new BadRequestException(RESET_TOKEN_INVALID_MESSAGE);
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+    const user = await this.prisma.$transaction(async (tx) => {
+      const updatedUser = await tx.user.update({
+        where: { id: stored.userId },
+        data: { passwordHash },
+      });
+      await tx.passwordResetToken.delete({ where: { id: stored.id } });
+      // Full session revocation: every device is force-logged-out.
+      await tx.refreshToken.deleteMany({ where: { userId: stored.userId } });
+      return updatedUser;
+    });
+
+    await this.sendMail(
+      user.email,
+      "Votre mot de passe a été modifié",
+      this.composeConfirmationEmail(user.firstName),
+    );
+  }
+
   // BR-06: evaluated lazily at login only, never on refresh — the login
   // response is the point where the frontend needs a fresh decision to
   // redirect. Referents/admins have no StudentProfile and are left alone.
@@ -170,5 +241,54 @@ export class AuthService {
     });
 
     return { user: toAuthUser(user), accessToken, refreshToken: rawRefreshToken };
+  }
+
+  // BR-13, mirroring AdminStudentsService.notifyStudent(): errors are caught
+  // and logged, not propagated — by the time this is called the password
+  // change (or the decision not to email anyone, for an unknown address) has
+  // already committed, and this project builds no in-app delivery-failure
+  // surface (ADR-0026).
+  private async sendMail(to: string, subject: string, text: string): Promise<void> {
+    try {
+      await this.mailerService.send({ to: { email: to }, subject, text });
+    } catch (error) {
+      this.logger.error(
+        `Failed to email ${to}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  // Locked copy (spec #78) — reused verbatim, never composed from paragraph
+  // fragments like AdminStudentsService.composeEmail() does for BR-11.
+  private composeResetEmail(firstName: string, resetUrl: string): string {
+    return `Bonjour ${firstName},
+
+Vous avez demandé la réinitialisation de votre mot de passe sur Gestion des stages.
+
+Cliquez sur le lien suivant pour choisir un nouveau mot de passe. Ce lien est valable 20 minutes et ne peut être utilisé qu'une seule fois :
+
+${resetUrl}
+
+Si vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet email : votre mot de passe reste inchangé.
+
+Cordialement,
+L'équipe Gestion des stages
+
+Cet email est envoyé automatiquement, merci de ne pas y répondre.`;
+  }
+
+  private composeConfirmationEmail(firstName: string): string {
+    return `Bonjour ${firstName},
+
+Votre mot de passe sur Gestion des stages vient d'être modifié.
+
+Si vous êtes à l'origine de ce changement, vous n'avez rien à faire.
+
+Si vous n'êtes pas à l'origine de cette modification, contactez l'administration au plus vite.
+
+Cordialement,
+L'équipe Gestion des stages
+
+Cet email est envoyé automatiquement, merci de ne pas y répondre.`;
   }
 }
