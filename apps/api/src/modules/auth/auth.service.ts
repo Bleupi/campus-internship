@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import type { StudentProfile, User } from "@prisma/client";
@@ -49,6 +49,8 @@ type SessionDb = Pick<PrismaService, "user" | "refreshToken">;
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
@@ -80,11 +82,16 @@ export class AuthService {
       include: { studentProfile: true },
     });
     if (!user) {
+      // Diagnostic only (issue #75) — never log the password itself, and
+      // this warn level keeps it out of Nest's error-severity alerting,
+      // which is reserved for unhandled/5xx failures, not expected 401s.
+      this.logger.warn(`Login failed, no user for email ${dto.email}`);
       throw new UnauthorizedException(LOGIN_FAILURE_MESSAGE);
     }
 
     const passwordMatches = await bcrypt.compare(dto.password, user.passwordHash);
     if (!passwordMatches) {
+      this.logger.warn(`Login failed, password mismatch for email ${dto.email}`);
       throw new UnauthorizedException(LOGIN_FAILURE_MESSAGE);
     }
 
