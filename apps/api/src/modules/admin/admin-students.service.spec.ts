@@ -66,9 +66,23 @@ describe("AdminStudentsService", () => {
 
       expect(prisma.studentProfile.updateMany).toHaveBeenCalledWith({
         where: { id: STUDENT_ID, profileStatus: { in: ["PENDING_VALIDATION"] } },
-        data: { profileStatus: "VALID" },
+        data: { profileStatus: "VALID", refusalReason: null },
       });
       expect(result).toEqual({ studentId: STUDENT_ID, profileStatus: "VALID" });
+    });
+
+    it("issue #66: clears any stale refusalReason on a direct validation", async () => {
+      prisma.studentProfile.updateMany.mockResolvedValue({ count: 1 });
+      prisma.studentProfile.findUniqueOrThrow.mockResolvedValue({
+        personalEmail: null,
+        user: { email: UNIVERSITY_EMAIL, firstName: STUDENT_FIRST_NAME },
+      });
+
+      await service.validateProfile(STUDENT_ID, ADMIN);
+
+      expect(prisma.studentProfile.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ refusalReason: null }) }),
+      );
     });
 
     it("BR-11: emails the university address only, no cc, when no personal address is on file", async () => {
@@ -180,9 +194,25 @@ describe("AdminStudentsService", () => {
 
       expect(prisma.studentProfile.updateMany).toHaveBeenCalledWith({
         where: { id: STUDENT_ID, profileStatus: { in: ["PENDING_VALIDATION", "VALID"] } },
-        data: { profileStatus: "INCOMPLETE" },
+        data: { profileStatus: "INCOMPLETE", refusalReason: REFUSAL_REASON },
       });
       expect(result).toEqual({ studentId: STUDENT_ID, profileStatus: "INCOMPLETE" });
+    });
+
+    it("issue #66: persists the refusal reason on the profile, not just the notification email", async () => {
+      prisma.studentProfile.updateMany.mockResolvedValue({ count: 1 });
+      prisma.studentProfile.findUniqueOrThrow.mockResolvedValue({
+        personalEmail: null,
+        user: { email: UNIVERSITY_EMAIL, firstName: STUDENT_FIRST_NAME },
+      });
+
+      await service.rejectProfile(STUDENT_ID, REFUSAL_REASON, ADMIN);
+
+      expect(prisma.studentProfile.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ refusalReason: REFUSAL_REASON }),
+        }),
+      );
     });
 
     it("BR-11: emails the university address with the refusal reason in the body", async () => {

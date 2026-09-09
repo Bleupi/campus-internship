@@ -425,12 +425,19 @@ export function ProfilePage() {
           </Alert>
         )}
 
-        {profile.profileStatus === "INCOMPLETE" && missingItems.length > 0 && (
-          <Alert severity="warning">
-            Complétez votre dossier. Votre profil est incomplet, il manque :{" "}
-            {missingItems.join(", ")}.
-          </Alert>
-        )}
+        {profile.profileStatus === "INCOMPLETE" &&
+          (profile.refusalReason ? (
+            <Alert severity="error" data-testid="refusal-reason-banner">
+              Votre profil a été refusé. Motif : {profile.refusalReason}
+            </Alert>
+          ) : (
+            missingItems.length > 0 && (
+              <Alert severity="warning">
+                Complétez votre dossier. Votre profil est incomplet, il manque :{" "}
+                {missingItems.join(", ")}.
+              </Alert>
+            )
+          ))}
 
         {serverError && <Alert severity="error">{serverError}</Alert>}
 

@@ -234,6 +234,27 @@ describe("Admin profile-validation transitions (e2e)", () => {
       expect(updated?.profileStatus).toBe("VALID");
     });
 
+    it("issue #66: clears a stale refusalReason on a direct validation", async () => {
+      const { studentId } = await studentWithProfile("VALID");
+      await request(app.getHttpServer())
+        .patch(`/admin/students/${studentId}/profile/reject`)
+        .set("Cookie", adminCookie)
+        .send({ reason: "Certificat illisible" })
+        .expect(200);
+      await prisma.studentProfile.update({
+        where: { id: studentId },
+        data: { profileStatus: "PENDING_VALIDATION" },
+      });
+
+      await request(app.getHttpServer())
+        .patch(`/admin/students/${studentId}/profile/validate`)
+        .set("Cookie", adminCookie)
+        .expect(200);
+
+      const updated = await prisma.studentProfile.findUnique({ where: { id: studentId } });
+      expect(updated?.refusalReason).toBeNull();
+    });
+
     it("409s when called from an invalid source status (INCOMPLETE)", async () => {
       const { studentId } = await studentWithProfile("INCOMPLETE");
 
@@ -275,6 +296,19 @@ describe("Admin profile-validation transitions (e2e)", () => {
 
       const updated = await prisma.studentProfile.findUnique({ where: { id: studentId } });
       expect(updated?.profileStatus).toBe("INCOMPLETE");
+    });
+
+    it("issue #66: persists the refusal reason on the profile", async () => {
+      const { studentId } = await studentWithProfile("PENDING_VALIDATION");
+
+      await request(app.getHttpServer())
+        .patch(`/admin/students/${studentId}/profile/reject`)
+        .set("Cookie", adminCookie)
+        .send({ reason: "Attestation illisible" })
+        .expect(200);
+
+      const updated = await prisma.studentProfile.findUnique({ where: { id: studentId } });
+      expect(updated?.refusalReason).toBe("Attestation illisible");
     });
 
     it("409s when called from an invalid source status (INCOMPLETE)", async () => {

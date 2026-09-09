@@ -48,7 +48,10 @@ export class AdminStudentsService {
   ): Promise<AdminProfileTransitionResponse> {
     const { count } = await this.prisma.studentProfile.updateMany({
       where: { id: studentId, profileStatus: { in: VALIDATABLE_STATUSES } },
-      data: { profileStatus: "VALID" satisfies ProfileStatus },
+      // Issue #66: a direct validation also leaves the rejected state (in the
+      // rare case a stale reason is still on file), so it's cleared here too
+      // — not just on student resubmission.
+      data: { profileStatus: "VALID" satisfies ProfileStatus, refusalReason: null },
     });
     if (count === 0) {
       await this.throwForFailedTransition(studentId, "valider");
@@ -77,7 +80,9 @@ export class AdminStudentsService {
   ): Promise<AdminProfileTransitionResponse> {
     const { count } = await this.prisma.studentProfile.updateMany({
       where: { id: studentId, profileStatus: { in: REJECTABLE_STATUSES } },
-      data: { profileStatus: "INCOMPLETE" satisfies ProfileStatus },
+      // Issue #66: latest reason only, persisted on the profile (not just
+      // the notification email) so the student sees it on their page.
+      data: { profileStatus: "INCOMPLETE" satisfies ProfileStatus, refusalReason: reason },
     });
     if (count === 0) {
       await this.throwForFailedTransition(studentId, "rejeter");

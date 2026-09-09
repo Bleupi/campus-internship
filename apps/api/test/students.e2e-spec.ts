@@ -33,6 +33,11 @@ describe("Students profile (e2e)", () => {
   });
 
   async function signupAndGetAccessToken(): Promise<string> {
+    const { accessToken } = await signup();
+    return accessToken;
+  }
+
+  async function signup(): Promise<{ email: string; accessToken: string }> {
     const email = uniqueEmail();
     createdUserEmails.push(email);
     const response = await request(app.getHttpServer())
@@ -44,7 +49,7 @@ describe("Students profile (e2e)", () => {
         lastName: "Dupont",
       })
       .expect(201);
-    return requireCookie(cookieMap(response), "access_token");
+    return { email, accessToken: requireCookie(cookieMap(response), "access_token") };
   }
 
   function authCookie(accessToken: string): string {
@@ -69,6 +74,7 @@ describe("Students profile (e2e)", () => {
       personalEmail: null,
       profileStatus: "INCOMPLETE",
       profileYear: null,
+      refusalReason: null,
       files: [],
     });
   });
@@ -171,5 +177,38 @@ describe("Students profile (e2e)", () => {
         expect.objectContaining({ type: "INSURANCE_CERTIFICATE", mimeType: "application/pdf" }),
       ]),
     );
+  });
+
+  it("issue #66: resubmitting a rejected profile clears its refusalReason", async () => {
+    const { email, accessToken } = await signup();
+    await prisma.studentProfile.updateMany({
+      where: { user: { email } },
+      data: { refusalReason: "Attestation illisible" },
+    });
+
+    await request(app.getHttpServer())
+      .patch("/students/me/profile")
+      .set("Cookie", authCookie(accessToken))
+      .send({ promotion: "L3" })
+      .expect(200);
+    await request(app.getHttpServer())
+      .post("/students/me/profile/id-photo")
+      .set("Cookie", authCookie(accessToken))
+      .attach("file", Buffer.from("fake-id-photo-bytes"), {
+        filename: "id.png",
+        contentType: "image/png",
+      })
+      .expect(201);
+    const response = await request(app.getHttpServer())
+      .post("/students/me/profile/insurance-certificate")
+      .set("Cookie", authCookie(accessToken))
+      .attach("file", Buffer.from("fake-certificate-bytes"), {
+        filename: "cert.pdf",
+        contentType: "application/pdf",
+      })
+      .expect(201);
+
+    expect(response.body.profileStatus).toBe("PENDING_VALIDATION");
+    expect(response.body.refusalReason).toBeNull();
   });
 });
