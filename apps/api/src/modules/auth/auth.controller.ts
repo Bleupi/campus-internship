@@ -35,8 +35,12 @@ const REFRESH_TOKEN_COOKIE = "refresh_token";
 const REFRESH_SESSION_MESSAGE = "Session invalide, merci de vous reconnecter";
 // BR-13: identical regardless of whether the email matched an account
 // (anti-enumeration) — the controller never branches on that outcome.
+// Spam-folder reminder (docs/wayfinder-forgot-password.md): the reset test
+// email landed in spam, so the confirmation shown after submission — not
+// the email itself — is where users are told to check there.
 const FORGOT_PASSWORD_MESSAGE =
-  "Si un compte existe avec cette adresse email, un email de réinitialisation vient d'être envoyé.";
+  "Si un compte existe avec cette adresse email, un email de réinitialisation vient d'être envoyé. " +
+  "Pensez à vérifier vos courriers indésirables (spams) si vous ne le recevez pas rapidement.";
 const RESET_PASSWORD_SUCCESS_MESSAGE =
   "Votre mot de passe a été réinitialisé. Vous pouvez maintenant vous connecter.";
 
