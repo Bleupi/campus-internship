@@ -1,5 +1,5 @@
 import { Readable } from "node:stream";
-import { ConflictException, Logger, NotFoundException } from "@nestjs/common";
+import { ConflictException, NotFoundException } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import { PrismaService } from "../../prisma/prisma.service";
 import { FilesService } from "../files/files.service";
@@ -26,7 +26,7 @@ describe("AdminStudentsService", () => {
     };
   };
   let filesService: { download: jest.Mock };
-  let mailerService: { send: jest.Mock };
+  let mailerService: { sendSafely: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
@@ -40,7 +40,7 @@ describe("AdminStudentsService", () => {
       },
     };
     filesService = { download: jest.fn() };
-    mailerService = { send: jest.fn().mockResolvedValue(undefined) };
+    mailerService = { sendSafely: jest.fn().mockResolvedValue(undefined) };
 
     const module = await Test.createTestingModule({
       providers: [
@@ -94,8 +94,8 @@ describe("AdminStudentsService", () => {
 
       await service.validateProfile(STUDENT_ID, ADMIN);
 
-      expect(mailerService.send).toHaveBeenCalledTimes(1);
-      const input = mailerService.send.mock.calls[0][0];
+      expect(mailerService.sendSafely).toHaveBeenCalledTimes(1);
+      const input = mailerService.sendSafely.mock.calls[0][0];
       expect(input.to).toEqual({ email: UNIVERSITY_EMAIL });
       expect(input.cc).toBeUndefined();
     });
@@ -109,7 +109,7 @@ describe("AdminStudentsService", () => {
 
       await service.validateProfile(STUDENT_ID, ADMIN);
 
-      const input = mailerService.send.mock.calls[0][0];
+      const input = mailerService.sendSafely.mock.calls[0][0];
       expect(input.to).toEqual({ email: UNIVERSITY_EMAIL });
       expect(input.cc).toEqual({ email: PERSONAL_EMAIL });
     });
@@ -123,7 +123,7 @@ describe("AdminStudentsService", () => {
 
       await service.validateProfile(STUDENT_ID, ADMIN);
 
-      const input = mailerService.send.mock.calls[0][0];
+      const input = mailerService.sendSafely.mock.calls[0][0];
       expect(input.subject).toBe("Votre profil a été validé");
       expect(input.text.startsWith(`Bonjour ${STUDENT_FIRST_NAME},`)).toBe(true);
       expect(input.text.endsWith("Cordialement,\nMARTIN Jean")).toBe(true);
@@ -138,24 +138,27 @@ describe("AdminStudentsService", () => {
 
       await service.validateProfile(STUDENT_ID, ADMIN);
 
-      const input = mailerService.send.mock.calls[0][0];
+      const input = mailerService.sendSafely.mock.calls[0][0];
       expect(input.text).toContain("validé par MARTIN Jean, responsable de stages L2 et L3 APA-S.");
       expect(input.text).not.toContain("l'administration");
       // The function title appears only in the body sentence, never in the signature.
       expect(input.text).not.toContain("Cordialement,\nMARTIN Jean, responsable");
     });
 
-    it("still returns success when the mailer send fails — the status change already committed", async () => {
-      jest.spyOn(Logger.prototype, "error").mockImplementation(() => undefined);
+    // The "catch, log, don't propagate" guarantee itself now lives in
+    // MailerService.sendSafely() (mailer.service.spec.ts) — this only
+    // checks AdminStudentsService delegates to it rather than calling
+    // send() directly (which would have no catch of its own here).
+    it("delegates to MailerService.sendSafely(), not send() directly", async () => {
       prisma.studentProfile.updateMany.mockResolvedValue({ count: 1 });
       prisma.studentProfile.findUniqueOrThrow.mockResolvedValue({
         personalEmail: null,
         user: { email: UNIVERSITY_EMAIL, firstName: STUDENT_FIRST_NAME },
       });
-      mailerService.send.mockRejectedValue(new Error("Scaleway TEM send failed: 401"));
 
       const result = await service.validateProfile(STUDENT_ID, ADMIN);
 
+      expect(mailerService.sendSafely).toHaveBeenCalledTimes(1);
       expect(result).toEqual({ studentId: STUDENT_ID, profileStatus: "VALID" });
     });
 
@@ -224,8 +227,8 @@ describe("AdminStudentsService", () => {
 
       await service.rejectProfile(STUDENT_ID, REFUSAL_REASON, ADMIN);
 
-      expect(mailerService.send).toHaveBeenCalledTimes(1);
-      const input = mailerService.send.mock.calls[0][0];
+      expect(mailerService.sendSafely).toHaveBeenCalledTimes(1);
+      const input = mailerService.sendSafely.mock.calls[0][0];
       expect(input.to).toEqual({ email: UNIVERSITY_EMAIL });
       expect(input.cc).toBeUndefined();
       expect(input.text).toContain(REFUSAL_REASON);
@@ -240,7 +243,7 @@ describe("AdminStudentsService", () => {
 
       await service.rejectProfile(STUDENT_ID, REFUSAL_REASON, ADMIN);
 
-      const input = mailerService.send.mock.calls[0][0];
+      const input = mailerService.sendSafely.mock.calls[0][0];
       expect(input.cc).toEqual({ email: PERSONAL_EMAIL });
     });
 
@@ -253,7 +256,7 @@ describe("AdminStudentsService", () => {
 
       await service.rejectProfile(STUDENT_ID, REFUSAL_REASON, ADMIN);
 
-      const input = mailerService.send.mock.calls[0][0];
+      const input = mailerService.sendSafely.mock.calls[0][0];
       expect(input.subject).toBe("Votre profil a été refusé");
       expect(input.text.startsWith(`Bonjour ${STUDENT_FIRST_NAME},`)).toBe(true);
       expect(input.text).toContain(`pour le motif suivant :\n\n${REFUSAL_REASON}`);
@@ -270,7 +273,7 @@ describe("AdminStudentsService", () => {
 
       await service.rejectProfile(STUDENT_ID, REFUSAL_REASON, ADMIN);
 
-      const input = mailerService.send.mock.calls[0][0];
+      const input = mailerService.sendSafely.mock.calls[0][0];
       expect(input.text).toContain(
         "examiné par MARTIN Jean, responsable de stages L2 et L3 APA-S,",
       );
@@ -279,17 +282,20 @@ describe("AdminStudentsService", () => {
       expect(input.text).not.toContain("Cordialement,\nMARTIN Jean, responsable");
     });
 
-    it("still returns success when the mailer send fails — the status change already committed", async () => {
-      jest.spyOn(Logger.prototype, "error").mockImplementation(() => undefined);
+    // The "catch, log, don't propagate" guarantee itself now lives in
+    // MailerService.sendSafely() (mailer.service.spec.ts) — this only
+    // checks AdminStudentsService delegates to it rather than calling
+    // send() directly (which would have no catch of its own here).
+    it("delegates to MailerService.sendSafely(), not send() directly", async () => {
       prisma.studentProfile.updateMany.mockResolvedValue({ count: 1 });
       prisma.studentProfile.findUniqueOrThrow.mockResolvedValue({
         personalEmail: null,
         user: { email: UNIVERSITY_EMAIL, firstName: STUDENT_FIRST_NAME },
       });
-      mailerService.send.mockRejectedValue(new Error("Scaleway TEM send failed: 401"));
 
       const result = await service.rejectProfile(STUDENT_ID, REFUSAL_REASON, ADMIN);
 
+      expect(mailerService.sendSafely).toHaveBeenCalledTimes(1);
       expect(result).toEqual({ studentId: STUDENT_ID, profileStatus: "INCOMPLETE" });
     });
 

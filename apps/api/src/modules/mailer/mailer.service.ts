@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import type { Env } from "../../config/env.schema";
 
@@ -74,6 +74,23 @@ export class MailerService {
 
     if (!response.ok) {
       throw new Error(`Scaleway TEM send failed: ${response.status} ${await response.text()}`);
+    }
+  }
+
+  // ADR-0026's "catch and log, don't propagate" policy (a failed send
+  // shouldn't turn an already-committed action into a 500), shared here once
+  // AuthService (BR-13) became the second real caller after
+  // AdminStudentsService (BR-11) — previously duplicated identically in
+  // both, review follow-up on PR #81. Takes the caller's own Logger so
+  // failures still log under the caller's context (e.g. [AuthService]), not
+  // a generic [MailerService] tag.
+  async sendSafely(input: SendEmailInput, logger: Logger): Promise<void> {
+    try {
+      await this.send(input);
+    } catch (error) {
+      logger.error(
+        `Failed to email ${input.to.email}: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 }

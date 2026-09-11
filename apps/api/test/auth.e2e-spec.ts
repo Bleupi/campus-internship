@@ -26,7 +26,11 @@ describe("Auth (e2e)", () => {
     mailerSend = jest.fn().mockResolvedValue(undefined);
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(MailerService)
-      .useValue({ send: mailerSend })
+      // sendSafely() reuses the same mock as send() — its first argument has
+      // the same shape (SendEmailInput), and every assertion below only
+      // inspects mailerSend.mock.calls[...][0], so the existing assertions
+      // don't need to change now that AuthService delegates to sendSafely().
+      .useValue({ send: mailerSend, sendSafely: mailerSend })
       .compile();
     app = moduleRef.createNestApplication();
     app.use(cookieParser());

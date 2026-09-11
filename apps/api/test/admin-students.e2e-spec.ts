@@ -34,7 +34,10 @@ describe("Admin profile-validation transitions (e2e)", () => {
     // network call to Scaleway (no account is provisioned in CI/local dev).
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(MailerService)
-      .useValue({ send: jest.fn().mockResolvedValue(undefined) })
+      .useValue({
+        send: jest.fn().mockResolvedValue(undefined),
+        sendSafely: jest.fn().mockResolvedValue(undefined),
+      })
       .compile();
     app = moduleRef.createNestApplication();
     app.use(cookieParser());

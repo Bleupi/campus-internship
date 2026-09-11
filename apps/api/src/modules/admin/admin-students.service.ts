@@ -176,29 +176,25 @@ export class AdminStudentsService {
   // BR-11: the student is notified by real email on validation/refusal — to
   // their university address always, and cc'd to their personal address
   // when one is on file. A refusal email's text already carries the reason
-  // (built by the caller). Errors are caught and logged rather than
-  // propagated: by this point the status transition already committed, and
-  // this project builds no in-app delivery-failure handling (ADR-0026) — a
-  // failed send is diagnosed via Scaleway's own activity dashboard, not by
-  // turning an already-successful admin action into a 500.
+  // (built by the caller). MailerService.sendSafely() owns the shared
+  // "catch, log, don't propagate" policy (ADR-0026): by this point the
+  // status transition already committed, and this project builds no in-app
+  // delivery-failure handling — a failed send is diagnosed via Scaleway's
+  // own activity dashboard, not by turning an already-successful admin
+  // action into a 500.
   private async notifyStudent(
     profile: { personalEmail: string | null; user: { email: string } },
     subject: string,
     text: string,
   ): Promise<void> {
-    try {
-      await this.mailerService.send({
+    await this.mailerService.sendSafely(
+      {
         to: { email: profile.user.email },
         cc: profile.personalEmail ? { email: profile.personalEmail } : undefined,
         subject,
         text,
-      });
-    } catch (error) {
-      this.logger.error(
-        `Failed to email student ${profile.user.email}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-    }
+      },
+      this.logger,
+    );
   }
 }

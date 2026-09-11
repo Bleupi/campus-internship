@@ -24,7 +24,7 @@ const baseUser = {
 
 describe("AuthService", () => {
   let service: AuthService;
-  let mailerService: { send: jest.Mock };
+  let mailerService: { sendSafely: jest.Mock };
   let prisma: {
     user: {
       create: jest.Mock;
@@ -74,7 +74,7 @@ describe("AuthService", () => {
       $transaction: jest.fn((arg) => (typeof arg === "function" ? arg(prisma) : Promise.all(arg))),
     };
 
-    mailerService = { send: jest.fn().mockResolvedValue(undefined) };
+    mailerService = { sendSafely: jest.fn().mockResolvedValue(undefined) };
 
     const module = await Test.createTestingModule({
       providers: [
@@ -444,7 +444,7 @@ describe("AuthService", () => {
       await service.forgotPassword("ghost@etu.u-paris.fr");
 
       expect(prisma.passwordResetToken.upsert).not.toHaveBeenCalled();
-      expect(mailerService.send).not.toHaveBeenCalled();
+      expect(mailerService.sendSafely).not.toHaveBeenCalled();
     });
 
     it("creates a hashed PasswordResetToken with an expiry ~20 minutes out for a known email", async () => {
@@ -484,18 +484,23 @@ describe("AuthService", () => {
 
       await service.forgotPassword(baseUser.email);
 
-      expect(mailerService.send).toHaveBeenCalledTimes(1);
-      const sendArgs = mailerService.send.mock.calls[0][0];
+      expect(mailerService.sendSafely).toHaveBeenCalledTimes(1);
+      const sendArgs = mailerService.sendSafely.mock.calls[0][0];
       expect(sendArgs.to).toEqual({ email: baseUser.email });
       expect(sendArgs.cc).toBeUndefined();
     });
 
-    it("does not propagate a MailerService.send() rejection", async () => {
+    // The "catch, log, don't propagate" policy itself now lives in
+    // MailerService.sendSafely() (mailer.service.spec.ts) — this only
+    // checks AuthService delegates to it rather than calling send()
+    // directly (which would have no catch of its own here).
+    it("delegates to MailerService.sendSafely(), not send() directly", async () => {
       prisma.user.findUnique.mockResolvedValue(baseUser);
       prisma.passwordResetToken.upsert.mockResolvedValue({});
-      mailerService.send.mockRejectedValue(new Error("Scaleway TEM is down"));
 
-      await expect(service.forgotPassword(baseUser.email)).resolves.toBeUndefined();
+      await service.forgotPassword(baseUser.email);
+
+      expect(mailerService.sendSafely).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -600,13 +605,17 @@ describe("AuthService", () => {
 
       await service.resetPassword(rawToken, "a-brand-new-password-thats-long");
 
-      expect(mailerService.send).toHaveBeenCalledTimes(1);
-      const sendArgs = mailerService.send.mock.calls[0][0];
+      expect(mailerService.sendSafely).toHaveBeenCalledTimes(1);
+      const sendArgs = mailerService.sendSafely.mock.calls[0][0];
       expect(sendArgs.to).toEqual({ email: baseUser.email });
       expect(sendArgs.cc).toBeUndefined();
     });
 
-    it("does not propagate a MailerService.send() rejection after a successful reset", async () => {
+    // The "catch, log, don't propagate" policy itself now lives in
+    // MailerService.sendSafely() (mailer.service.spec.ts) — this only
+    // checks AuthService delegates to it rather than calling send()
+    // directly (which would have no catch of its own here).
+    it("delegates to MailerService.sendSafely(), not send() directly", async () => {
       prisma.passwordResetToken.findUnique.mockResolvedValue({
         id: "prt-5",
         tokenHash: sha256(rawToken),
@@ -616,11 +625,10 @@ describe("AuthService", () => {
       prisma.user.update.mockResolvedValue(baseUser);
       prisma.passwordResetToken.deleteMany.mockResolvedValue({ count: 1 });
       prisma.refreshToken.deleteMany.mockResolvedValue({ count: 0 });
-      mailerService.send.mockRejectedValue(new Error("Scaleway TEM is down"));
 
-      await expect(
-        service.resetPassword(rawToken, "a-brand-new-password-thats-long"),
-      ).resolves.toBeUndefined();
+      await service.resetPassword(rawToken, "a-brand-new-password-thats-long");
+
+      expect(mailerService.sendSafely).toHaveBeenCalledTimes(1);
     });
   });
 });

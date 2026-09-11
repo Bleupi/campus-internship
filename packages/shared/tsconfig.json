@@ -4,7 +4,14 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "noEmit": true,
-    "declaration": false
+    "declaration": false,
+    // This package runs in both the browser (react-hook-form resolvers) and
+    // Node (apps/api) — unlike DOM, TextEncoder/TextDecoder are genuinely
+    // global in both, just not covered by the base ES2022 lib. Deliberately
+    // not @types/node instead: that would also expose Node-only globals
+    // (Buffer, process, ...) at the type level, undermining the
+    // runtime-agnostic guardrail this package is held to (CLAUDE.md §7).
+    "lib": ["ES2022", "DOM"]
   },
   "include": ["src"]
 }

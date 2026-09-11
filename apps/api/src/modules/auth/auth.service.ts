@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
+import { setTimeout as sleep } from "node:timers/promises";
 import { BadRequestException, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
@@ -19,6 +20,11 @@ const REFRESH_FAILURE_MESSAGE = "Session invalide, merci de vous reconnecter";
 // to the caller — one generic message for all three.
 const RESET_TOKEN_INVALID_MESSAGE = "Lien de réinitialisation invalide ou expiré";
 const RESET_TOKEN_TTL_MS = 20 * 60 * 1000;
+// BR-13 anti-enumeration, review follow-up on PR #81: a known email costs one
+// extra DB round trip (the upsert) versus a bare lookup for an unknown one —
+// a residual timing side channel on top of the already-unawaited email send.
+// Padding every response to this floor keeps that gap out of the noise.
+const FORGOT_PASSWORD_MIN_RESPONSE_MS = 150;
 
 // BR-06: lazy yearly reset. Absent from this map, a status is left
 // unchanged — INCOMPLETE has nowhere lower to go, and an already-EXPIRED
@@ -136,6 +142,13 @@ export class AuthService {
   // happens when a match exists, silently, so this method never signals
   // "found" vs. "not found" to its caller either.
   async forgotPassword(email: string): Promise<void> {
+    // Padded to a fixed floor (FORGOT_PASSWORD_MIN_RESPONSE_MS) so the extra
+    // DB round trip on the known-email path doesn't leak through response
+    // timing — see that constant's comment.
+    await Promise.all([this.processForgotPassword(email), sleep(FORGOT_PASSWORD_MIN_RESPONSE_MS)]);
+  }
+
+  private async processForgotPassword(email: string): Promise<void> {
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user) return;
 
@@ -158,7 +171,10 @@ export class AuthService {
       },
     });
 
-    const webAppUrl = this.configService.get("WEB_APP_URL", { infer: true });
+    // Trailing slash stripped: WEB_APP_URL is only validated as a URL
+    // (env.schema.ts), not as slash-free — an operator setting it with one
+    // would otherwise produce a malformed "//reset-password" link.
+    const webAppUrl = this.configService.get("WEB_APP_URL", { infer: true }).replace(/\/+$/, "");
     const resetUrl = `${webAppUrl}/reset-password?token=${rawToken}`;
     // Not awaited (unlike resetPassword's confirmation email): awaiting the
     // outbound Scaleway call here would make a known email measurably
@@ -202,7 +218,12 @@ export class AuthService {
         where: { id: stored.userId },
         data: { passwordHash },
       });
-      // Full session revocation: every device is force-logged-out.
+      // Revokes every stored RefreshToken (all devices need to log in again
+      // to get a new session). This does NOT invalidate an access token
+      // already issued: JwtStrategy checks only signature/expiry, no DB
+      // lookup, so a JWT signed before the reset keeps working for up to
+      // its own TTL (JWT_ACCESS_TTL, 15m by default) — review follow-up on
+      // PR #81, tracked as a known gap rather than "fully force-logged-out".
       await tx.refreshToken.deleteMany({ where: { userId: stored.userId } });
       return updatedUser;
     });
@@ -261,19 +282,13 @@ export class AuthService {
     return { user: toAuthUser(user), accessToken, refreshToken: rawRefreshToken };
   }
 
-  // BR-13, mirroring AdminStudentsService.notifyStudent(): errors are caught
-  // and logged, not propagated — by the time this is called the password
-  // change (or the decision not to email anyone, for an unknown address) has
-  // already committed, and this project builds no in-app delivery-failure
-  // surface (ADR-0026).
+  // BR-13: by the time this is called the password change (or the decision
+  // not to email anyone, for an unknown address) has already committed —
+  // MailerService.sendSafely() owns the shared "catch, log, don't
+  // propagate" policy (ADR-0026), the same one AdminStudentsService's
+  // notifyStudent() delegates to for BR-11.
   private async sendMail(to: string, subject: string, text: string): Promise<void> {
-    try {
-      await this.mailerService.send({ to: { email: to }, subject, text });
-    } catch (error) {
-      this.logger.error(
-        `Failed to email ${to}: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
+    await this.mailerService.sendSafely({ to: { email: to }, subject, text }, this.logger);
   }
 
   // Locked copy (spec #78) — reused verbatim, never composed from paragraph

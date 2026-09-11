@@ -1,3 +1,4 @@
+import type { Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Test } from "@nestjs/testing";
 import { MailerService } from "./mailer.service";
@@ -92,5 +93,37 @@ describe("MailerService — ADR-0026: Scaleway Transactional Email", () => {
         text: "Texte",
       }),
     ).rejects.toThrow(/401/);
+  });
+
+  // Shared "catch, log, don't propagate" policy (review follow-up on PR
+  // #81): previously duplicated identically in AuthService.sendMail() and
+  // AdminStudentsService.notifyStudent(); both now delegate here.
+  describe("sendSafely() — shared catch-and-log policy", () => {
+    it("delegates to send() and resolves normally on success, without logging", async () => {
+      fetchMock.mockResolvedValue({ ok: true, status: 202, text: async () => "" });
+      const logger = { error: jest.fn() };
+
+      await expect(
+        service.sendSafely(
+          { to: { email: "etudiant@etu.u-pariscite.fr" }, subject: "Sujet", text: "Texte" },
+          logger as unknown as Logger,
+        ),
+      ).resolves.toBeUndefined();
+      expect(logger.error).not.toHaveBeenCalled();
+    });
+
+    it("catches a send() failure and logs it via the caller's own Logger, without rejecting", async () => {
+      fetchMock.mockResolvedValue({ ok: false, status: 500, text: async () => "boom" });
+      const logger = { error: jest.fn() };
+
+      await expect(
+        service.sendSafely(
+          { to: { email: "etudiant@etu.u-pariscite.fr" }, subject: "Sujet", text: "Texte" },
+          logger as unknown as Logger,
+        ),
+      ).resolves.toBeUndefined();
+      expect(logger.error).toHaveBeenCalledTimes(1);
+      expect(logger.error.mock.calls[0][0]).toContain("etudiant@etu.u-pariscite.fr");
+    });
   });
 });
