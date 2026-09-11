@@ -10,4 +10,6 @@ Add self-service password reset for every role (BR-13, issue #79) — `POST /aut
 
 The forgot-password confirmation message now also reminds the user to check their spam/junk folder — the reset link itself stays out of the email body per `docs/wayfinder-forgot-password.md` (a test send landed in spam), so the reminder lives in the response shown right after submission instead.
 
+Code-review follow-up: `PasswordResetToken.userId` is now unique, and `forgotPassword()` reissues a token via a single atomic `upsert` instead of a separate `deleteMany` + `create` — closes a race where two concurrent requests for the same account could otherwise both survive as distinct live tokens. `resetPassword()` now claims the token with an atomic `deleteMany` inside its transaction instead of trusting an earlier `findUnique`, so a concurrent request racing on the same token gets the documented generic 400 instead of an accidental 404.
+
 No web UI yet — the frontend reset-password screen is a separate, blocked ticket.

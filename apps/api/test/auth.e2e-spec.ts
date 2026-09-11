@@ -337,6 +337,20 @@ describe("Auth (e2e)", () => {
         .expect(400);
     });
 
+    it("concurrent forgot-password requests for the same account leave exactly one live token (review follow-up on PR #81)", async () => {
+      const email = uniqueEmail();
+      await signup(email).expect(201);
+
+      await Promise.all([
+        request(app.getHttpServer()).post("/auth/forgot-password").send({ email }).expect(200),
+        request(app.getHttpServer()).post("/auth/forgot-password").send({ email }).expect(200),
+      ]);
+
+      const user = await prisma.user.findUniqueOrThrow({ where: { email } });
+      const tokenCount = await prisma.passwordResetToken.count({ where: { userId: user.id } });
+      expect(tokenCount).toBe(1);
+    });
+
     it("POST /auth/reset-password: a valid token updates the password and revokes every session; new password works, old one doesn't, and the pre-reset refresh cookie is rejected", async () => {
       const email = uniqueEmail();
       const oldPassword = "the-original-password-long-enough";
@@ -418,6 +432,26 @@ describe("Auth (e2e)", () => {
         .post("/auth/reset-password")
         .send({ token, newPassword: "yet-another-password-thats-long" })
         .expect(400);
+    });
+
+    it("concurrent reset-password requests with the same valid token: exactly one succeeds, the other gets the generic 400 (not a 404) (review follow-up on PR #81)", async () => {
+      const email = uniqueEmail();
+      await signup(email).expect(201);
+
+      await request(app.getHttpServer()).post("/auth/forgot-password").send({ email }).expect(200);
+      const token = extractResetToken();
+
+      const results = await Promise.all([
+        request(app.getHttpServer())
+          .post("/auth/reset-password")
+          .send({ token, newPassword: "first-racer-password-long-enough" }),
+        request(app.getHttpServer())
+          .post("/auth/reset-password")
+          .send({ token, newPassword: "second-racer-password-long-enough" }),
+      ]);
+
+      const statuses = results.map((response) => response.status).sort();
+      expect(statuses).toEqual([200, 400]);
     });
   });
 });

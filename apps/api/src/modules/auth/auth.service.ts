@@ -139,15 +139,21 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user) return;
 
-    // Only one active token per account: a new request invalidates any
-    // still-live one first.
-    await this.prisma.passwordResetToken.deleteMany({ where: { userId: user.id } });
-
     const rawToken = randomBytes(32).toString("hex");
-    await this.prisma.passwordResetToken.create({
-      data: {
-        tokenHash: hashToken(rawToken),
+    // Only one active token per account, reissued in place (same "in-place
+    // update on a unique key, never a second row" pattern as ADR-0014).
+    // Atomic via the userId unique constraint + Postgres ON CONFLICT —
+    // unlike a separate deleteMany+create, two concurrent requests for the
+    // same account can't both survive as distinct live tokens.
+    await this.prisma.passwordResetToken.upsert({
+      where: { userId: user.id },
+      create: {
         userId: user.id,
+        tokenHash: hashToken(rawToken),
+        expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
+      },
+      update: {
+        tokenHash: hashToken(rawToken),
         expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
       },
     });
@@ -179,11 +185,23 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
     const user = await this.prisma.$transaction(async (tx) => {
+      // Atomically claim the token: a concurrent request racing on the same
+      // token sees this match 0 rows once the first has committed (the
+      // DELETE's row lock serializes the two), instead of crashing on a
+      // stale row after the fact. Replaces the pre-transaction findUnique
+      // check as the actual authority — that earlier check above is now
+      // only a fast-fail for an obviously invalid/expired token.
+      const claimed = await tx.passwordResetToken.deleteMany({
+        where: { id: stored.id, expiresAt: { gt: new Date() } },
+      });
+      if (claimed.count === 0) {
+        throw new BadRequestException(RESET_TOKEN_INVALID_MESSAGE);
+      }
+
       const updatedUser = await tx.user.update({
         where: { id: stored.userId },
         data: { passwordHash },
       });
-      await tx.passwordResetToken.delete({ where: { id: stored.id } });
       // Full session revocation: every device is force-logged-out.
       await tx.refreshToken.deleteMany({ where: { userId: stored.userId } });
       return updatedUser;

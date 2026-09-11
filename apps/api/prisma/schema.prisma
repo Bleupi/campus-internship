@@ -59,10 +59,13 @@ model PasswordResetToken {
   expiresAt DateTime
   createdAt DateTime @default(now())
 
+  // Unique (not just indexed, unlike RefreshToken's multi-device userId): at
+  // most one live token per account by construction. forgotPassword()
+  // upserts on this key instead of delete-then-create, so reissuing a token
+  // is a single atomic DB operation (Postgres ON CONFLICT) — no window where
+  // two concurrent requests could both survive as separate live tokens.
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId String
-
-  @@index([userId])
+  userId String @unique
 }
 
 // --- Profiles ----------------------------------------------------------------
