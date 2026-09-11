@@ -39,7 +39,7 @@ describe("MailerService — ADR-0026: Scaleway Transactional Email", () => {
     fetchMock.mockResolvedValue({ ok: true, status: 202, text: async () => "" });
 
     await service.send({
-      to: { email: "etudiant@etu.u-pariscite.fr" },
+      to: { email: "etudiant@etu.u-paris.fr" },
       cc: { email: "perso@example.com" },
       subject: "Votre profil a été validé",
       text: "Votre certificat d'assurance a été validé.",
@@ -59,7 +59,7 @@ describe("MailerService — ADR-0026: Scaleway Transactional Email", () => {
     expect(JSON.parse(init.body)).toEqual({
       project_id: "project-1",
       from: { email: "no-reply@example.org", name: "Gestion des stages" },
-      to: [{ email: "etudiant@etu.u-pariscite.fr" }],
+      to: [{ email: "etudiant@etu.u-paris.fr" }],
       cc: [{ email: "perso@example.com" }],
       subject: "Votre profil a été validé",
       text: "Votre certificat d'assurance a été validé.",
@@ -70,7 +70,7 @@ describe("MailerService — ADR-0026: Scaleway Transactional Email", () => {
     fetchMock.mockResolvedValue({ ok: true, status: 202, text: async () => "" });
 
     await service.send({
-      to: { email: "etudiant@etu.u-pariscite.fr" },
+      to: { email: "etudiant@etu.u-paris.fr" },
       subject: "Votre profil a été validé",
       text: "Votre certificat d'assurance a été validé.",
     });
@@ -88,7 +88,7 @@ describe("MailerService — ADR-0026: Scaleway Transactional Email", () => {
 
     await expect(
       service.send({
-        to: { email: "etudiant@etu.u-pariscite.fr" },
+        to: { email: "etudiant@etu.u-paris.fr" },
         subject: "Sujet",
         text: "Texte",
       }),
@@ -105,7 +105,7 @@ describe("MailerService — ADR-0026: Scaleway Transactional Email", () => {
 
       await expect(
         service.sendSafely(
-          { to: { email: "etudiant@etu.u-pariscite.fr" }, subject: "Sujet", text: "Texte" },
+          { to: { email: "etudiant@etu.u-paris.fr" }, subject: "Sujet", text: "Texte" },
           logger as unknown as Logger,
         ),
       ).resolves.toBeUndefined();
@@ -118,12 +118,12 @@ describe("MailerService — ADR-0026: Scaleway Transactional Email", () => {
 
       await expect(
         service.sendSafely(
-          { to: { email: "etudiant@etu.u-pariscite.fr" }, subject: "Sujet", text: "Texte" },
+          { to: { email: "etudiant@etu.u-paris.fr" }, subject: "Sujet", text: "Texte" },
           logger as unknown as Logger,
         ),
       ).resolves.toBeUndefined();
       expect(logger.error).toHaveBeenCalledTimes(1);
-      expect(logger.error.mock.calls[0][0]).toContain("etudiant@etu.u-pariscite.fr");
+      expect(logger.error.mock.calls[0][0]).toContain("etudiant@etu.u-paris.fr");
     });
   });
 });
