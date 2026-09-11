@@ -1,3 +1,4 @@
+import type { ComponentProps } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -17,11 +18,13 @@ vi.mock("./api", () => ({
   login: (...args: unknown[]) => loginMock(...args),
 }));
 
-function renderPage() {
+function renderPage(
+  initialEntries: ComponentProps<typeof MemoryRouter>["initialEntries"] = ["/login"],
+) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={initialEntries}>
         <LoginPage />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -93,5 +96,21 @@ describe("LoginPage", () => {
     await user.click(screen.getByRole("button", { name: /se connecter/i }));
 
     expect(await screen.findByText(/identifiants incorrects/i)).toBeInTheDocument();
+  });
+
+  it('has a visible "Mot de passe oublié ?" link to the forgot-password page', () => {
+    renderPage();
+
+    const link = screen.getByRole("link", { name: /mot de passe oublié/i });
+    expect(link).toBeVisible();
+    expect(link).toHaveAttribute("href", "/forgot-password");
+  });
+
+  it("shows the success message carried in navigation state after a password reset", () => {
+    renderPage([
+      { pathname: "/login", state: { successMessage: "Mot de passe réinitialisé avec succès." } },
+    ]);
+
+    expect(screen.getByText(/mot de passe réinitialisé avec succès/i)).toBeInTheDocument();
   });
 });
