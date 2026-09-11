@@ -11,17 +11,38 @@ import {
 import { ConfigService } from "@nestjs/config";
 import type { CookieOptions, Request, Response } from "express";
 import ms from "ms";
-import { loginSchema, signupSchema, type AuthUser, type MeResponse } from "shared";
+import {
+  forgotPasswordSchema,
+  loginSchema,
+  resetPasswordSchema,
+  signupSchema,
+  type AuthUser,
+  type ForgotPasswordResponse,
+  type MeResponse,
+  type ResetPasswordResponse,
+} from "shared";
 import { Public } from "../../common/decorators/public.decorator";
 import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
 import type { Env } from "../../config/env.schema";
 import { AuthService, type IssuedSession } from "./auth.service";
+import type { ForgotPasswordDto } from "./dto/forgot-password.dto";
 import type { LoginDto } from "./dto/login.dto";
+import type { ResetPasswordDto } from "./dto/reset-password.dto";
 import type { SignupDto } from "./dto/signup.dto";
 
 const ACCESS_TOKEN_COOKIE = "access_token";
 const REFRESH_TOKEN_COOKIE = "refresh_token";
 const REFRESH_SESSION_MESSAGE = "Session invalide, merci de vous reconnecter";
+// BR-13: identical regardless of whether the email matched an account
+// (anti-enumeration) — the controller never branches on that outcome.
+// Spam-folder reminder (docs/wayfinder-forgot-password.md): the reset test
+// email landed in spam, so the confirmation shown after submission — not
+// the email itself — is where users are told to check there.
+const FORGOT_PASSWORD_MESSAGE =
+  "Si un compte existe avec cette adresse email, un email de réinitialisation vient d'être envoyé. " +
+  "Pensez à vérifier vos courriers indésirables (spams) si vous ne le recevez pas rapidement.";
+const RESET_PASSWORD_SUCCESS_MESSAGE =
+  "Votre mot de passe a été réinitialisé. Vous pouvez maintenant vous connecter.";
 
 @Controller("auth")
 export class AuthController {
@@ -77,6 +98,26 @@ export class AuthController {
     }
     res.clearCookie(ACCESS_TOKEN_COOKIE, { path: "/" });
     res.clearCookie(REFRESH_TOKEN_COOKIE, { path: "/auth" });
+  }
+
+  @Public()
+  @Post("forgot-password")
+  @HttpCode(200)
+  async forgotPassword(
+    @Body(new ZodValidationPipe(forgotPasswordSchema)) dto: ForgotPasswordDto,
+  ): Promise<ForgotPasswordResponse> {
+    await this.authService.forgotPassword(dto.email);
+    return { message: FORGOT_PASSWORD_MESSAGE };
+  }
+
+  @Public()
+  @Post("reset-password")
+  @HttpCode(200)
+  async resetPassword(
+    @Body(new ZodValidationPipe(resetPasswordSchema)) dto: ResetPasswordDto,
+  ): Promise<ResetPasswordResponse> {
+    await this.authService.resetPassword(dto.token, dto.newPassword);
+    return { message: RESET_PASSWORD_SUCCESS_MESSAGE };
   }
 
   // No @Public() — protected by the global JwtAuthGuard by default.

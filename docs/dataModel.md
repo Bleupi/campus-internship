@@ -40,9 +40,10 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  studentProfile  StudentProfile?
-  referentProfile ReferentProfile?
-  refreshTokens   RefreshToken[]
+  studentProfile      StudentProfile?
+  referentProfile     ReferentProfile?
+  refreshTokens       RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
   // adminProfile intentionally omitted in V1 (see ROADMAP_V2 / ADR-0002)
 }
 ```
@@ -66,6 +67,22 @@ model RefreshToken {
 ```
 
 Refresh is a **rotate-on-use** operation: presenting a valid, unexpired token deletes that row and creates a new one (and a new access token) in the same transaction. A stolen-then-reused token that's already been rotated away simply fails to match any row — a reasonable baseline without building full token-family reuse tracking. Logout deletes only the row matching the presented token, revoking that one session and leaving a student's other concurrent sessions untouched.
+
+Password reset (BR-13) reuses the same opaque-token-hashed-with-SHA-256 pattern as `RefreshToken`, in its own table rather than a repurposed `RefreshToken` row — the two have different lifetimes (20 minutes vs. session-length), different single-active-per-account semantics, and different consumers (`/auth/reset-password` vs. `/auth/refresh`), so sharing a table would mean overloading one model with two unrelated invalidation policies.
+
+```prisma
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique          // SHA-256 hex digest of the raw token; the raw value never touches the DB
+  expiresAt DateTime                  // createdAt + 20 minutes
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  @@index([userId])
+}
+```
 
 ---
 

@@ -5,6 +5,7 @@ import type { ProfileStatus } from "@prisma/client";
 import cookieParser from "cookie-parser";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
+import { MailerService } from "../src/modules/mailer/mailer.service";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { cookieHeader, cookieMap, requireCookie } from "./helpers/cookies";
 
@@ -15,10 +16,22 @@ function uniqueEmail(): string {
 describe("Auth (e2e)", () => {
   let app: INestApplication;
   let prisma: PrismaService;
+  let mailerSend: jest.Mock;
   const createdUserEmails: string[] = [];
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    // The mailer boundary (ADR-0026) is swapped for a no-op stub — see
+    // admin-students.e2e-spec.ts for the same pattern. Needed here now that
+    // forgot/reset-password (BR-13) send real emails.
+    mailerSend = jest.fn().mockResolvedValue(undefined);
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(MailerService)
+      // sendSafely() reuses the same mock as send() — its first argument has
+      // the same shape (SendEmailInput), and every assertion below only
+      // inspects mailerSend.mock.calls[...][0], so the existing assertions
+      // don't need to change now that AuthService delegates to sendSafely().
+      .useValue({ send: mailerSend, sendSafely: mailerSend })
+      .compile();
     app = moduleRef.createNestApplication();
     app.use(cookieParser());
     await app.init();
@@ -35,6 +48,16 @@ describe("Auth (e2e)", () => {
     return request(app.getHttpServer())
       .post("/auth/signup")
       .send({ email, password, firstName: "Étu", lastName: "Dupont" });
+  }
+
+  // Pulls the raw reset token out of the last email the (mocked) MailerService
+  // sent — the only place a real client would ever see it.
+  function extractResetToken(): string {
+    const lastCall = mailerSend.mock.calls.at(-1)?.[0] as { text: string } | undefined;
+    const match = lastCall?.text.match(/token=(\S+)/);
+    const token = match?.[1];
+    if (!token) throw new Error("No reset token found in the last sent email");
+    return token;
   }
 
   it("rejects signup with a non-@etu.u-paris.fr email (400)", async () => {
@@ -267,5 +290,172 @@ describe("Auth (e2e)", () => {
         cookieHeader({ refresh_token: requireCookie(deviceBCookies, "refresh_token") }),
       )
       .expect(200);
+  });
+
+  describe("BR-13: forgot / reset password", () => {
+    beforeEach(() => {
+      mailerSend.mockClear();
+    });
+
+    it("POST /auth/forgot-password: 200 with a generic body for an unknown email, no email sent", async () => {
+      const response = await request(app.getHttpServer())
+        .post("/auth/forgot-password")
+        .send({ email: "nobody-registered-at-all@example.org" })
+        .expect(200);
+
+      expect(response.body.message).toEqual(expect.any(String));
+      expect(mailerSend).not.toHaveBeenCalled();
+    });
+
+    it("POST /auth/forgot-password: 200 for a known email, creates a PasswordResetToken row and emails only user.email", async () => {
+      const email = uniqueEmail();
+      await signup(email).expect(201);
+      mailerSend.mockClear();
+
+      const response = await request(app.getHttpServer())
+        .post("/auth/forgot-password")
+        .send({ email })
+        .expect(200);
+
+      expect(response.body.message).toEqual(expect.any(String));
+      expect(mailerSend).toHaveBeenCalledTimes(1);
+      expect(mailerSend.mock.calls[0][0].to).toEqual({ email });
+
+      const user = await prisma.user.findUniqueOrThrow({ where: { email } });
+      const tokenCount = await prisma.passwordResetToken.count({ where: { userId: user.id } });
+      expect(tokenCount).toBe(1);
+    });
+
+    it("a second forgot-password request invalidates the prior token (only one active token per account)", async () => {
+      const email = uniqueEmail();
+      await signup(email).expect(201);
+
+      await request(app.getHttpServer()).post("/auth/forgot-password").send({ email }).expect(200);
+      const firstToken = extractResetToken();
+
+      await request(app.getHttpServer()).post("/auth/forgot-password").send({ email }).expect(200);
+
+      await request(app.getHttpServer())
+        .post("/auth/reset-password")
+        .send({ token: firstToken, newPassword: "should-never-work-password" })
+        .expect(400);
+    });
+
+    it("concurrent forgot-password requests for the same account leave exactly one live token (review follow-up on PR #81)", async () => {
+      const email = uniqueEmail();
+      await signup(email).expect(201);
+
+      await Promise.all([
+        request(app.getHttpServer()).post("/auth/forgot-password").send({ email }).expect(200),
+        request(app.getHttpServer()).post("/auth/forgot-password").send({ email }).expect(200),
+      ]);
+
+      const user = await prisma.user.findUniqueOrThrow({ where: { email } });
+      const tokenCount = await prisma.passwordResetToken.count({ where: { userId: user.id } });
+      expect(tokenCount).toBe(1);
+    });
+
+    it("POST /auth/reset-password: a valid token updates the password and revokes every session; new password works, old one doesn't, and the pre-reset refresh cookie is rejected", async () => {
+      const email = uniqueEmail();
+      const oldPassword = "the-original-password-long-enough";
+      const newPassword = "a-brand-new-password-thats-long-enough";
+      await signup(email, oldPassword).expect(201);
+
+      const loginResponse = await request(app.getHttpServer())
+        .post("/auth/login")
+        .send({ email, password: oldPassword })
+        .expect(200);
+      const preResetCookies = cookieMap(loginResponse);
+
+      await request(app.getHttpServer()).post("/auth/forgot-password").send({ email }).expect(200);
+      const token = extractResetToken();
+
+      await request(app.getHttpServer())
+        .post("/auth/reset-password")
+        .send({ token, newPassword })
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .post("/auth/login")
+        .send({ email, password: newPassword })
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .post("/auth/login")
+        .send({ email, password: oldPassword })
+        .expect(401);
+
+      // Session revocation proven end-to-end, not just at the unit level.
+      await request(app.getHttpServer())
+        .post("/auth/refresh")
+        .set(
+          "Cookie",
+          cookieHeader({ refresh_token: requireCookie(preResetCookies, "refresh_token") }),
+        )
+        .expect(401);
+    });
+
+    it("POST /auth/reset-password: rejects a garbage/unknown token (400, not 200)", async () => {
+      await request(app.getHttpServer())
+        .post("/auth/reset-password")
+        .send({ token: "not-a-real-token", newPassword: "a-brand-new-password-thats-long" })
+        .expect(400);
+    });
+
+    it("POST /auth/reset-password: rejects an expired token (400, not 200)", async () => {
+      const email = uniqueEmail();
+      await signup(email).expect(201);
+
+      await request(app.getHttpServer()).post("/auth/forgot-password").send({ email }).expect(200);
+      const token = extractResetToken();
+
+      await prisma.passwordResetToken.updateMany({
+        where: { user: { email } },
+        data: { expiresAt: new Date(Date.now() - 60_000) },
+      });
+
+      await request(app.getHttpServer())
+        .post("/auth/reset-password")
+        .send({ token, newPassword: "a-brand-new-password-thats-long" })
+        .expect(400);
+    });
+
+    it("POST /auth/reset-password: rejects a replayed already-used token (400, not 200)", async () => {
+      const email = uniqueEmail();
+      await signup(email).expect(201);
+
+      await request(app.getHttpServer()).post("/auth/forgot-password").send({ email }).expect(200);
+      const token = extractResetToken();
+
+      await request(app.getHttpServer())
+        .post("/auth/reset-password")
+        .send({ token, newPassword: "a-brand-new-password-thats-long" })
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .post("/auth/reset-password")
+        .send({ token, newPassword: "yet-another-password-thats-long" })
+        .expect(400);
+    });
+
+    it("concurrent reset-password requests with the same valid token: exactly one succeeds, the other gets the generic 400 (not a 404) (review follow-up on PR #81)", async () => {
+      const email = uniqueEmail();
+      await signup(email).expect(201);
+
+      await request(app.getHttpServer()).post("/auth/forgot-password").send({ email }).expect(200);
+      const token = extractResetToken();
+
+      const results = await Promise.all([
+        request(app.getHttpServer())
+          .post("/auth/reset-password")
+          .send({ token, newPassword: "first-racer-password-long-enough" }),
+        request(app.getHttpServer())
+          .post("/auth/reset-password")
+          .send({ token, newPassword: "second-racer-password-long-enough" }),
+      ]);
+
+      const statuses = results.map((response) => response.status).sort();
+      expect(statuses).toEqual([200, 400]);
+    });
   });
 });

@@ -54,5 +54,11 @@ Thumbs.db
 # --- Infra notes (kept local only — too much infra topology to commit) -----
 docs/Ressources.md
 
+# --- Wayfinder scratch notes (in-progress grilling, not on the tracker) ----
+docs/wayfinder-forgot-password.md
+
+# --- Personal learning notes (not project docs) -----------------------------
+docs/to_learn.md
+
 # --- Local-only ops scripts (never committed) -------------------------------
 apps/api/scripts/

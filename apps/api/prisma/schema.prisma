@@ -29,9 +29,10 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  studentProfile  StudentProfile?
-  referentProfile ReferentProfile?
-  refreshTokens   RefreshToken[]
+  studentProfile      StudentProfile?
+  referentProfile     ReferentProfile?
+  refreshTokens       RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
 }
 
 // Access+refresh JWT auth (ADR-0018). Only the SHA-256 hash of the raw
@@ -46,6 +47,25 @@ model RefreshToken {
   userId String
 
   @@index([userId])
+}
+
+// BR-13: self-service password reset. Same opaque-token-hashed-with-SHA-256
+// pattern as RefreshToken, in its own table — different lifetime (20 minutes
+// vs. session-length), different single-active-per-account semantics, and a
+// different consumer (/auth/reset-password vs. /auth/refresh).
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  // Unique (not just indexed, unlike RefreshToken's multi-device userId): at
+  // most one live token per account by construction. forgotPassword()
+  // upserts on this key instead of delete-then-create, so reissuing a token
+  // is a single atomic DB operation (Postgres ON CONFLICT) — no window where
+  // two concurrent requests could both survive as separate live tokens.
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String @unique
 }
 
 // --- Profiles ----------------------------------------------------------------

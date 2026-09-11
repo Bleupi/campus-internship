@@ -30,3 +30,4 @@ Every structuring decision is recorded here as an ADR. Format: lightweight [MADR
 | [0024](0024-certificate-proxy-stream.md) | Certificate download: proxied stream, never a presigned URL | Accepted |
 | [0025](0025-personnel-account-provisioning.md) | Personnel (ADMIN/REFERENT) accounts: provisioned out-of-band, no institutional email domain | Accepted |
 | [0026](0026-scaleway-transactional-email.md) | Email provider: Scaleway Transactional Email | Accepted |
+| [0027](0027-forgot-password-mechanism.md) | Forgot/reset password: anti-enumeration, token model, and concurrency | Accepted |

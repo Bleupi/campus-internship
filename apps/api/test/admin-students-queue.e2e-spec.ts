@@ -24,7 +24,10 @@ describe("Admin certificate-validation queue (e2e) — issue #42", () => {
     // admin-students.e2e-spec.ts for why.
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(MailerService)
-      .useValue({ send: jest.fn().mockResolvedValue(undefined) })
+      .useValue({
+        send: jest.fn().mockResolvedValue(undefined),
+        sendSafely: jest.fn().mockResolvedValue(undefined),
+      })
       .compile();
     app = moduleRef.createNestApplication();
     app.use(cookieParser());

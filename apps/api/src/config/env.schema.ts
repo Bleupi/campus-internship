@@ -6,6 +6,9 @@ export const envSchema = z
     JWT_SECRET: z.string().min(32),
     JWT_ACCESS_TTL: z.string().default("15m"),
     JWT_REFRESH_TTL: z.string().default("7d"),
+    // Base frontend origin (BR-13) — used to build the absolute
+    // password-reset link emailed to the user, e.g. `${WEB_APP_URL}/reset-password?token=...`.
+    WEB_APP_URL: z.string().url(),
     CORS_ORIGINS: z
       .string()
       .default("")
