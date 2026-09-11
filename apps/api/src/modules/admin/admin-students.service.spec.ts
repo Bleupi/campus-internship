@@ -7,7 +7,7 @@ import { MailerService } from "../mailer/mailer.service";
 import { AdminStudentsService } from "./admin-students.service";
 
 const STUDENT_ID = "profile-1";
-const UNIVERSITY_EMAIL = "etudiant@etu.u-pariscite.fr";
+const UNIVERSITY_EMAIL = "etudiant@etu.u-paris.fr";
 const PERSONAL_EMAIL = "perso@example.com";
 const STUDENT_FIRST_NAME = "Camille";
 const REFUSAL_REASON = "Attestation illisible";
