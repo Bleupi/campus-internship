@@ -9,6 +9,14 @@ overrides:
   lodash: "^4.18.0"
   picomatch: "^4.0.4"
   glob: "^10.5.0"
+  # test-exclude (Jest coverage, via babel-plugin-istanbul) already resolved
+  # to the unaffected glob@7.2.3 pre-override — GHSA-5j98-mcp5-4vw2 only
+  # affects glob@10.2.0-10.4.x. Forcing this edge to the bare `glob`
+  # override above breaks jest --coverage: test-exclude@6.0.0 does
+  # `promisify(require('glob'))`, and glob >=9 replaced the old callable
+  # default export with a named-exports object, so promisify() throws at
+  # module load. Pin this specific chain back to what it already used.
+  test-exclude>glob: "7.2.3"
 allowBuilds:
   "@nestjs/core": true
   "@prisma/client": true
