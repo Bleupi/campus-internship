@@ -14,7 +14,12 @@ services:
       - postgres-data:/var/lib/postgresql/data
 
   minio:
-    image: minio/minio:latest
+    # quay.io, not Docker Hub: MinIO pulled its images from Docker Hub in
+    # September 2026 (Docker Hub now 401s "pull access denied" for
+    # minio/minio, which reads like a credentials issue but the repo is
+    # simply gone). quay.io/minio/minio is MinIO's current official
+    # distribution — same tags, no version change.
+    image: quay.io/minio/minio:latest
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
