@@ -41,7 +41,12 @@ jobs:
         # the `command` key below is what makes that possible for a service
         # container (GitHub Actions added it in April 2026; previously this
         # required a custom wrapper image).
-        image: minio/minio:latest
+        # Pulled from quay.io, not Docker Hub: MinIO removed its images from
+        # Docker Hub in September 2026 (401 "pull access denied" for
+        # minio/minio — reads like a credentials issue but the repo is gone).
+        # quay.io/minio/minio is MinIO's current official distribution, same
+        # tags.
+        image: quay.io/minio/minio:latest
         command: server /data --console-address ":9001"
         env:
           MINIO_ROOT_USER: minioadmin
@@ -133,7 +138,9 @@ jobs:
           --health-cmd=pg_isready --health-interval=10s --health-timeout=5s --health-retries=5
 
       minio:
-        image: minio/minio:latest
+        # Pulled from quay.io, not Docker Hub — see the other minio service
+        # above for why.
+        image: quay.io/minio/minio:latest
         command: server /data --console-address ":9001"
         env:
           MINIO_ROOT_USER: minioadmin
