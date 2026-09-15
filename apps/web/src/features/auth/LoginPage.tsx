@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useNavigate, Link as RouterLink } from "react-router-dom";
+import { useLocation, useNavigate, Link as RouterLink } from "react-router-dom";
 import { Alert, Box, Button, Container, Link, TextField, Typography } from "@mui/material";
 import { blocksNavigation, loginSchema, type LoginRequest } from "shared";
 import { ApiError } from "../../lib/api-client";
@@ -10,8 +10,12 @@ import { useLogin } from "./useLogin";
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const login = useLogin();
   const [serverError, setServerError] = useState<string | null>(null);
+  // Carried by ResetPasswordPage's redirect after a successful reset —
+  // never rendered again once the user navigates away from /login.
+  const successMessage = (location.state as { successMessage?: string } | null)?.successMessage;
 
   const {
     register,
@@ -51,6 +55,7 @@ export function LoginPage() {
           Se connecter
         </Typography>
 
+        {successMessage && <Alert severity="success">{successMessage}</Alert>}
         {serverError && <Alert severity="error">{serverError}</Alert>}
 
         <TextField
@@ -73,6 +78,12 @@ export function LoginPage() {
         <Button type="submit" variant="contained" disabled={isSubmitting}>
           Se connecter
         </Button>
+
+        <Typography variant="body2">
+          <Link component={RouterLink} to="/forgot-password">
+            Mot de passe oublié ?
+          </Link>
+        </Typography>
 
         <Typography variant="body2">
           Pas encore de compte ?{" "}

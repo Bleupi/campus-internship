@@ -3,7 +3,9 @@ import { Typography } from "@mui/material";
 import { blocksNavigation } from "shared";
 import { AppShell } from "./components/AppShell";
 import { CertificateQueuePage } from "./features/admin/CertificateQueuePage";
+import { ForgotPasswordPage } from "./features/auth/ForgotPasswordPage";
 import { LoginPage } from "./features/auth/LoginPage";
+import { ResetPasswordPage } from "./features/auth/ResetPasswordPage";
 import { SignupPage } from "./features/auth/SignupPage";
 import { useCurrentUser } from "./features/auth/useCurrentUser";
 import { useProfile } from "./features/students/useProfile";
@@ -71,6 +73,8 @@ export function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route element={<RequireAuth />}>
         <Route element={<RequireCompleteProfile />}>
           <Route element={<AppShell />}>
