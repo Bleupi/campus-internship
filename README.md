@@ -1,6 +1,6 @@
 # Campus Internship
 
-Internship request & validation system for a university ("gestion des stages") — a portfolio project. Students submit internship requests; one or two admins validate/refuse them and manage the referents assigned to students; the admin can extract data (host organism list, CSV export).
+Internship request & validation system for a university ("gestion des stages"), built as a personal project to learn NestJS, Prisma, and Zod. Students submit internship requests; one or two admins validate/refuse them and manage the referents assigned to students; the admin can extract data (host organism list, CSV export).
 
 - **Stack**: NestJS (API) + React/Vite (web) + PostgreSQL + Prisma + Zod, TypeScript everywhere, pnpm workspaces monorepo.
 - **Design docs**: [`docs/dataModel.md`](docs/dataModel.md), [`docs/businessRules.md`](docs/businessRules.md), [`docs/userFlow.md`](docs/userFlow.md), and the decision log in [`docs/adr/`](docs/adr/) are the source of truth for behavior. See [`CLAUDE.md`](CLAUDE.md) for the full set of repository conventions.
