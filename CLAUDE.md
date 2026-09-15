@@ -6,11 +6,11 @@ This file is subordinate to the specs. If anything here conflicts with `docs/dat
 
 ## 1. Project identity
 
-A showcase project for a university internship management system (campus internship / "gestion des stages"). Students submit internship requests; one or two admins validate/refuse them and manage referents assigned to students; the admin can extract data (host organism list, CSV export).
+A university internship management system (campus internship / "gestion des stages"). Students submit internship requests; one or two admins validate/refuse them and manage referents assigned to students; the admin can extract data (host organism list, CSV export).
 
 - **Stack**: NestJS (API) + React/Vite (web) + PostgreSQL + Prisma + Zod, TypeScript everywhere.
 - **Layout**: pnpm workspaces monorepo — `apps/api`, `apps/web`, `packages/shared` (ADR-0010). No Turborepo for now.
-- **Audience**: this is an interview/portfolio piece. Code quality, idiomatic use of each technology, and a documented rationale for every structuring decision (ADRs) matter as much as working features.
+- **Audience**: this is a personal learning project. Code quality, idiomatic use of each technology, and a documented rationale for every structuring decision (ADRs) matter as much as working features.
 - **Language convention**: code, schema, comments, commit messages, and this file → English. UI copy shown to users → French.
 
 ---
