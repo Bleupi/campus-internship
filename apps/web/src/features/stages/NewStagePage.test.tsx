@@ -44,7 +44,7 @@ async function openOrganismPicker(user: ReturnType<typeof userEvent.setup>) {
 
 async function pickCreateNewOrganism(user: ReturnType<typeof userEvent.setup>) {
   await openOrganismPicker(user);
-  await user.click(await screen.findByText(/créer un nouvel organisme/i));
+  await user.click(await screen.findByText(/créer une nouvelle structure/i));
 }
 
 async function fillNewOrganismForm(user: ReturnType<typeof userEvent.setup>) {
@@ -122,7 +122,7 @@ describe("NewStagePage", () => {
     await resolveOrganismAndTutorInline(user);
 
     expect(
-      await screen.findByText(/Karim Belkacem — Directeur \(nouveau tuteur\)/i),
+      await screen.findByText(/Karim Belkacem \(Directeur, nouveau tuteur\)/i),
     ).toBeInTheDocument();
     // Still on step 1 (Organisme & tuteur) — "Suivant" is now enabled.
     expect(screen.getByRole("button", { name: /suivant/i })).toBeEnabled();

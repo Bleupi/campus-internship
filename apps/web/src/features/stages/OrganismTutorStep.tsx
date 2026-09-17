@@ -11,6 +11,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import AddOutlined from "@mui/icons-material/AddOutlined";
 import {
   hostOrganismInputSchema,
   tutorInputSchema,
@@ -29,7 +30,7 @@ type TutorSelection = CreateStageDraftInput["tutor"];
 
 const CREATE_NEW_ORGANISM = {
   id: "__create_new__",
-  name: "Aucun de ceux-ci — créer un nouvel organisme",
+  name: "Créer une nouvelle structure",
 };
 const CREATE_NEW_TUTOR = { id: "__create_new__", label: "Nouveau tuteur" };
 
@@ -224,6 +225,30 @@ export function OrganismTutorStep({ organism, tutor, onChange }: Props) {
                 selectExistingOrganism(value as OrganismSearchResultItem);
               }
             }}
+            renderOption={(props, option) => {
+              const { key, ...optionProps } = props;
+              if (option.id === CREATE_NEW_ORGANISM.id) {
+                return (
+                  <li key={key} {...optionProps}>
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      sx={{ alignItems: "center", color: "primary.main", width: "100%" }}
+                    >
+                      <AddOutlined fontSize="small" />
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: "inherit" }}>
+                        {option.name}
+                      </Typography>
+                    </Stack>
+                  </li>
+                );
+              }
+              return (
+                <li key={key} {...optionProps}>
+                  {option.name}
+                </li>
+              );
+            }}
             renderInput={(params) => <TextField {...params} label="Rechercher un organisme" />}
           />
         )}
@@ -293,12 +318,12 @@ export function OrganismTutorStep({ organism, tutor, onChange }: Props) {
                     .filter((t) => t.id === tutor.id)
                     .map((t) => (
                       <Typography key={t.id} variant="body1">
-                        {t.firstName} {t.lastName} — {t.jobTitle}
+                        {t.firstName} {t.lastName} ({t.jobTitle})
                       </Typography>
                     ))}
                 {tutor.mode === "new" && (
                   <Typography variant="body1">
-                    {tutor.data.firstName} {tutor.data.lastName} — {tutor.data.jobTitle} (nouveau
+                    {tutor.data.firstName} {tutor.data.lastName} ({tutor.data.jobTitle}, nouveau
                     tuteur)
                   </Typography>
                 )}
