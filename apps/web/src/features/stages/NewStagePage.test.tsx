@@ -44,7 +44,7 @@ async function openOrganismPicker(user: ReturnType<typeof userEvent.setup>) {
 
 async function pickCreateNewOrganism(user: ReturnType<typeof userEvent.setup>) {
   await openOrganismPicker(user);
-  await user.click(await screen.findByText(/créer une nouvelle structure/i));
+  await user.click(await screen.findByText(/créer un nouvel organisme/i));
 }
 
 async function fillNewOrganismForm(user: ReturnType<typeof userEvent.setup>) {
@@ -151,7 +151,7 @@ describe("NewStagePage", () => {
     await user.type(startInput!, "2025-10-01");
     await user.type(endInput!, "2025-10-15");
 
-    expect(await screen.findByText(/semestre dérivé.*S1/i)).toBeInTheDocument();
+    expect(await screen.findByText(/semestre.*S1/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /suivant/i })).toBeEnabled();
   });
 
@@ -169,7 +169,7 @@ describe("NewStagePage", () => {
 
     expect(screen.getByRole("button", { name: /suivant/i })).toBeDisabled();
 
-    await user.click(screen.getByLabelText(/oui, ce stage est obligatoire/i));
+    await user.click(screen.getByLabelText(/^oui$/i));
 
     expect(screen.getByRole("button", { name: /suivant/i })).toBeEnabled();
   });
@@ -186,7 +186,7 @@ describe("NewStagePage", () => {
     await user.type(startInput!, "2025-10-01");
     await user.type(endInput!, "2025-10-15");
     await user.click(screen.getByRole("button", { name: /suivant/i }));
-    await user.click(screen.getByLabelText(/oui, ce stage est obligatoire/i));
+    await user.click(screen.getByLabelText(/^oui$/i));
     await user.click(screen.getByRole("button", { name: /suivant/i }));
     await user.click(screen.getByRole("button", { name: /enregistrer le brouillon/i }));
 
@@ -202,5 +202,72 @@ describe("NewStagePage", () => {
     expect(payload).not.toHaveProperty("semester");
 
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/dashboard"));
+  });
+
+  it("labels the inline-creation options distinctly and lets a new tutor opt into phone contact", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await openOrganismPicker(user);
+    expect(await screen.findByText("Créer un nouvel Organisme")).toBeInTheDocument();
+    await user.click(screen.getByText("Créer un nouvel Organisme"));
+    await fillNewOrganismForm(user);
+
+    const tutorInput = await screen.findByLabelText(/sélectionner un tuteur/i);
+    await user.click(tutorInput);
+    expect(await screen.findByText("Créer un nouveau Tuteur")).toBeInTheDocument();
+    await user.click(screen.getByText("Créer un nouveau Tuteur"));
+
+    await user.type(screen.getByLabelText(/^prénom$/i), "Karim");
+    await user.type(screen.getByLabelText(/^nom$/i), "Belkacem");
+    await user.type(screen.getByLabelText(/^email$/i), "k.belkacem@example.org");
+    await user.type(screen.getByLabelText(/fonction/i), "Directeur");
+    await user.click(screen.getByLabelText(/accepte d'être contacté par téléphone/i));
+    await user.click(screen.getByRole("button", { name: /valider ce nouveau tuteur/i }));
+
+    expect(
+      await screen.findByText(/Karim Belkacem \(Directeur, nouveau tuteur\)/i),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /suivant/i }));
+    await user.click(screen.getByRole("button", { name: /ajouter une période/i }));
+    const [startInput, endInput] = screen.getAllByLabelText(/début|fin/i);
+    await user.type(startInput!, "2025-10-01");
+    await user.type(endInput!, "2025-10-15");
+    await user.click(screen.getByRole("button", { name: /suivant/i }));
+    await user.click(screen.getByLabelText(/^oui$/i));
+    await user.click(screen.getByRole("button", { name: /suivant/i }));
+    await user.click(screen.getByRole("button", { name: /enregistrer le brouillon/i }));
+
+    await waitFor(() => expect(createStageDraftMock).toHaveBeenCalledTimes(1));
+    const payload = createStageDraftMock.mock.calls[0]![0];
+    expect(payload.tutor).toMatchObject({ data: { acceptsPhoneContact: true } });
+  });
+
+  it("shows every field entered in the previous steps on the recap", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await resolveOrganismAndTutorInline(user);
+    await user.click(screen.getByRole("button", { name: /suivant/i }));
+    await user.click(screen.getByRole("button", { name: /ajouter une période/i }));
+    const [startInput, endInput] = screen.getAllByLabelText(/début|fin/i);
+    await user.type(startInput!, "2025-10-01");
+    await user.type(endInput!, "2025-10-15");
+    await user.click(screen.getByRole("button", { name: /suivant/i }));
+
+    await user.type(screen.getByLabelText(/^service$/i), "Service RH");
+    await user.type(screen.getByLabelText(/type de handicap concerné/i), "Moteur");
+    await user.type(screen.getByLabelText(/^motivation$/i), "Découvrir le secteur associatif");
+    await user.click(screen.getByLabelText(/^oui$/i));
+    await user.click(screen.getByRole("button", { name: /suivant/i }));
+
+    expect(screen.getByText(/Fondation OVE/i)).toBeInTheDocument();
+    expect(screen.getByText(/Karim Belkacem \(Directeur, nouveau tuteur\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/2025-10-01.*2025-10-15/)).toBeInTheDocument();
+    expect(screen.getByText(/Service : Service RH/i)).toBeInTheDocument();
+    expect(screen.getByText(/Type de handicap concerné : Moteur/i)).toBeInTheDocument();
+    expect(screen.getByText(/Motivation : Découvrir le secteur associatif/i)).toBeInTheDocument();
+    expect(screen.getByText(/Stage obligatoire/i)).toBeInTheDocument();
   });
 });

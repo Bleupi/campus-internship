@@ -1,13 +1,15 @@
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Autocomplete,
   Button,
   Chip,
   Divider,
+  FormControlLabel,
   MenuItem,
   Stack,
+  Switch,
   TextField,
   Typography,
 } from "@mui/material";
@@ -24,15 +26,16 @@ import {
 import { useOrganism } from "../organisms/useOrganism";
 import { useOrganismSearch } from "../organisms/useOrganismSearch";
 import { useStructureTypes } from "../organisms/useStructureTypes";
+import { formatOrganismAddress } from "./format-summary";
 
 type OrganismSelection = CreateStageDraftInput["organism"];
 type TutorSelection = CreateStageDraftInput["tutor"];
 
 const CREATE_NEW_ORGANISM = {
   id: "__create_new__",
-  name: "Créer une nouvelle structure",
+  name: "Créer un nouvel Organisme",
 };
-const CREATE_NEW_TUTOR = { id: "__create_new__", label: "Nouveau tuteur" };
+const CREATE_NEW_TUTOR = { id: "__create_new__", label: "Créer un nouveau Tuteur" };
 
 // An untouched, empty phone field must submit as undefined (a valid
 // "no value" for this optional field), not "" — which frenchMobilePhoneSchema
@@ -115,6 +118,7 @@ function TutorCreationForm({ onCreated }: { onCreated: (data: TutorInput) => voi
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors },
   } = useForm<TutorInput>({
     resolver: (values, context, options) =>
@@ -167,6 +171,18 @@ function TutorCreationForm({ onCreated }: { onCreated: (data: TutorInput) => voi
         {...register("phone")}
         error={!!errors.phone}
         helperText={errors.phone?.message}
+      />
+      <Controller
+        name="acceptsPhoneContact"
+        control={control}
+        render={({ field }) => (
+          <FormControlLabel
+            control={
+              <Switch checked={field.value} onChange={(e) => field.onChange(e.target.checked)} />
+            }
+            label="Accepte d'être contacté par téléphone"
+          />
+        )}
       />
       <Button type="submit" variant="outlined" sx={{ alignSelf: "flex-start" }}>
         Valider ce nouveau tuteur
@@ -259,8 +275,7 @@ export function OrganismTutorStep({ organism, tutor, onChange }: Props) {
               <>
                 <Typography variant="body1">{organismDetail.data.name}</Typography>
                 <Typography variant="body2" color="text.secondary">
-                  {organismDetail.data.structureType} · {organismDetail.data.street},{" "}
-                  {organismDetail.data.postalCode} {organismDetail.data.city}
+                  {formatOrganismAddress(organismDetail.data)}
                 </Typography>
               </>
             )}
@@ -271,8 +286,7 @@ export function OrganismTutorStep({ organism, tutor, onChange }: Props) {
                   <Chip size="small" color="info" variant="outlined" label="nouvel organisme" />
                 </Stack>
                 <Typography variant="body2" color="text.secondary">
-                  {organism.data.structureType} · {organism.data.street}, {organism.data.postalCode}{" "}
-                  {organism.data.city}
+                  {formatOrganismAddress(organism.data)}
                 </Typography>
               </>
             )}
@@ -306,6 +320,30 @@ export function OrganismTutorStep({ organism, tutor, onChange }: Props) {
                   } else {
                     selectExistingTutor(value as OrganismTutorSummary);
                   }
+                }}
+                renderOption={(props, option) => {
+                  const { key, ...optionProps } = props;
+                  if ("label" in option) {
+                    return (
+                      <li key={key} {...optionProps}>
+                        <Stack
+                          direction="row"
+                          spacing={1}
+                          sx={{ alignItems: "center", color: "primary.main", width: "100%" }}
+                        >
+                          <AddOutlined fontSize="small" />
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: "inherit" }}>
+                            {option.label}
+                          </Typography>
+                        </Stack>
+                      </li>
+                    );
+                  }
+                  return (
+                    <li key={key} {...optionProps}>
+                      {`${option.firstName} ${option.lastName}`}
+                    </li>
+                  );
                 }}
                 renderInput={(params) => <TextField {...params} label="Sélectionner un tuteur" />}
               />

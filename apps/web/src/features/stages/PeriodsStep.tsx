@@ -34,7 +34,16 @@ export function PeriodsStep({ periods, onChange }: Props) {
 
   return (
     <Stack spacing={2} sx={{ maxWidth: 480 }}>
-      <Typography variant="subtitle1">Périodes de stage</Typography>
+      <Stack direction="row" spacing={1} sx={{ alignItems: "baseline" }}>
+        <Typography variant="subtitle1">Périodes de stage</Typography>
+        {result.success && (
+          // Semester is derived server-side from these periods and never
+          // entered by the student (BR-04b) — shown here only as a preview.
+          <Typography variant="body2" color="text.secondary">
+            Semestre {deriveSemester(result.data)}
+          </Typography>
+        )}
+      </Stack>
       {periods.map((period) => (
         <Stack key={period.id} direction="row" spacing={1} sx={{ alignItems: "center" }}>
           <TextField
@@ -79,12 +88,6 @@ export function PeriodsStep({ periods, onChange }: Props) {
       {showValidation && !result.success && (
         <Alert severity="error" variant="outlined">
           {result.error.issues[0]?.message ?? "Périodes invalides"}
-        </Alert>
-      )}
-      {result.success && (
-        <Alert severity="info" variant="outlined">
-          Semestre dérivé (aperçu) : {deriveSemester(result.data)} — jamais saisi par l'étudiant
-          (BR-04b)
         </Alert>
       )}
     </Stack>

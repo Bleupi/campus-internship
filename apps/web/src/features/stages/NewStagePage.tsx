@@ -4,6 +4,7 @@ import {
   Alert,
   Box,
   Button,
+  Divider,
   FormControlLabel,
   Radio,
   RadioGroup,
@@ -17,6 +18,8 @@ import {
 import type { CreateStageDraftInput } from "shared";
 import { ApiError } from "../../lib/api-client";
 import { ROUTES } from "../../routes";
+import { useOrganism } from "../organisms/useOrganism";
+import { formatOrganismAddress, formatTutorContact } from "./format-summary";
 import { OrganismTutorStep } from "./OrganismTutorStep";
 import { PeriodsStep, type RawPeriod } from "./PeriodsStep";
 import { useCreateStageDraft } from "./useCreateStageDraft";
@@ -41,6 +44,13 @@ export function NewStagePage() {
   // No default: an explicit true/false choice is required before the draft
   // can be saved (issue #113 AC — no silent default reaches the server).
   const [mandatory, setMandatory] = useState<boolean | null>(null);
+
+  const existingOrganismId = organism?.mode === "existing" ? organism.id : null;
+  const organismDetail = useOrganism(existingOrganismId);
+  const existingTutor =
+    tutor?.mode === "existing"
+      ? organismDetail.data?.tutors.find((t) => t.id === tutor.id)
+      : undefined;
 
   const periodsResult = validatePeriods(periods);
   const stepValid = [
@@ -98,40 +108,28 @@ export function NewStagePage() {
 
       {step === 2 && (
         <Stack spacing={2} sx={{ maxWidth: 420 }}>
+          <TextField label="Service" value={service} onChange={(e) => setService(e.target.value)} />
           <TextField
-            label="Service (facultatif)"
-            value={service}
-            onChange={(e) => setService(e.target.value)}
-          />
-          <TextField
-            label="Type de handicap concerné (facultatif)"
+            label="Type de handicap concerné"
             value={projectType}
             onChange={(e) => setProjectType(e.target.value)}
           />
           <TextField
-            label="Motivation (facultatif)"
+            label="Motivation"
             multiline
             minRows={3}
             value={motivation}
             onChange={(e) => setMotivation(e.target.value)}
           />
           <Typography component="legend" variant="subtitle2">
-            Stage obligatoire ?
+            Ce stage est-il obligatoire ?
           </Typography>
           <RadioGroup
             value={mandatory === null ? "" : String(mandatory)}
             onChange={(e) => setMandatory(e.target.value === "true")}
           >
-            <FormControlLabel
-              value="true"
-              control={<Radio />}
-              label="Oui, ce stage est obligatoire"
-            />
-            <FormControlLabel
-              value="false"
-              control={<Radio />}
-              label="Non, ce stage est optionnel"
-            />
+            <FormControlLabel value="true" control={<Radio />} label="Oui" />
+            <FormControlLabel value="false" control={<Radio />} label="Non" />
           </RadioGroup>
         </Stack>
       )}
@@ -141,24 +139,71 @@ export function NewStagePage() {
         organism !== null &&
         tutor !== null &&
         mandatory !== null && (
-          <Stack spacing={1} sx={{ maxWidth: 480 }}>
+          <Stack spacing={1.5} sx={{ maxWidth: 480 }}>
             <Typography variant="subtitle1">Récapitulatif</Typography>
-            <Typography variant="body2">
-              {organism.mode === "existing" ? "Organisme existant sélectionné" : organism.data.name}
-            </Typography>
-            <Typography variant="body2">
-              {tutor.mode === "existing"
-                ? "Tuteur existant sélectionné"
-                : `${tutor.data.firstName} ${tutor.data.lastName}`}
-            </Typography>
-            <Typography variant="body2">
-              {mandatory ? "Stage obligatoire" : "Stage optionnel"}
-            </Typography>
+
+            <Typography variant="subtitle2">Organisme & tuteur</Typography>
+            {organism.mode === "existing" ? (
+              organismDetail.data && (
+                <>
+                  <Typography variant="body2">{organismDetail.data.name}</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {formatOrganismAddress(organismDetail.data)}
+                  </Typography>
+                </>
+              )
+            ) : (
+              <>
+                <Typography variant="body2">{organism.data.name} (nouvel organisme)</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {formatOrganismAddress(organism.data)}
+                </Typography>
+              </>
+            )}
+            {tutor.mode === "existing" ? (
+              existingTutor && (
+                <>
+                  <Typography variant="body2">
+                    {existingTutor.firstName} {existingTutor.lastName} ({existingTutor.jobTitle})
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {formatTutorContact(existingTutor)}
+                  </Typography>
+                </>
+              )
+            ) : (
+              <>
+                <Typography variant="body2">
+                  {tutor.data.firstName} {tutor.data.lastName} ({tutor.data.jobTitle}, nouveau
+                  tuteur)
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {formatTutorContact(tutor.data)}
+                </Typography>
+              </>
+            )}
+
+            <Divider />
+            <Typography variant="subtitle2">Périodes</Typography>
             {periods.map((p) => (
               <Typography variant="body2" key={p.id}>
                 {p.startDate} → {p.endDate}
               </Typography>
             ))}
+
+            <Divider />
+            <Typography variant="subtitle2">Détails</Typography>
+            <Typography variant="body2">Service : {service.trim() || "Non renseigné"}</Typography>
+            <Typography variant="body2">
+              Type de handicap concerné : {projectType.trim() || "Non renseigné"}
+            </Typography>
+            <Typography variant="body2">
+              Motivation : {motivation.trim() || "Non renseignée"}
+            </Typography>
+            <Typography variant="body2">
+              {mandatory ? "Stage obligatoire" : "Stage optionnel"}
+            </Typography>
+
             {createDraft.isError && (
               <Alert severity="error">
                 {createDraft.error instanceof ApiError
