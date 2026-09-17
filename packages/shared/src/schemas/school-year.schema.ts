@@ -32,3 +32,18 @@ export function getSchoolYearEnd(schoolYear: string): Date {
   const endYear = Number(schoolYear.split("-")[1]);
   return new Date(Date.UTC(endYear, 8, 1, 0, 0, 0, 0));
 }
+
+// ADR-0009's inclusive lower bound, mirroring getSchoolYearEnd. `schoolYear`
+// is assumed already-validated ("YYYY-YYYY+1").
+export function getSchoolYearStart(schoolYear: string): Date {
+  const startYear = Number(schoolYear.split("-")[0]);
+  return new Date(Date.UTC(startYear, 8, 1, 0, 0, 0, 0));
+}
+
+// BR-05a/b/ADR-0009: the instant semester 1 hands off to semester 2 within a
+// school year — January 1st of the second calendar year. `schoolYear` is
+// assumed already-validated ("YYYY-YYYY+1").
+export function getSemesterBoundary(schoolYear: string): Date {
+  const endYear = Number(schoolYear.split("-")[1]);
+  return new Date(Date.UTC(endYear, 0, 1, 0, 0, 0, 0));
+}

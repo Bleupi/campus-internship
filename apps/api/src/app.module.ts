@@ -34,8 +34,16 @@ import { HealthModule } from "./modules/health/health.module";
     AuthModule,
     StudentsModule,
     ReferentsModule,
-    StagesModule,
-    OrganismsModule,
+    // Issue #113/ADR-0029: off means these modules are never part of the
+    // module graph at all — a true 404 on their routes, not a guard-blocked
+    // 401/403. Reading process.env directly (not ConfigService) here is
+    // safe: despite being declared `async`, ConfigModule.forRoot() runs
+    // assignVariablesToProcess(validatedConfig) synchronously, before its
+    // first `await` — so process.env.FEATURE_STAGE_MANAGEMENT already holds
+    // the validated/transformed value by the time this next array element
+    // evaluates (array literals evaluate left-to-right). This only holds
+    // because this line comes after ConfigModule.forRoot() above.
+    ...(process.env.FEATURE_STAGE_MANAGEMENT === "true" ? [StagesModule, OrganismsModule] : []),
     AdminModule,
     FilesModule,
     HealthModule,

@@ -8,7 +8,9 @@ import { LoginPage } from "./features/auth/LoginPage";
 import { ResetPasswordPage } from "./features/auth/ResetPasswordPage";
 import { SignupPage } from "./features/auth/SignupPage";
 import { useCurrentUser } from "./features/auth/useCurrentUser";
+import { NewStagePage } from "./features/stages/NewStagePage";
 import { useProfile } from "./features/students/useProfile";
+import { isStageManagementEnabled } from "./lib/feature-flags";
 import { ROUTES } from "./routes";
 import { ProfilePage } from "./features/students/ProfilePage";
 
@@ -80,6 +82,9 @@ export function App() {
           <Route element={<AppShell />}>
             <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
             <Route path={ROUTES.PROFILE} element={<ProfilePage />} />
+            {isStageManagementEnabled && (
+              <Route path={ROUTES.STAGE_NEW} element={<NewStagePage />} />
+            )}
             <Route element={<RequireAdmin />}>
               <Route path={ROUTES.CERTIFICATE_QUEUE} element={<CertificateQueuePage />} />
             </Route>

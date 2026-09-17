@@ -32,3 +32,4 @@ Every structuring decision is recorded here as an ADR. Format: lightweight [MADR
 | [0026](0026-scaleway-transactional-email.md) | Email provider: Scaleway Transactional Email | Accepted |
 | [0027](0027-forgot-password-mechanism.md) | Forgot/reset password: anti-enumeration, token model, and concurrency | Accepted |
 | [0028](0028-dependency-vulnerability-automation.md) | Dependency-vulnerability remediation & branch-protection automation | Accepted |
+| [0029](0029-feature-flag-module-gating.md) | Feature flags via conditional module registration, not a guard | Accepted |

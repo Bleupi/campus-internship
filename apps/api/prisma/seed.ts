@@ -84,6 +84,28 @@ interface SeedStudent {
   files: FileSpec[];
 }
 
+// Issue #113: OrganismStructureType is an admin-configurable DB table, not a
+// fixed shared enum (dataModel.md) — the wizard's inline-organism-creation
+// dropdown needs real rows to choose from locally.
+const STRUCTURE_TYPE_LABELS = [
+  "Association",
+  "Hôpital",
+  "Club",
+  "EPHAD",
+  "Clinique",
+  "Handisport",
+  "Sport adapté",
+  "IME",
+  "IEM",
+  "MAS",
+  "FAM",
+  "Foyer de vie",
+  "SESSAD",
+  "IMP",
+  "Fédération",
+  "Maison Sport Santé",
+];
+
 const STUDENTS: SeedStudent[] = [
   // --- INCOMPLETE (5): every way a profile can still be missing something ---
   {
@@ -326,13 +348,24 @@ async function seedStudent(student: SeedStudent): Promise<void> {
   }
 }
 
+// Upsert-by-unique-label is idempotent the same way seedStudent's
+// deleteMany-then-create is, and simpler here since there's no dependent
+// row to cascade-clean first.
+async function seedStructureTypes(): Promise<void> {
+  for (const label of STRUCTURE_TYPE_LABELS) {
+    await prisma.organismStructureType.upsert({ where: { label }, create: { label }, update: {} });
+  }
+}
+
 async function main(): Promise<void> {
   await ensureBucket();
+  await seedStructureTypes();
 
   for (const student of STUDENTS) {
     await seedStudent(student);
   }
 
+  console.log(`Seeded ${STRUCTURE_TYPE_LABELS.length} organism structure types.\n`);
   console.log(`Seeded ${STUDENTS.length} student accounts (password: ${SEED_PASSWORD}):\n`);
   const byStatus = new Map<string, string[]>();
   for (const s of STUDENTS) {

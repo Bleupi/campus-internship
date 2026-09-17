@@ -14,6 +14,7 @@ import {
   useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
+import AddOutlinedIcon from "@mui/icons-material/AddOutlined";
 import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
 import LogoutIcon from "@mui/icons-material/LogoutOutlined";
 import MenuIcon from "@mui/icons-material/MenuOutlined";
@@ -24,12 +25,21 @@ import { useState } from "react";
 import { NavLink, Outlet, useMatch, useNavigate } from "react-router-dom";
 import { useCurrentUser } from "../features/auth/useCurrentUser";
 import { useLogout } from "../features/auth/useLogout";
+import { isStageManagementEnabled } from "../lib/feature-flags";
 import { ROUTES } from "../routes";
 
 const baseNavItems = [
   { to: ROUTES.DASHBOARD, label: "Tableau de bord", icon: <SpaceDashboardOutlinedIcon /> },
   { to: ROUTES.PROFILE, label: "Profil", icon: <PersonOutlineOutlinedIcon /> },
 ];
+
+// Issue #113: student-only, and only while the feature flag is on — mirrors
+// adminNavItem's gating below.
+const newStageNavItem = {
+  to: ROUTES.STAGE_NEW,
+  label: "Nouvelle demande",
+  icon: <AddOutlinedIcon />,
+};
 
 // Issue #42: the queue-list link only makes sense (and only avoids a 403)
 // for an ADMIN — same role check as App.tsx's RequireAdmin route guard.
@@ -109,7 +119,12 @@ export function AppShell() {
   const logout = useLogout();
   const { data: me } = useCurrentUser();
   const isAdmin = me?.user.roles.includes("ADMIN") ?? false;
-  const navItems = isAdmin ? [...baseNavItems, adminNavItem] : baseNavItems;
+  const isStudent = me?.user.roles.includes("STUDENT") ?? false;
+  const navItems = [
+    ...baseNavItems,
+    ...(isStageManagementEnabled && isStudent ? [newStageNavItem] : []),
+    ...(isAdmin ? [adminNavItem] : []),
+  ];
 
   const handleLogout = () => {
     setDrawerOpen(false);
