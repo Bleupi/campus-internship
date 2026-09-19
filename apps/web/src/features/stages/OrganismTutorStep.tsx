@@ -31,12 +31,6 @@ import { formatOrganismAddress } from "./format-summary";
 type OrganismSelection = CreateStageDraftInput["organism"];
 type TutorSelection = CreateStageDraftInput["tutor"];
 
-const CREATE_NEW_ORGANISM = {
-  id: "__create_new__",
-  name: "Créer un nouvel Organisme",
-};
-const CREATE_NEW_TUTOR = { id: "__create_new__", label: "Créer un nouveau Tuteur" };
-
 // An untouched, empty phone field must submit as undefined (a valid
 // "no value" for this optional field), not "" — which frenchMobilePhoneSchema
 // rejects (same pattern as ProfilePage's emptyToNull for the same schema).
@@ -227,46 +221,27 @@ export function OrganismTutorStep({ organism, tutor, onChange }: Props) {
       <Stack spacing={1.5}>
         <Typography variant="subtitle1">Organisme d'accueil</Typography>
         {organism === null && !creatingOrganism && (
-          <Autocomplete
-            options={[...(search.data ?? []), CREATE_NEW_ORGANISM]}
-            getOptionLabel={(option) => option.name}
-            loading={search.isFetching}
-            noOptionsText="Aucun résultat"
-            onInputChange={(_, value) => setSearchText(value)}
-            onChange={(_, value) => {
-              if (!value) return;
-              if (value.id === CREATE_NEW_ORGANISM.id) {
-                setCreatingOrganism(true);
-              } else {
-                selectExistingOrganism(value as OrganismSearchResultItem);
-              }
-            }}
-            renderOption={(props, option) => {
-              const { key, ...optionProps } = props;
-              if (option.id === CREATE_NEW_ORGANISM.id) {
-                return (
-                  <li key={key} {...optionProps}>
-                    <Stack
-                      direction="row"
-                      spacing={1}
-                      sx={{ alignItems: "center", color: "primary.main", width: "100%" }}
-                    >
-                      <AddOutlined fontSize="small" />
-                      <Typography variant="body2" sx={{ fontWeight: 600, color: "inherit" }}>
-                        {option.name}
-                      </Typography>
-                    </Stack>
-                  </li>
-                );
-              }
-              return (
-                <li key={key} {...optionProps}>
-                  {option.name}
-                </li>
-              );
-            }}
-            renderInput={(params) => <TextField {...params} label="Rechercher un organisme" />}
-          />
+          <>
+            <Autocomplete
+              options={search.data ?? []}
+              getOptionLabel={(option) => option.name}
+              loading={search.isFetching}
+              noOptionsText="Aucun résultat"
+              onInputChange={(_, value) => setSearchText(value)}
+              onChange={(_, value) => {
+                if (value) selectExistingOrganism(value);
+              }}
+              renderInput={(params) => <TextField {...params} label="Rechercher un organisme" />}
+            />
+            <Button
+              variant="outlined"
+              startIcon={<AddOutlined />}
+              onClick={() => setCreatingOrganism(true)}
+              sx={{ alignSelf: "flex-start" }}
+            >
+              Créer un nouvel Organisme
+            </Button>
+          </>
         )}
         {creatingOrganism && <OrganismCreationForm onCreated={createOrganism} />}
         {organism !== null && (
@@ -307,46 +282,25 @@ export function OrganismTutorStep({ organism, tutor, onChange }: Props) {
           <Stack spacing={1.5}>
             <Typography variant="subtitle1">Tuteur de stage</Typography>
             {tutor === null && !creatingTutor && (
-              <Autocomplete
-                options={[...tutorOptions, CREATE_NEW_TUTOR]}
-                getOptionLabel={(option) =>
-                  "label" in option ? option.label : `${option.firstName} ${option.lastName}`
-                }
-                noOptionsText="Aucun tuteur pour cet organisme"
-                onChange={(_, value) => {
-                  if (!value) return;
-                  if (value.id === CREATE_NEW_TUTOR.id) {
-                    setCreatingTutor(true);
-                  } else {
-                    selectExistingTutor(value as OrganismTutorSummary);
-                  }
-                }}
-                renderOption={(props, option) => {
-                  const { key, ...optionProps } = props;
-                  if ("label" in option) {
-                    return (
-                      <li key={key} {...optionProps}>
-                        <Stack
-                          direction="row"
-                          spacing={1}
-                          sx={{ alignItems: "center", color: "primary.main", width: "100%" }}
-                        >
-                          <AddOutlined fontSize="small" />
-                          <Typography variant="body2" sx={{ fontWeight: 600, color: "inherit" }}>
-                            {option.label}
-                          </Typography>
-                        </Stack>
-                      </li>
-                    );
-                  }
-                  return (
-                    <li key={key} {...optionProps}>
-                      {`${option.firstName} ${option.lastName}`}
-                    </li>
-                  );
-                }}
-                renderInput={(params) => <TextField {...params} label="Sélectionner un tuteur" />}
-              />
+              <>
+                <Autocomplete
+                  options={tutorOptions}
+                  getOptionLabel={(option) => `${option.firstName} ${option.lastName}`}
+                  noOptionsText="Aucun tuteur pour cet organisme"
+                  onChange={(_, value) => {
+                    if (value) selectExistingTutor(value);
+                  }}
+                  renderInput={(params) => <TextField {...params} label="Sélectionner un tuteur" />}
+                />
+                <Button
+                  variant="outlined"
+                  startIcon={<AddOutlined />}
+                  onClick={() => setCreatingTutor(true)}
+                  sx={{ alignSelf: "flex-start" }}
+                >
+                  Créer un nouveau Tuteur
+                </Button>
+              </>
             )}
             {creatingTutor && <TutorCreationForm onCreated={createTutor} />}
             {tutor !== null && (

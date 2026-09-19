@@ -43,8 +43,7 @@ async function openOrganismPicker(user: ReturnType<typeof userEvent.setup>) {
 }
 
 async function pickCreateNewOrganism(user: ReturnType<typeof userEvent.setup>) {
-  await openOrganismPicker(user);
-  await user.click(await screen.findByText(/créer un nouvel organisme/i));
+  await user.click(screen.getByRole("button", { name: /créer un nouvel organisme/i }));
 }
 
 async function fillNewOrganismForm(user: ReturnType<typeof userEvent.setup>) {
@@ -69,9 +68,7 @@ async function resolveOrganismAndTutorInline(user: ReturnType<typeof userEvent.s
   await pickCreateNewOrganism(user);
   await fillNewOrganismForm(user);
 
-  const tutorInput = await screen.findByLabelText(/sélectionner un tuteur/i);
-  await user.click(tutorInput);
-  await user.click(await screen.findByText(/nouveau tuteur/i));
+  await user.click(await screen.findByRole("button", { name: /créer un nouveau tuteur/i }));
   await fillNewTutorForm(user);
 }
 
@@ -204,19 +201,21 @@ describe("NewStagePage", () => {
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/dashboard"));
   });
 
-  it("labels the inline-creation options distinctly and lets a new tutor opt into phone contact", async () => {
+  it("offers organism/tutor creation as buttons below the pickers, not as dropdown options", async () => {
     const user = userEvent.setup();
     renderPage();
 
     await openOrganismPicker(user);
-    expect(await screen.findByText("Créer un nouvel Organisme")).toBeInTheDocument();
-    await user.click(screen.getByText("Créer un nouvel Organisme"));
+    expect(await screen.findByText("Aucun résultat")).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /créer un nouvel organisme/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /créer un nouvel organisme/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /créer un nouvel organisme/i }));
     await fillNewOrganismForm(user);
 
-    const tutorInput = await screen.findByLabelText(/sélectionner un tuteur/i);
-    await user.click(tutorInput);
-    expect(await screen.findByText("Créer un nouveau Tuteur")).toBeInTheDocument();
-    await user.click(screen.getByText("Créer un nouveau Tuteur"));
+    await user.click(await screen.findByLabelText(/sélectionner un tuteur/i));
+    expect(screen.queryByRole("option", { name: /créer un nouveau tuteur/i })).toBeNull();
+    await user.click(screen.getByRole("button", { name: /créer un nouveau tuteur/i }));
 
     await user.type(screen.getByLabelText(/^prénom$/i), "Karim");
     await user.type(screen.getByLabelText(/^nom$/i), "Belkacem");
