@@ -14,7 +14,7 @@ function uniqueEmail(): string {
 function organismPayload(overrides: Record<string, unknown> = {}) {
   return {
     name: "Hôpital Cochin",
-    structureType: "Hôpital",
+    structureType: "Secteur Sanitaire",
     city: "Paris",
     postalCode: "75014",
     street: "27 Rue du Faubourg Saint-Jacques",

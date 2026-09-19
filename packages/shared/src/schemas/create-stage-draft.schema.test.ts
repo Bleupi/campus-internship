@@ -23,7 +23,7 @@ describe("createStageDraftSchema", () => {
           mode: "new",
           data: {
             name: "Hôpital Cochin",
-            structureType: "Hôpital",
+            structureType: "Secteur Sanitaire",
             city: "Paris",
             postalCode: "75014",
             street: "27 Rue du Faubourg Saint-Jacques",
@@ -79,7 +79,7 @@ describe("createStageDraftSchema", () => {
 describe("hostOrganismInputSchema postalCode (French postal codes are exactly 5 digits)", () => {
   const organism = (postalCode: string) => ({
     name: "Hôpital Cochin",
-    structureType: "Hôpital",
+    structureType: "Secteur Sanitaire",
     city: "Paris",
     postalCode,
     street: "27 Rue du Faubourg Saint-Jacques",

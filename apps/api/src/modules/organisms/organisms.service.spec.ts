@@ -59,7 +59,7 @@ describe("OrganismsService", () => {
 
     it("returns the rows from the raw query", async () => {
       const rows = [
-        { id: "org-1", name: "Hôpital Cochin", structureType: "Hôpital", city: "Paris" },
+        { id: "org-1", name: "Hôpital Cochin", structureType: "Secteur Sanitaire", city: "Paris" },
       ];
       prisma.$queryRaw.mockResolvedValue(rows);
 
@@ -78,7 +78,7 @@ describe("OrganismsService", () => {
       prisma.hostOrganism.findUnique.mockResolvedValue({
         id: "org-1",
         name: "Hôpital Cochin",
-        structureType: "Hôpital",
+        structureType: "Secteur Sanitaire",
         city: "Paris",
         postalCode: "75014",
         street: "27 Rue du Faubourg Saint-Jacques",
@@ -94,7 +94,7 @@ describe("OrganismsService", () => {
       prisma.hostOrganism.findUnique.mockResolvedValue({
         id: "org-1",
         name: "Hôpital Cochin",
-        structureType: "Hôpital",
+        structureType: "Secteur Sanitaire",
         city: "Paris",
         postalCode: "75014",
         street: "27 Rue du Faubourg Saint-Jacques",
@@ -133,8 +133,8 @@ describe("OrganismsService", () => {
   describe("listStructureTypes", () => {
     it("returns structure types ordered by label", async () => {
       const types = [
-        { id: "st-1", label: "Association" },
-        { id: "st-2", label: "Hôpital" },
+        { id: "st-1", label: "Secteur Associatif" },
+        { id: "st-2", label: "Secteur Sanitaire" },
       ];
       prisma.organismStructureType.findMany.mockResolvedValue(types);
 

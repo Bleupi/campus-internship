@@ -51,7 +51,7 @@ async function pickCreateNewOrganism(user: ReturnType<typeof userEvent.setup>) {
 async function fillNewOrganismForm(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText(/nom de l'organisme/i), "Fondation OVE");
   await user.click(screen.getByLabelText(/type de structure/i));
-  await user.click(await screen.findByText("Association"));
+  await user.click(await screen.findByText("Secteur Associatif"));
   await user.type(screen.getByLabelText(/adresse/i), "1 rue Test");
   await user.type(screen.getByLabelText(/code postal/i), "69000");
   await user.type(screen.getByLabelText(/ville/i), "Lyon");
@@ -106,7 +106,9 @@ describe("NewStagePage", () => {
   beforeEach(() => {
     searchOrganismsMock.mockReset().mockResolvedValue([]);
     getOrganismMock.mockReset();
-    getStructureTypesMock.mockReset().mockResolvedValue([{ id: "st-1", label: "Association" }]);
+    getStructureTypesMock
+      .mockReset()
+      .mockResolvedValue([{ id: "st-1", label: "Secteur Associatif" }]);
     createStageDraftMock.mockReset();
     navigateMock.mockReset();
   });
@@ -120,12 +122,12 @@ describe("NewStagePage", () => {
   it("finds and selects an existing organism, prefilling structureType/address read-only", async () => {
     const user = userEvent.setup();
     searchOrganismsMock.mockResolvedValue([
-      { id: "org-1", name: "Hôpital Cochin", structureType: "Hôpital", city: "Paris" },
+      { id: "org-1", name: "Hôpital Cochin", structureType: "Secteur Sanitaire", city: "Paris" },
     ]);
     getOrganismMock.mockResolvedValue({
       id: "org-1",
       name: "Hôpital Cochin",
-      structureType: "Hôpital",
+      structureType: "Secteur Sanitaire",
       city: "Paris",
       postalCode: "75014",
       street: "27 Rue du Faubourg Saint-Jacques",
@@ -139,7 +141,7 @@ describe("NewStagePage", () => {
     await user.click(await screen.findByText("Hôpital Cochin"));
 
     expect(
-      await screen.findByText("Hôpital · 27 Rue du Faubourg Saint-Jacques, 75014 Paris"),
+      await screen.findByText("Secteur Sanitaire · 27 Rue du Faubourg Saint-Jacques, 75014 Paris"),
     ).toBeInTheDocument();
     // Read-only: none of the inline-creation inputs are offered for an existing organism.
     expect(screen.queryByLabelText(/nom de l'organisme/i)).toBeNull();

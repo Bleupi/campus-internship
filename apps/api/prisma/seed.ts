@@ -88,22 +88,11 @@ interface SeedStudent {
 // fixed shared enum (dataModel.md) — the wizard's inline-organism-creation
 // dropdown needs real rows to choose from locally.
 const STRUCTURE_TYPE_LABELS = [
-  "Association",
-  "Hôpital",
-  "Club",
-  "EPHAD",
-  "Clinique",
-  "Handisport",
-  "Sport adapté",
-  "IME",
-  "IEM",
-  "MAS",
-  "FAM",
-  "Foyer de vie",
-  "SESSAD",
-  "IMP",
-  "Fédération",
-  "Maison Sport Santé",
+  "Secteur Médico-social",
+  "Secteur Sanitaire",
+  "Secteur Fédérale",
+  "Secteur Libéral",
+  "Secteur Associatif",
 ];
 
 const STUDENTS: SeedStudent[] = [
@@ -350,8 +339,14 @@ async function seedStudent(student: SeedStudent): Promise<void> {
 
 // Upsert-by-unique-label is idempotent the same way seedStudent's
 // deleteMany-then-create is, and simpler here since there's no dependent
-// row to cascade-clean first.
+// row to cascade-clean first. Labels outside the current list are deleted so
+// a database seeded with an earlier list ends up with exactly this one
+// (HostOrganism.structureType is a plain string, not a FK, so nothing
+// references these rows). Safe because this script is dev-only.
 async function seedStructureTypes(): Promise<void> {
+  await prisma.organismStructureType.deleteMany({
+    where: { label: { notIn: STRUCTURE_TYPE_LABELS } },
+  });
   for (const label of STRUCTURE_TYPE_LABELS) {
     await prisma.organismStructureType.upsert({ where: { label }, create: { label }, update: {} });
   }

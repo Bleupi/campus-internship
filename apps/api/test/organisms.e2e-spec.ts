@@ -59,7 +59,7 @@ describe("Organisms search/detail (e2e)", () => {
     const organism = await prisma.hostOrganism.create({
       data: {
         name: `Hôpital Écoblanc ${randomUUID()}`,
-        structureType: "Hôpital",
+        structureType: "Secteur Sanitaire",
         city: "Paris",
         postalCode: "75014",
         street: "1 rue Test",
@@ -93,7 +93,7 @@ describe("Organisms search/detail (e2e)", () => {
     const organism = await prisma.hostOrganism.create({
       data: {
         name: "Fondation OVE",
-        structureType: "Association",
+        structureType: "Secteur Associatif",
         city: "Lyon",
         postalCode: "69000",
         street: "1 rue de la République",

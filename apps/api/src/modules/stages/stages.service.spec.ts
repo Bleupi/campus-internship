@@ -27,7 +27,7 @@ function organismRow(overrides: Record<string, unknown> = {}) {
   return {
     id: ORGANISM_ID,
     name: "Hôpital Cochin",
-    structureType: "Hôpital",
+    structureType: "Secteur Sanitaire",
     city: "Paris",
     postalCode: "75014",
     street: "27 Rue du Faubourg Saint-Jacques",
@@ -154,7 +154,7 @@ describe("StagesService", () => {
     it("creates both rows inside the same transaction and links the stage to them", async () => {
       const newOrganismData = {
         name: "Fondation OVE",
-        structureType: "Association",
+        structureType: "Secteur Associatif",
         city: "Lyon",
         postalCode: "69000",
         street: "1 rue de la République",
@@ -232,7 +232,7 @@ describe("StagesService", () => {
   describe("inline creation failures (issue #113)", () => {
     const newOrganism = {
       name: "Fondation OVE",
-      structureType: "Association",
+      structureType: "Secteur Associatif",
       city: "Lyon",
       postalCode: "69000",
       street: "1 rue de la République",
