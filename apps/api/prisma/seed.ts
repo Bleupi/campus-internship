@@ -90,7 +90,7 @@ interface SeedStudent {
 const STRUCTURE_TYPE_LABELS = [
   "Secteur Médico-social",
   "Secteur Sanitaire",
-  "Secteur Fédérale",
+  "Secteur Fédéral",
   "Secteur Libéral",
   "Secteur Associatif",
 ];
@@ -276,7 +276,11 @@ async function seedStudent(student: SeedStudent): Promise<void> {
   const email = `${student.localPart}${STUDENT_EMAIL_DOMAIN}`;
 
   // Cascade (onDelete: Cascade on StudentProfile/FileObject/RefreshToken)
-  // takes care of every dependent row.
+  // takes care of every dependent row, except Stage: Stage.studentId has no
+  // cascade (dataModel.md), so stages created for this account by hand (e.g.
+  // through the wizard) must go first or deleting the user violates that FK.
+  // StagePeriod cascades from Stage.
+  await prisma.stage.deleteMany({ where: { student: { user: { email } } } });
   await prisma.user.deleteMany({ where: { email } });
 
   const passwordHash = await bcrypt.hash(SEED_PASSWORD, 10);
