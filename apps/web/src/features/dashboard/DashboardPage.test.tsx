@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -22,13 +22,22 @@ function user(roles: string[]) {
 
 function renderDashboard() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
         <DashboardPage />
       </MemoryRouter>
     </QueryClientProvider>,
   );
+  return queryClient;
+}
+
+// The heading renders immediately, before getMe resolves — so an absence
+// assertion made right after it would pass vacuously. Wait for the user query
+// itself to settle first.
+async function waitForUserLoaded(queryClient: QueryClient) {
+  await waitFor(() => expect(getMeMock).toHaveBeenCalled());
+  await waitFor(() => expect(queryClient.isFetching()).toBe(0));
 }
 
 describe("DashboardPage", () => {
@@ -48,17 +57,17 @@ describe("DashboardPage", () => {
   it("hides the link while the stage-management feature flag is off", async () => {
     flags.isStageManagementEnabled = false;
     getMeMock.mockResolvedValue({ user: user(["STUDENT"]) });
-    renderDashboard();
+    const queryClient = renderDashboard();
 
-    expect(await screen.findByText(/tableau de bord/i)).toBeInTheDocument();
+    await waitForUserLoaded(queryClient);
     expect(screen.queryByRole("link", { name: /nouvelle demande/i })).toBeNull();
   });
 
   it("hides the link from a non-student user", async () => {
     getMeMock.mockResolvedValue({ user: user(["ADMIN"]) });
-    renderDashboard();
+    const queryClient = renderDashboard();
 
-    expect(await screen.findByText(/tableau de bord/i)).toBeInTheDocument();
+    await waitForUserLoaded(queryClient);
     expect(screen.queryByRole("link", { name: /nouvelle demande/i })).toBeNull();
   });
 });

@@ -227,7 +227,13 @@ export function OrganismTutorStep({ organism, tutor, onChange }: Props) {
               options={search.data ?? []}
               getOptionLabel={(option) => option.name}
               loading={search.isFetching}
-              noOptionsText="Aucun résultat"
+              // The search only runs once there is text (useOrganismSearch), so an
+              // untouched picker has "no results" only because nothing was asked.
+              noOptionsText={
+                searchText.trim() === ""
+                  ? "Taper un caractère pour commencer la recherche"
+                  : "Aucun résultat"
+              }
               onInputChange={(_, value) => setSearchText(value)}
               onChange={(_, value) => {
                 if (value) selectExistingOrganism(value);

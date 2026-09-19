@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setMatchMedia } from "../test/setup";
 import { AppShell } from "./AppShell";
 
+// Flag on: a menu entry gated on it (the pre-#135-QA behaviour) would render,
+// so the "not in the menu" test below can actually catch that regression.
 vi.mock("../lib/feature-flags", () => ({ isStageManagementEnabled: true }));
 
 const navigateMock = vi.fn();
@@ -66,9 +68,13 @@ describe("AppShell", () => {
   });
 
   it("does not list 'Nouvelle demande' in the menu, even for a student with stage management on (it lives on the dashboard)", async () => {
+    // STUDENT + ADMIN so the admin-only link doubles as a signal that the
+    // current user has loaded — otherwise the absence check could pass merely
+    // because getMe hasn't resolved yet.
+    getMeMock.mockResolvedValue({ user: { ...studentUser, roles: ["STUDENT", "ADMIN"] } });
     renderShell("/dashboard");
 
-    await waitFor(() => expect(getMeMock).toHaveBeenCalled());
+    expect(await screen.findByRole("link", { name: /certificats à valider/i })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /nouvelle demande/i })).toBeNull();
   });
 

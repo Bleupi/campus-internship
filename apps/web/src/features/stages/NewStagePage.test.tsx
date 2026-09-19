@@ -57,20 +57,41 @@ async function fillNewOrganismForm(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: /valider ce nouvel organisme/i }));
 }
 
-async function fillNewTutorForm(user: ReturnType<typeof userEvent.setup>) {
+async function fillNewTutorForm(user: ReturnType<typeof userEvent.setup>, phone?: string) {
   await user.type(screen.getByLabelText(/^prénom$/i), "Karim");
   await user.type(screen.getByLabelText(/^nom$/i), "Belkacem");
   await user.type(screen.getByLabelText(/^email$/i), "k.belkacem@example.org");
   await user.type(screen.getByLabelText(/fonction/i), "Directeur");
+  if (phone) await user.type(screen.getByLabelText(/^téléphone/i), phone);
   await user.click(screen.getByRole("button", { name: /valider ce nouveau tuteur/i }));
 }
 
-async function resolveOrganismAndTutorInline(user: ReturnType<typeof userEvent.setup>) {
+async function resolveOrganismAndTutorInline(
+  user: ReturnType<typeof userEvent.setup>,
+  tutorPhone?: string,
+) {
   await pickCreateNewOrganism(user);
   await fillNewOrganismForm(user);
 
   await user.click(await screen.findByRole("button", { name: /créer un nouveau tuteur/i }));
-  await fillNewTutorForm(user);
+  await fillNewTutorForm(user, tutorPhone);
+}
+
+// Step 0 → Périodes → Détails, with one valid period (S1) entered on the way.
+async function goToDetailsStep(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("button", { name: /suivant/i }));
+  await user.click(screen.getByRole("button", { name: /ajouter une période/i }));
+  const [startInput, endInput] = screen.getAllByLabelText(/début|fin/i);
+  await user.type(startInput!, "2025-10-01");
+  await user.type(endInput!, "2025-10-15");
+  await user.click(screen.getByRole("button", { name: /suivant/i }));
+}
+
+// Détails → Récapitulatif → save, answering the mandatory question "Oui".
+async function chooseMandatoryAndSave(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByLabelText(/^oui$/i));
+  await user.click(screen.getByRole("button", { name: /suivant/i }));
+  await user.click(screen.getByRole("button", { name: /enregistrer le brouillon/i }));
 }
 
 // The recap renders each entry as a <dt> label paired with a <dd> value, so a
@@ -89,8 +110,9 @@ describe("NewStagePage", () => {
     navigateMock.mockReset();
   });
 
+  // The mobile-stepper test flips the global matchMedia; reset it so a failure
+  // there can't leak "mobile" into the following tests.
   afterEach(() => {
-    vi.clearAllMocks();
     setMatchMedia(false);
   });
 
@@ -115,10 +137,31 @@ describe("NewStagePage", () => {
 
     await user.click(await screen.findByText("Hôpital Cochin"));
 
-    expect(await screen.findByText(/27 Rue du Faubourg Saint-Jacques/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText("Hôpital · 27 Rue du Faubourg Saint-Jacques, 75014 Paris"),
+    ).toBeInTheDocument();
+    // Read-only: none of the inline-creation inputs are offered for an existing organism.
+    expect(screen.queryByLabelText(/nom de l'organisme/i)).toBeNull();
+    expect(screen.queryByLabelText(/code postal/i)).toBeNull();
     // No tutors yet for this organism — this must not be an error state, just
     // an empty picker with only "Nouveau tuteur" available.
     expect(screen.getByLabelText(/sélectionner un tuteur/i)).toBeInTheDocument();
+  });
+
+  it("prompts to type a character before searching, then says 'Aucun résultat' once a search finds nothing", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    const input = await openOrganismPicker(user);
+    expect(
+      await screen.findByText("Taper un caractère pour commencer la recherche"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Aucun résultat")).toBeNull();
+
+    await user.type(input, "zzz");
+
+    expect(await screen.findByText("Aucun résultat")).toBeInTheDocument();
+    expect(screen.queryByText(/taper un caractère/i)).toBeNull();
   });
 
   it("creates a new organism and a new tutor inline, without leaving the wizard", async () => {
@@ -185,12 +228,7 @@ describe("NewStagePage", () => {
     renderPage();
 
     await resolveOrganismAndTutorInline(user);
-    await user.click(screen.getByRole("button", { name: /suivant/i }));
-    await user.click(screen.getByRole("button", { name: /ajouter une période/i }));
-    const [startInput, endInput] = screen.getAllByLabelText(/début|fin/i);
-    await user.type(startInput!, "2025-10-01");
-    await user.type(endInput!, "2025-10-15");
-    await user.click(screen.getByRole("button", { name: /suivant/i }));
+    await goToDetailsStep(user);
 
     expect(screen.getByRole("button", { name: /suivant/i })).toBeDisabled();
 
@@ -205,15 +243,8 @@ describe("NewStagePage", () => {
     renderPage();
 
     await resolveOrganismAndTutorInline(user);
-    await user.click(screen.getByRole("button", { name: /suivant/i }));
-    await user.click(screen.getByRole("button", { name: /ajouter une période/i }));
-    const [startInput, endInput] = screen.getAllByLabelText(/début|fin/i);
-    await user.type(startInput!, "2025-10-01");
-    await user.type(endInput!, "2025-10-15");
-    await user.click(screen.getByRole("button", { name: /suivant/i }));
-    await user.click(screen.getByLabelText(/^oui$/i));
-    await user.click(screen.getByRole("button", { name: /suivant/i }));
-    await user.click(screen.getByRole("button", { name: /enregistrer le brouillon/i }));
+    await goToDetailsStep(user);
+    await chooseMandatoryAndSave(user);
 
     await waitFor(() => expect(createStageDraftMock).toHaveBeenCalledTimes(1));
     const payload = createStageDraftMock.mock.calls[0]![0];
@@ -234,55 +265,50 @@ describe("NewStagePage", () => {
     renderPage();
 
     await openOrganismPicker(user);
-    expect(await screen.findByText("Aucun résultat")).toBeInTheDocument();
+    expect(await screen.findByText(/taper un caractère/i)).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: /créer un nouvel organisme/i })).toBeNull();
     expect(screen.getByRole("button", { name: /créer un nouvel organisme/i })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /créer un nouvel organisme/i }));
+    await pickCreateNewOrganism(user);
     await fillNewOrganismForm(user);
 
     await user.click(await screen.findByLabelText(/sélectionner un tuteur/i));
     expect(screen.queryByRole("option", { name: /créer un nouveau tuteur/i })).toBeNull();
-    await user.click(screen.getByRole("button", { name: /créer un nouveau tuteur/i }));
-
-    await user.type(screen.getByLabelText(/^prénom$/i), "Karim");
-    await user.type(screen.getByLabelText(/^nom$/i), "Belkacem");
-    await user.type(screen.getByLabelText(/^email$/i), "k.belkacem@example.org");
-    await user.type(screen.getByLabelText(/fonction/i), "Directeur");
-    await user.click(screen.getByLabelText(/accepte d'être contacté par téléphone/i));
-    await user.click(screen.getByRole("button", { name: /valider ce nouveau tuteur/i }));
-
-    expect(
-      await screen.findByText(/Karim Belkacem \(Directeur, nouveau tuteur\)/i),
-    ).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: /suivant/i }));
-    await user.click(screen.getByRole("button", { name: /ajouter une période/i }));
-    const [startInput, endInput] = screen.getAllByLabelText(/début|fin/i);
-    await user.type(startInput!, "2025-10-01");
-    await user.type(endInput!, "2025-10-15");
-    await user.click(screen.getByRole("button", { name: /suivant/i }));
-    await user.click(screen.getByLabelText(/^oui$/i));
-    await user.click(screen.getByRole("button", { name: /suivant/i }));
-    await user.click(screen.getByRole("button", { name: /enregistrer le brouillon/i }));
-
-    await waitFor(() => expect(createStageDraftMock).toHaveBeenCalledTimes(1));
-    const payload = createStageDraftMock.mock.calls[0]![0];
-    expect(payload.tutor).toMatchObject({ data: { acceptsPhoneContact: true } });
+    expect(screen.getByRole("button", { name: /créer un nouveau tuteur/i })).toBeInTheDocument();
   });
 
-  it("only allows digits and '+' in the new tutor's phone field", async () => {
+  it("submits acceptsPhoneContact: true when the inline tutor form's switch is turned on", async () => {
     const user = userEvent.setup();
+    createStageDraftMock.mockResolvedValue({ id: "stage-1" });
     renderPage();
 
     await pickCreateNewOrganism(user);
     await fillNewOrganismForm(user);
     await user.click(await screen.findByRole("button", { name: /créer un nouveau tuteur/i }));
+    await user.click(screen.getByLabelText(/accepte d'être contacté par téléphone/i));
+    await fillNewTutorForm(user);
+    await goToDetailsStep(user);
+    await chooseMandatoryAndSave(user);
 
-    const phoneInput = screen.getByLabelText(/^téléphone/i);
-    await user.type(phoneInput, "06 12a34-56b78");
+    await waitFor(() => expect(createStageDraftMock).toHaveBeenCalledTimes(1));
+    expect(createStageDraftMock.mock.calls[0]![0].tutor).toMatchObject({
+      data: { acceptsPhoneContact: true },
+    });
+  });
 
-    expect(phoneInput).toHaveValue("0612345678");
+  it("submits the new tutor's phone with letters and separators stripped (digits and '+' only)", async () => {
+    const user = userEvent.setup();
+    createStageDraftMock.mockResolvedValue({ id: "stage-1" });
+    renderPage();
+
+    await resolveOrganismAndTutorInline(user, "+33 6 12a34 56b78");
+    await goToDetailsStep(user);
+    await chooseMandatoryAndSave(user);
+
+    await waitFor(() => expect(createStageDraftMock).toHaveBeenCalledTimes(1));
+    expect(createStageDraftMock.mock.calls[0]![0].tutor).toMatchObject({
+      data: { phone: "+33612345678" },
+    });
   });
 
   it("shows only a compact step indicator on mobile, and the full stepper on desktop", async () => {
@@ -303,12 +329,7 @@ describe("NewStagePage", () => {
     renderPage();
 
     await resolveOrganismAndTutorInline(user);
-    await user.click(screen.getByRole("button", { name: /suivant/i }));
-    await user.click(screen.getByRole("button", { name: /ajouter une période/i }));
-    const [startInput, endInput] = screen.getAllByLabelText(/début|fin/i);
-    await user.type(startInput!, "2025-10-01");
-    await user.type(endInput!, "2025-10-15");
-    await user.click(screen.getByRole("button", { name: /suivant/i }));
+    await goToDetailsStep(user);
 
     await user.type(screen.getByLabelText(/^service$/i), "Service RH");
     await user.type(screen.getByLabelText(/type de handicap concerné/i), "Moteur");
@@ -330,12 +351,7 @@ describe("NewStagePage", () => {
     renderPage();
 
     await resolveOrganismAndTutorInline(user);
-    await user.click(screen.getByRole("button", { name: /suivant/i }));
-    await user.click(screen.getByRole("button", { name: /ajouter une période/i }));
-    const [startInput, endInput] = screen.getAllByLabelText(/début|fin/i);
-    await user.type(startInput!, "2025-10-01");
-    await user.type(endInput!, "2025-10-15");
-    await user.click(screen.getByRole("button", { name: /suivant/i }));
+    await goToDetailsStep(user);
     await user.click(screen.getByLabelText(/^non$/i));
     await user.click(screen.getByRole("button", { name: /suivant/i }));
 

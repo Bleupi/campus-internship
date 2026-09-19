@@ -25,6 +25,32 @@ describe("PhoneField", () => {
     expect(input).toHaveValue("+330612345678");
   });
 
+  it("keeps the caret in place when a rejected character is typed in the middle of the number", async () => {
+    const user = userEvent.setup();
+    render(<PhoneField label="Téléphone" />);
+
+    const input = screen.getByLabelText<HTMLInputElement>(/téléphone/i);
+    await user.type(input, "0612");
+    await user.type(input, "a", { initialSelectionStart: 2, initialSelectionEnd: 2 });
+
+    expect(input).toHaveValue("0612");
+    expect(input.selectionStart).toBe(2);
+    expect(input.selectionEnd).toBe(2);
+  });
+
+  it("keeps the caret after the pasted digits when a paste into the middle contains letters", async () => {
+    const user = userEvent.setup();
+    render(<PhoneField label="Téléphone" />);
+
+    const input = screen.getByLabelText<HTMLInputElement>(/téléphone/i);
+    await user.type(input, "0612");
+    input.setSelectionRange(2, 2);
+    await user.paste("3a4b");
+
+    expect(input).toHaveValue("063412");
+    expect(input.selectionStart).toBe(4);
+  });
+
   it("hints mobile keyboards to show the phone keypad", () => {
     render(<PhoneField label="Téléphone" />);
 

@@ -18,3 +18,4 @@ Create and save a stage draft via the "Nouvelle demande" wizard (issue #113, BR-
 - A shared `PhoneField` (digits and `+` only, phone keypad on mobile) is used by both the student profile and the inline tutor-creation form.
 - The périodes alerts sit above the list of periods; on phones the period rows wrap and the wizard shows a compact "Étape N sur 4" progress bar instead of the four-label stepper, so the page no longer scrolls horizontally.
 - The récapitulatif is split into titled cards with a muted label above each value, lists "Stage obligatoire" before the (possibly long) motivation, and no longer flags the organism/tutor as new.
+- The organism search box shows "Taper un caractère pour commencer la recherche" until something is typed (the search only runs on non-empty text), and "Aucun résultat" only after a search finds nothing; the shared `PhoneField` keeps the caret in place when it drops a character.
