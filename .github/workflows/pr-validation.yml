@@ -116,6 +116,12 @@ jobs:
 
       - name: E2e tests
         run: pnpm --filter api run test:e2e
+        env:
+          # .env.example ships this flag off (ADR-0029), which would leave
+          # StagesModule/OrganismsModule out of the module graph and 404 their
+          # e2e specs. process.env wins over .env in @nestjs/config; the
+          # flag-off spec sets it to "false" itself for its own app instance.
+          FEATURE_STAGE_MANAGEMENT: "true"
 
   container-smoke-test:
     name: Build container images and smoke-test the API image
