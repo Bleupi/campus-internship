@@ -8,7 +8,10 @@ import { LoginPage } from "./features/auth/LoginPage";
 import { ResetPasswordPage } from "./features/auth/ResetPasswordPage";
 import { SignupPage } from "./features/auth/SignupPage";
 import { useCurrentUser } from "./features/auth/useCurrentUser";
+import { DashboardPage } from "./features/dashboard/DashboardPage";
+import { NewStagePage } from "./features/stages/NewStagePage";
 import { useProfile } from "./features/students/useProfile";
+import { isStageManagementEnabled } from "./lib/feature-flags";
 import { ROUTES } from "./routes";
 import { ProfilePage } from "./features/students/ProfilePage";
 
@@ -62,12 +65,6 @@ function RequireAdmin() {
   return <Outlet />;
 }
 
-// Not a real feature — just an unblocking placeholder until the real
-// dashboard screen (issue #11) exists.
-function DashboardPage() {
-  return <Typography sx={{ mt: 8, textAlign: "center" }}>Tableau de bord (à venir)</Typography>;
-}
-
 export function App() {
   return (
     <Routes>
@@ -80,6 +77,9 @@ export function App() {
           <Route element={<AppShell />}>
             <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
             <Route path={ROUTES.PROFILE} element={<ProfilePage />} />
+            {isStageManagementEnabled && (
+              <Route path={ROUTES.STAGE_NEW} element={<NewStagePage />} />
+            )}
             <Route element={<RequireAdmin />}>
               <Route path={ROUTES.CERTIFICATE_QUEUE} element={<CertificateQueuePage />} />
             </Route>

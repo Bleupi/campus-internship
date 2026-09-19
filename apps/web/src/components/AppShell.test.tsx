@@ -6,6 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setMatchMedia } from "../test/setup";
 import { AppShell } from "./AppShell";
 
+// Flag on: a menu entry gated on it (the pre-#135-QA behaviour) would render,
+// so the "not in the menu" test below can actually catch that regression.
+vi.mock("../lib/feature-flags", () => ({ isStageManagementEnabled: true }));
+
 const navigateMock = vi.fn();
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
@@ -61,6 +65,17 @@ describe("AppShell", () => {
     expect(screen.getByRole("link", { name: /tableau de bord/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /profil/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /déconnexion/i })).toBeInTheDocument();
+  });
+
+  it("does not list 'Nouvelle demande' in the menu, even for a student with stage management on (it lives on the dashboard)", async () => {
+    // STUDENT + ADMIN so the admin-only link doubles as a signal that the
+    // current user has loaded — otherwise the absence check could pass merely
+    // because getMe hasn't resolved yet.
+    getMeMock.mockResolvedValue({ user: { ...studentUser, roles: ["STUDENT", "ADMIN"] } });
+    renderShell("/dashboard");
+
+    expect(await screen.findByRole("link", { name: /certificats à valider/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /nouvelle demande/i })).toBeNull();
   });
 
   it("renders the active route's page content via the outlet", () => {

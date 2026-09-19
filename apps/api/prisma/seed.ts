@@ -84,6 +84,17 @@ interface SeedStudent {
   files: FileSpec[];
 }
 
+// Issue #113: OrganismStructureType is an admin-configurable DB table, not a
+// fixed shared enum (dataModel.md) — the wizard's inline-organism-creation
+// dropdown needs real rows to choose from locally.
+const STRUCTURE_TYPE_LABELS = [
+  "Secteur Médico-social",
+  "Secteur Sanitaire",
+  "Secteur Fédéral",
+  "Secteur Libéral",
+  "Secteur Associatif",
+];
+
 const STUDENTS: SeedStudent[] = [
   // --- INCOMPLETE (5): every way a profile can still be missing something ---
   {
@@ -265,7 +276,11 @@ async function seedStudent(student: SeedStudent): Promise<void> {
   const email = `${student.localPart}${STUDENT_EMAIL_DOMAIN}`;
 
   // Cascade (onDelete: Cascade on StudentProfile/FileObject/RefreshToken)
-  // takes care of every dependent row.
+  // takes care of every dependent row, except Stage: Stage.studentId has no
+  // cascade (dataModel.md), so stages created for this account by hand (e.g.
+  // through the wizard) must go first or deleting the user violates that FK.
+  // StagePeriod cascades from Stage.
+  await prisma.stage.deleteMany({ where: { student: { user: { email } } } });
   await prisma.user.deleteMany({ where: { email } });
 
   const passwordHash = await bcrypt.hash(SEED_PASSWORD, 10);
@@ -326,13 +341,30 @@ async function seedStudent(student: SeedStudent): Promise<void> {
   }
 }
 
+// Upsert-by-unique-label is idempotent the same way seedStudent's
+// deleteMany-then-create is, and simpler here since there's no dependent
+// row to cascade-clean first. Labels outside the current list are deleted so
+// a database seeded with an earlier list ends up with exactly this one
+// (HostOrganism.structureType is a plain string, not a FK, so nothing
+// references these rows). Safe because this script is dev-only.
+async function seedStructureTypes(): Promise<void> {
+  await prisma.organismStructureType.deleteMany({
+    where: { label: { notIn: STRUCTURE_TYPE_LABELS } },
+  });
+  for (const label of STRUCTURE_TYPE_LABELS) {
+    await prisma.organismStructureType.upsert({ where: { label }, create: { label }, update: {} });
+  }
+}
+
 async function main(): Promise<void> {
   await ensureBucket();
+  await seedStructureTypes();
 
   for (const student of STUDENTS) {
     await seedStudent(student);
   }
 
+  console.log(`Seeded ${STRUCTURE_TYPE_LABELS.length} organism structure types.\n`);
   console.log(`Seeded ${STUDENTS.length} student accounts (password: ${SEED_PASSWORD}):\n`);
   const byStatus = new Map<string, string[]>();
   for (const s of STUDENTS) {

@@ -36,6 +36,15 @@ export const envSchema = z
     MAILER_SCW_PROJECT_ID: z.string().min(1),
     MAILER_FROM_EMAIL: z.string().email(),
     MAILER_FROM_NAME: z.string().default("Gestion des stages"),
+    // Issue #113/ADR-0029: gates the whole stage-management feature (StagesModule +
+    // OrganismsModule). Off by default — with it off, AppModule never
+    // registers those modules at all, so their routes true-404 rather than
+    // being merely guard-blocked. Same "true"/"false" string transform as
+    // S3_FORCE_PATH_STYLE (z.coerce.boolean() would treat "false" as true).
+    FEATURE_STAGE_MANAGEMENT: z
+      .string()
+      .default("false")
+      .transform((value) => value === "true"),
   })
   // Nest's ConfigModule only reassigns this schema's *own* output back onto
   // process.env when `validate` is set (see ConfigModule.assignVariablesToProcess).

@@ -109,7 +109,7 @@ export function AppShell() {
   const logout = useLogout();
   const { data: me } = useCurrentUser();
   const isAdmin = me?.user.roles.includes("ADMIN") ?? false;
-  const navItems = isAdmin ? [...baseNavItems, adminNavItem] : baseNavItems;
+  const navItems = [...baseNavItems, ...(isAdmin ? [adminNavItem] : [])];
 
   const handleLogout = () => {
     setDrawerOpen(false);
@@ -183,7 +183,7 @@ export function AppShell() {
           </Box>
         </Drawer>
       )}
-      <Box component="main" sx={{ p: 3 }}>
+      <Box component="main" sx={{ p: { xs: 2, sm: 3 }, minWidth: 0 }}>
         <Outlet />
       </Box>
     </>
