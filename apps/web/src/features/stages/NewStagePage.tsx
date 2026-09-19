@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Box,
@@ -48,6 +48,13 @@ export function NewStagePage() {
   // No default: an explicit true/false choice is required before the draft
   // can be saved (issue #113 AC — no silent default reaches the server).
   const [mandatory, setMandatory] = useState<boolean | null>(null);
+
+  // The window is the scroll container and stays where it was when the step's
+  // content is swapped: the long recap would otherwise open scrolled to its
+  // bottom, right after clicking "Suivant" at the foot of the previous step.
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [step]);
 
   const existingOrganismId = organism?.mode === "existing" ? organism.id : null;
   const organismDetail = useOrganism(existingOrganismId);

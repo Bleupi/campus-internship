@@ -395,6 +395,25 @@ describe("NewStagePage", () => {
     expectRecapField("Stage obligatoire", "Oui");
   });
 
+  it("scrolls back to the top of the page when moving between steps (QA feedback, PR #135)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    vi.mocked(window.scrollTo).mockClear();
+
+    await resolveOrganismAndTutorInline(user);
+    await goToDetailsStep(user);
+    await user.click(screen.getByLabelText(/^oui$/i));
+    vi.mocked(window.scrollTo).mockClear();
+
+    await user.click(screen.getByRole("button", { name: /suivant/i }));
+    expect(screen.getByText("Fondation OVE")).toBeInTheDocument();
+    expect(window.scrollTo).toHaveBeenLastCalledWith({ top: 0 });
+
+    vi.mocked(window.scrollTo).mockClear();
+    await user.click(screen.getByRole("button", { name: /précédent/i }));
+    expect(window.scrollTo).toHaveBeenLastCalledWith({ top: 0 });
+  });
+
   it("does not tell the student on the recap that the organism and tutor are new", async () => {
     const user = userEvent.setup();
     renderPage();

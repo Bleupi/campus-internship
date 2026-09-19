@@ -25,3 +25,7 @@ setMatchMedia(false);
 // globally for the same reason as matchMedia above.
 URL.createObjectURL = vi.fn(() => "blob:mock-url");
 URL.revokeObjectURL = vi.fn();
+
+// jsdom doesn't implement window.scrollTo (it logs a "not implemented" error);
+// the stage wizard scrolls back to the top on every step change.
+window.scrollTo = vi.fn();

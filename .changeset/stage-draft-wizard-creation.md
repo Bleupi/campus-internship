@@ -20,3 +20,4 @@ Create and save a stage draft via the "Nouvelle demande" wizard (issue #113, BR-
 - The récapitulatif is split into titled cards with a muted label above each value, lists "Stage obligatoire" before the (possibly long) motivation, and no longer flags the organism/tutor as new.
 - The organism search box shows "Taper un caractère pour commencer la recherche" until something is typed (the search only runs on non-empty text), and "Aucun résultat" only after a search finds nothing; the shared `PhoneField` keeps the caret in place when it drops a character.
 - A new organism's postal code must be exactly 5 digits (`hostOrganismInputSchema`, so the API enforces it too); the field only accepts digits and stops at 5. While an inline organism/tutor creation form is open, "Précédent" is enabled and closes it, back to the search/picker.
+- The wizard scrolls back to the top of the page on every step change, so the récapitulatif no longer opens scrolled to its bottom.
