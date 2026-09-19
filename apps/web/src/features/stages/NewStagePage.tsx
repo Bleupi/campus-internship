@@ -20,7 +20,7 @@ import type { CreateStageDraftInput } from "shared";
 import { ApiError } from "../../lib/api-client";
 import { ROUTES } from "../../routes";
 import { useOrganism } from "../organisms/useOrganism";
-import { OrganismTutorStep } from "./OrganismTutorStep";
+import { OrganismTutorStep, type CreationMode } from "./OrganismTutorStep";
 import { PeriodsStep, type RawPeriod } from "./PeriodsStep";
 import { RecapStep } from "./RecapStep";
 import { useCreateStageDraft } from "./useCreateStageDraft";
@@ -38,6 +38,7 @@ export function NewStagePage() {
   const createDraft = useCreateStageDraft();
 
   const [step, setStep] = useState(0);
+  const [creating, setCreating] = useState<CreationMode>(null);
   const [organism, setOrganism] = useState<OrganismSelection | null>(null);
   const [tutor, setTutor] = useState<TutorSelection | null>(null);
   const [periods, setPeriods] = useState<RawPeriod[]>([]);
@@ -68,6 +69,16 @@ export function NewStagePage() {
     : createDraft.error instanceof ApiError
       ? "Une erreur est survenue lors de l'enregistrement du brouillon."
       : "Une erreur inattendue est survenue.";
+
+  // On the first step there is no earlier step to go to, but while an inline
+  // creation form is open "Précédent" backs out of it, to the search/picker.
+  function handleBack() {
+    if (step === 0) {
+      setCreating(null);
+      return;
+    }
+    setStep((s) => s - 1);
+  }
 
   function handleSubmit() {
     if (!periodsResult.success || organism === null || tutor === null || mandatory === null) {
@@ -121,6 +132,8 @@ export function NewStagePage() {
             setOrganism(o);
             setTutor(t);
           }}
+          creating={creating}
+          onCreatingChange={setCreating}
         />
       )}
 
@@ -168,7 +181,7 @@ export function NewStagePage() {
       )}
 
       <Stack direction="row" spacing={1} sx={{ mt: 4 }}>
-        <Button disabled={step === 0} onClick={() => setStep((s) => s - 1)}>
+        <Button disabled={step === 0 && creating === null} onClick={handleBack}>
           Précédent
         </Button>
         {step < STEPS.length - 1 && (

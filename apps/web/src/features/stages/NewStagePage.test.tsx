@@ -164,6 +164,55 @@ describe("NewStagePage", () => {
     expect(screen.queryByText(/taper un caractère/i)).toBeNull();
   });
 
+  it("only accepts 5 digits in the new organism's postal code, and rejects a shorter one on submit", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await pickCreateNewOrganism(user);
+    const postalCode = screen.getByLabelText(/code postal/i);
+    await user.type(postalCode, "69a0b0012");
+    expect(postalCode).toHaveValue("69000");
+
+    await user.clear(postalCode);
+    await user.type(postalCode, "690");
+    await user.click(screen.getByRole("button", { name: /valider ce nouvel organisme/i }));
+
+    expect(await screen.findByText("Le code postal doit contenir 5 chiffres")).toBeInTheDocument();
+  });
+
+  it("lets the student back out of the new-organism form with Précédent (and keeps it disabled when nothing is open)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    expect(screen.getByRole("button", { name: /précédent/i })).toBeDisabled();
+
+    await pickCreateNewOrganism(user);
+    expect(screen.getByLabelText(/nom de l'organisme/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /précédent/i })).toBeEnabled();
+
+    await user.click(screen.getByRole("button", { name: /précédent/i }));
+
+    expect(screen.queryByLabelText(/nom de l'organisme/i)).toBeNull();
+    expect(screen.getByLabelText(/rechercher un organisme/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /précédent/i })).toBeDisabled();
+  });
+
+  it("lets the student back out of the new-tutor form with Précédent, keeping the chosen organism", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await pickCreateNewOrganism(user);
+    await fillNewOrganismForm(user);
+    await user.click(await screen.findByRole("button", { name: /créer un nouveau tuteur/i }));
+    expect(screen.getByLabelText(/^prénom$/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /précédent/i }));
+
+    expect(screen.queryByLabelText(/^prénom$/i)).toBeNull();
+    expect(screen.getByLabelText(/sélectionner un tuteur/i)).toBeInTheDocument();
+    expect(screen.getByText(/Fondation OVE/)).toBeInTheDocument();
+  });
+
   it("creates a new organism and a new tutor inline, without leaving the wizard", async () => {
     const user = userEvent.setup();
     renderPage();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createStageDraftSchema } from "./create-stage-draft.schema";
+import { createStageDraftSchema, hostOrganismInputSchema } from "./create-stage-draft.schema";
 
 function basePayload(overrides: Record<string, unknown> = {}) {
   return {
@@ -73,5 +73,38 @@ describe("createStageDraftSchema", () => {
   it("allows service/projectType/motivation to be omitted at draft time (BR-02: only required at submission)", () => {
     const result = createStageDraftSchema.safeParse(basePayload());
     expect(result.success).toBe(true);
+  });
+});
+
+describe("hostOrganismInputSchema postalCode (French postal codes are exactly 5 digits)", () => {
+  const organism = (postalCode: string) => ({
+    name: "Hôpital Cochin",
+    structureType: "Hôpital",
+    city: "Paris",
+    postalCode,
+    street: "27 Rue du Faubourg Saint-Jacques",
+  });
+
+  it.each(["75014", "01000", "20000"])("accepts %s", (postalCode) => {
+    expect(hostOrganismInputSchema.safeParse(organism(postalCode)).success).toBe(true);
+  });
+
+  it("trims surrounding whitespace before checking", () => {
+    const result = hostOrganismInputSchema.safeParse(organism(" 75014 "));
+    expect(result.success && result.data.postalCode).toBe("75014");
+  });
+
+  it.each(["", "7501", "750144", "75O14", "7501a", "75 014", "+7501"])(
+    "rejects %j",
+    (postalCode) => {
+      expect(hostOrganismInputSchema.safeParse(organism(postalCode)).success).toBe(false);
+    },
+  );
+
+  it("explains the rule in French", () => {
+    const result = hostOrganismInputSchema.safeParse(organism("7501"));
+    expect(!result.success && result.error.issues[0]?.message).toBe(
+      "Le code postal doit contenir 5 chiffres",
+    );
   });
 });

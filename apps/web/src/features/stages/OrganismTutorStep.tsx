@@ -24,6 +24,7 @@ import {
   type TutorInput,
 } from "shared";
 import { PhoneField } from "../../components/PhoneField";
+import { PostalCodeField } from "../../components/PostalCodeField";
 import { useOrganism } from "../organisms/useOrganism";
 import { useOrganismSearch } from "../organisms/useOrganismSearch";
 import { useStructureTypes } from "../organisms/useStructureTypes";
@@ -39,10 +40,16 @@ function emptyToUndefined(value: string | null | undefined) {
   return value === "" ? undefined : value;
 }
 
+// Which inline-creation form is open, if any. Owned by the wizard (not this
+// step) so its "Précédent" button can close the form instead of being dead.
+export type CreationMode = "organism" | "tutor" | null;
+
 interface Props {
   organism: OrganismSelection | null;
   tutor: TutorSelection | null;
   onChange: (organism: OrganismSelection | null, tutor: TutorSelection | null) => void;
+  creating: CreationMode;
+  onCreatingChange: (creating: CreationMode) => void;
 }
 
 function OrganismCreationForm({ onCreated }: { onCreated: (data: HostOrganismInput) => void }) {
@@ -88,7 +95,7 @@ function OrganismCreationForm({ onCreated }: { onCreated: (data: HostOrganismInp
         helperText={errors.street?.message}
       />
       <Stack direction="row" spacing={2}>
-        <TextField
+        <PostalCodeField
           label="Code postal"
           {...register("postalCode")}
           error={!!errors.postalCode}
@@ -186,32 +193,38 @@ function TutorCreationForm({ onCreated }: { onCreated: (data: TutorInput) => voi
   );
 }
 
-export function OrganismTutorStep({ organism, tutor, onChange }: Props) {
+export function OrganismTutorStep({
+  organism,
+  tutor,
+  onChange,
+  creating,
+  onCreatingChange,
+}: Props) {
   const [searchText, setSearchText] = useState("");
-  const [creatingOrganism, setCreatingOrganism] = useState(false);
-  const [creatingTutor, setCreatingTutor] = useState(false);
+  const creatingOrganism = creating === "organism";
+  const creatingTutor = creating === "tutor";
 
   const search = useOrganismSearch(searchText);
   const existingOrganismId = organism?.mode === "existing" ? organism.id : null;
   const organismDetail = useOrganism(existingOrganismId);
 
   function selectExistingOrganism(item: OrganismSearchResultItem) {
-    setCreatingOrganism(false);
+    onCreatingChange(null);
     onChange({ mode: "existing", id: item.id }, null);
   }
 
   function createOrganism(data: HostOrganismInput) {
-    setCreatingOrganism(false);
+    onCreatingChange(null);
     onChange({ mode: "new", data }, null);
   }
 
   function selectExistingTutor(item: OrganismTutorSummary) {
-    setCreatingTutor(false);
+    onCreatingChange(null);
     onChange(organism, { mode: "existing", id: item.id });
   }
 
   function createTutor(data: TutorInput) {
-    setCreatingTutor(false);
+    onCreatingChange(null);
     onChange(organism, { mode: "new", data });
   }
 
@@ -243,7 +256,7 @@ export function OrganismTutorStep({ organism, tutor, onChange }: Props) {
             <Button
               variant="outlined"
               startIcon={<AddOutlined />}
-              onClick={() => setCreatingOrganism(true)}
+              onClick={() => onCreatingChange("organism")}
               sx={{ alignSelf: "flex-start" }}
             >
               Créer un nouvel Organisme
@@ -302,7 +315,7 @@ export function OrganismTutorStep({ organism, tutor, onChange }: Props) {
                 <Button
                   variant="outlined"
                   startIcon={<AddOutlined />}
-                  onClick={() => setCreatingTutor(true)}
+                  onClick={() => onCreatingChange("tutor")}
                   sx={{ alignSelf: "flex-start" }}
                 >
                   Créer un nouveau Tuteur

@@ -10,7 +10,13 @@ export const hostOrganismInputSchema = z.object({
   name: z.string().trim().min(1, "Le nom de l'organisme est requis"),
   structureType: z.string().trim().min(1, "Le type de structure est requis"),
   city: z.string().trim().min(1, "La ville est requise"),
-  postalCode: z.string().trim().min(1, "Le code postal est requis"),
+  // French postal codes are exactly five digits (leading zero included, so
+  // "01000" — never coerced to a number).
+  postalCode: z
+    .string()
+    .trim()
+    .min(1, "Le code postal est requis")
+    .regex(/^\d{5}$/, "Le code postal doit contenir 5 chiffres"),
   street: z.string().trim().min(1, "L'adresse est requise"),
 });
 
