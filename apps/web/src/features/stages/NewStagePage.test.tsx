@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "../../lib/api-client";
 import { setMatchMedia } from "../../test/setup";
 import { NewStagePage } from "./NewStagePage";
 
@@ -308,6 +309,29 @@ describe("NewStagePage", () => {
 
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/dashboard"));
   });
+
+  it.each([
+    ["organism", "Impossible de créer l'organisme. Le brouillon n'a pas été enregistré."],
+    ["tutor", "Impossible de créer le tuteur. Le brouillon n'a pas été enregistré."],
+  ])(
+    "keeps the student on the recap with the generic save error when the API can't create the new %s",
+    async (_entity, serverMessage) => {
+      const user = userEvent.setup();
+      createStageDraftMock.mockRejectedValue(new ApiError(500, serverMessage));
+      renderPage();
+
+      await resolveOrganismAndTutorInline(user);
+      await goToDetailsStep(user);
+      await chooseMandatoryAndSave(user);
+
+      expect(
+        await screen.findByText(/erreur est survenue lors de l'enregistrement/i),
+      ).toBeVisible();
+      expect(screen.queryByText(serverMessage)).toBeNull();
+      expect(navigateMock).not.toHaveBeenCalled();
+      expect(screen.getByRole("button", { name: /enregistrer le brouillon/i })).toBeEnabled();
+    },
+  );
 
   it("offers organism/tutor creation as buttons below the pickers, not as dropdown options", async () => {
     const user = userEvent.setup();

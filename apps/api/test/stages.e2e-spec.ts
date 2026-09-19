@@ -194,4 +194,50 @@ describe("Stages draft creation (e2e)", () => {
     const after = await prisma.hostOrganism.count();
     expect(after).toBe(before);
   });
+
+  // Postgres text columns reject the NUL character, but Zod happily accepts
+  // it, so it's a way to make the INSERT itself fail after validation passed.
+  it("POST /stages: 500 with a clear message and no stage when the new organism can't be inserted", async () => {
+    const accessToken = await signupAndGetAccessToken();
+    const stagesBefore = await prisma.stage.count();
+
+    const response = await request(app.getHttpServer())
+      .post("/stages")
+      .set("Cookie", authCookie(accessToken))
+      .send({
+        organism: { mode: "new", data: organismPayload({ name: "Fondation\u0000OVE" }) },
+        tutor: { mode: "new", data: tutorPayload() },
+        periods: [{ startDate: "2025-10-01", endDate: "2025-10-15" }],
+        mandatory: true,
+      })
+      .expect(500);
+
+    expect(response.body.message).toBe(
+      "Impossible de créer l'organisme. Le brouillon n'a pas été enregistré.",
+    );
+    expect(await prisma.stage.count()).toBe(stagesBefore);
+  });
+
+  it("POST /stages: 500 with a clear message, and the just-created organism rolled back, when the new tutor can't be inserted", async () => {
+    const accessToken = await signupAndGetAccessToken();
+    const organismName = `Rollback ${randomUUID()}`;
+    const stagesBefore = await prisma.stage.count();
+
+    const response = await request(app.getHttpServer())
+      .post("/stages")
+      .set("Cookie", authCookie(accessToken))
+      .send({
+        organism: { mode: "new", data: organismPayload({ name: organismName }) },
+        tutor: { mode: "new", data: tutorPayload({ firstName: "Marie\u0000" }) },
+        periods: [{ startDate: "2025-10-01", endDate: "2025-10-15" }],
+        mandatory: true,
+      })
+      .expect(500);
+
+    expect(response.body.message).toBe(
+      "Impossible de créer le tuteur. Le brouillon n'a pas été enregistré.",
+    );
+    expect(await prisma.stage.count()).toBe(stagesBefore);
+    expect(await prisma.hostOrganism.count({ where: { name: organismName } })).toBe(0);
+  });
 });

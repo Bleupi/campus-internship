@@ -1,4 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+} from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import {
   deriveSemester,
@@ -12,6 +18,8 @@ type Tx = Prisma.TransactionClient;
 
 @Injectable()
 export class StagesService {
+  private readonly logger = new Logger(StagesService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   // Issue #113: organism/tutor find-or-create + Stage/StagePeriod creation
@@ -71,8 +79,18 @@ export class StagesService {
       return found.id;
     }
 
-    const created = await tx.hostOrganism.create({ data: organism.data });
-    return created.id;
+    try {
+      const created = await tx.hostOrganism.create({ data: organism.data });
+      return created.id;
+    } catch (error) {
+      this.logger.error(
+        "Inline organism creation failed",
+        error instanceof Error ? error.stack : error,
+      );
+      throw new InternalServerErrorException(
+        "Impossible de créer l'organisme. Le brouillon n'a pas été enregistré.",
+      );
+    }
   }
 
   private async resolveTutor(
@@ -88,8 +106,18 @@ export class StagesService {
       return found.id;
     }
 
-    const created = await tx.tutor.create({ data: { ...tutor.data, organismId } });
-    return created.id;
+    try {
+      const created = await tx.tutor.create({ data: { ...tutor.data, organismId } });
+      return created.id;
+    } catch (error) {
+      this.logger.error(
+        "Inline tutor creation failed",
+        error instanceof Error ? error.stack : error,
+      );
+      throw new InternalServerErrorException(
+        "Impossible de créer le tuteur. Le brouillon n'a pas été enregistré.",
+      );
+    }
   }
 
   private toResponse(

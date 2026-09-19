@@ -1,4 +1,8 @@
-import { BadRequestException, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  InternalServerErrorException,
+  NotFoundException,
+} from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import type { CreateStageDraftRequest } from "shared";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -222,6 +226,61 @@ describe("StagesService", () => {
       expect(prisma.tutor.create).toHaveBeenCalledWith({
         data: { ...newTutorData, organismId: ORGANISM_ID },
       });
+    });
+  });
+
+  describe("inline creation failures (issue #113)", () => {
+    const newOrganism = {
+      name: "Fondation OVE",
+      structureType: "Association",
+      city: "Lyon",
+      postalCode: "69000",
+      street: "1 rue de la République",
+    };
+    const newTutor = {
+      firstName: "Karim",
+      lastName: "Belkacem",
+      email: "k.belkacem@example.org",
+      jobTitle: "Directeur",
+      acceptsPhoneContact: false,
+    };
+
+    it("reports a clear error and never creates the tutor or the stage when the new organism can't be created", async () => {
+      prisma.hostOrganism.create.mockRejectedValue(new Error("db down"));
+
+      const attempt = service.createDraft(
+        USER_ID,
+        basePayload({
+          organism: { mode: "new", data: newOrganism },
+          tutor: { mode: "new", data: newTutor },
+        }),
+      );
+
+      await expect(attempt).rejects.toBeInstanceOf(InternalServerErrorException);
+      await expect(attempt).rejects.toThrow(
+        "Impossible de créer l'organisme. Le brouillon n'a pas été enregistré.",
+      );
+      expect(prisma.tutor.create).not.toHaveBeenCalled();
+      expect(prisma.stage.create).not.toHaveBeenCalled();
+    });
+
+    it("reports a clear error and never creates the stage when the new tutor can't be created", async () => {
+      prisma.hostOrganism.create.mockResolvedValue(organismRow());
+      prisma.tutor.create.mockRejectedValue(new Error("db down"));
+
+      const attempt = service.createDraft(
+        USER_ID,
+        basePayload({
+          organism: { mode: "new", data: newOrganism },
+          tutor: { mode: "new", data: newTutor },
+        }),
+      );
+
+      await expect(attempt).rejects.toBeInstanceOf(InternalServerErrorException);
+      await expect(attempt).rejects.toThrow(
+        "Impossible de créer le tuteur. Le brouillon n'a pas été enregistré.",
+      );
+      expect(prisma.stage.create).not.toHaveBeenCalled();
     });
   });
 
