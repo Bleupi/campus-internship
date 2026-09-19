@@ -6,6 +6,7 @@ import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { cookieHeader, cookieMap, requireCookie } from "./helpers/cookies";
+import { E2E_ORGANISM_TAG, purgeE2eData, sweepStaleE2eData } from "./helpers/cleanup";
 
 function uniqueEmail(): string {
   return `e2e.stages.${randomUUID()}@etu.u-paris.fr`;
@@ -13,7 +14,7 @@ function uniqueEmail(): string {
 
 function organismPayload(overrides: Record<string, unknown> = {}) {
   return {
-    name: "Hôpital Cochin",
+    name: `Hôpital Cochin ${E2E_ORGANISM_TAG}`,
     structureType: "Secteur Sanitaire",
     city: "Paris",
     postalCode: "75014",
@@ -45,19 +46,14 @@ describe("Stages draft creation (e2e)", () => {
     app.use(cookieParser());
     await app.init();
     prisma = moduleRef.get(PrismaService);
+    await sweepStaleE2eData(prisma);
   });
 
   afterAll(async () => {
-    // Stage.studentId has no onDelete cascade (dataModel.md) — the stages
-    // this test suite created must go first, or deleting the user (which
-    // cascades to StudentProfile) violates that FK. Tutor.organismId has no
-    // cascade either, so it goes before the organism it belongs to.
-    await prisma.stage.deleteMany({
-      where: { student: { user: { email: { in: createdUserEmails } } } },
+    await purgeE2eData(prisma, {
+      userEmails: createdUserEmails,
+      organismIds: createdOrganismIds,
     });
-    await prisma.tutor.deleteMany({ where: { organismId: { in: createdOrganismIds } } });
-    await prisma.hostOrganism.deleteMany({ where: { id: { in: createdOrganismIds } } });
-    await prisma.user.deleteMany({ where: { email: { in: createdUserEmails } } });
     await app.close();
   });
 
@@ -154,7 +150,10 @@ describe("Stages draft creation (e2e)", () => {
       .post("/stages")
       .set("Cookie", authCookie(accessToken))
       .send({
-        organism: { mode: "new", data: organismPayload({ name: "Fondation OVE" }) },
+        organism: {
+          mode: "new",
+          data: organismPayload({ name: `Fondation OVE ${E2E_ORGANISM_TAG}` }),
+        },
         tutor: { mode: "new", data: tutorPayload({ email: "k.belkacem@example.org" }) },
         periods: [{ startDate: "2025-10-01", endDate: "2025-10-15" }],
         mandatory: false,
@@ -162,7 +161,7 @@ describe("Stages draft creation (e2e)", () => {
       .expect(201);
     createdOrganismIds.push(response.body.organism.id);
 
-    expect(response.body.organism.name).toBe("Fondation OVE");
+    expect(response.body.organism.name).toBe(`Fondation OVE ${E2E_ORGANISM_TAG}`);
     expect(response.body.tutor.email).toBe("k.belkacem@example.org");
 
     const organismRow = await prisma.hostOrganism.findUnique({
@@ -175,13 +174,13 @@ describe("Stages draft creation (e2e)", () => {
     const accessToken = await signupAndGetAccessToken();
     const { tutor: unrelatedTutor } = await seedOrganismWithTutor();
 
-    const before = await prisma.hostOrganism.count();
+    const organismName = `Institut Le Val Mandé ${randomUUID()} ${E2E_ORGANISM_TAG}`;
 
     await request(app.getHttpServer())
       .post("/stages")
       .set("Cookie", authCookie(accessToken))
       .send({
-        organism: { mode: "new", data: organismPayload({ name: "Institut Le Val Mandé" }) },
+        organism: { mode: "new", data: organismPayload({ name: organismName }) },
         // This tutor belongs to a DIFFERENT organism than the one just
         // created inline above — resolveTutor rejects it, rolling back the
         // whole transaction, including the just-created organism.
@@ -191,8 +190,7 @@ describe("Stages draft creation (e2e)", () => {
       })
       .expect(400);
 
-    const after = await prisma.hostOrganism.count();
-    expect(after).toBe(before);
+    expect(await prisma.hostOrganism.count({ where: { name: organismName } })).toBe(0);
   });
 
   // Postgres text columns reject the NUL character, but Zod happily accepts
@@ -205,7 +203,10 @@ describe("Stages draft creation (e2e)", () => {
       .post("/stages")
       .set("Cookie", authCookie(accessToken))
       .send({
-        organism: { mode: "new", data: organismPayload({ name: "Fondation\u0000OVE" }) },
+        organism: {
+          mode: "new",
+          data: organismPayload({ name: `Fondation\u0000OVE ${E2E_ORGANISM_TAG}` }),
+        },
         tutor: { mode: "new", data: tutorPayload() },
         periods: [{ startDate: "2025-10-01", endDate: "2025-10-15" }],
         mandatory: true,
@@ -220,7 +221,7 @@ describe("Stages draft creation (e2e)", () => {
 
   it("POST /stages: 500 with a clear message, and the just-created organism rolled back, when the new tutor can't be inserted", async () => {
     const accessToken = await signupAndGetAccessToken();
-    const organismName = `Rollback ${randomUUID()}`;
+    const organismName = `Rollback ${randomUUID()} ${E2E_ORGANISM_TAG}`;
     const stagesBefore = await prisma.stage.count();
 
     const response = await request(app.getHttpServer())

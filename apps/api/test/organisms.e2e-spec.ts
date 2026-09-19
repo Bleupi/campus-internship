@@ -6,6 +6,7 @@ import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { cookieHeader, cookieMap, requireCookie } from "./helpers/cookies";
+import { E2E_ORGANISM_TAG, purgeE2eData, sweepStaleE2eData } from "./helpers/cleanup";
 
 function uniqueEmail(): string {
   return `e2e.organisms.${randomUUID()}@etu.u-paris.fr`;
@@ -23,11 +24,14 @@ describe("Organisms search/detail (e2e)", () => {
     app.use(cookieParser());
     await app.init();
     prisma = moduleRef.get(PrismaService);
+    await sweepStaleE2eData(prisma);
   });
 
   afterAll(async () => {
-    await prisma.hostOrganism.deleteMany({ where: { id: { in: createdOrganismIds } } });
-    await prisma.user.deleteMany({ where: { email: { in: createdUserEmails } } });
+    await purgeE2eData(prisma, {
+      userEmails: createdUserEmails,
+      organismIds: createdOrganismIds,
+    });
     await app.close();
   });
 
@@ -58,7 +62,7 @@ describe("Organisms search/detail (e2e)", () => {
     const accessToken = await signupAndGetAccessToken();
     const organism = await prisma.hostOrganism.create({
       data: {
-        name: `Hôpital Écoblanc ${randomUUID()}`,
+        name: `Hôpital Écoblanc ${randomUUID()} ${E2E_ORGANISM_TAG}`,
         structureType: "Secteur Sanitaire",
         city: "Paris",
         postalCode: "75014",
@@ -92,7 +96,7 @@ describe("Organisms search/detail (e2e)", () => {
     const accessToken = await signupAndGetAccessToken();
     const organism = await prisma.hostOrganism.create({
       data: {
-        name: "Fondation OVE",
+        name: `Fondation OVE ${E2E_ORGANISM_TAG}`,
         structureType: "Secteur Associatif",
         city: "Lyon",
         postalCode: "69000",
