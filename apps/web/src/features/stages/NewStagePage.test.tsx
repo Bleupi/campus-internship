@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { setMatchMedia } from "../../test/setup";
 import { NewStagePage } from "./NewStagePage";
 
 const navigateMock = vi.fn();
@@ -72,6 +73,13 @@ async function resolveOrganismAndTutorInline(user: ReturnType<typeof userEvent.s
   await fillNewTutorForm(user);
 }
 
+// The recap renders each entry as a <dt> label paired with a <dd> value, so a
+// label can never be mistaken for what the student typed (QA feedback, PR #135).
+function expectRecapField(label: string, value: string) {
+  const term = screen.getByText(label, { selector: "dt" });
+  expect(term.nextElementSibling).toHaveTextContent(value);
+}
+
 describe("NewStagePage", () => {
   beforeEach(() => {
     searchOrganismsMock.mockReset().mockResolvedValue([]);
@@ -83,6 +91,7 @@ describe("NewStagePage", () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    setMatchMedia(false);
   });
 
   it("finds and selects an existing organism, prefilling structureType/address read-only", async () => {
@@ -134,6 +143,25 @@ describe("NewStagePage", () => {
 
     expect(await screen.findByText(/au moins une période est requise/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /suivant/i })).toBeDisabled();
+  });
+
+  it("shows the period alerts above the list of periods, not below it", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await resolveOrganismAndTutorInline(user);
+    await user.click(screen.getByRole("button", { name: /suivant/i }));
+    const emptyAlert = await screen.findByText(/au moins une période est requise/i);
+    const addButton = screen.getByRole("button", { name: /ajouter une période/i });
+    expect(emptyAlert.compareDocumentPosition(addButton)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+
+    await user.click(addButton);
+    const [startInput, endInput] = screen.getAllByLabelText(/début|fin/i);
+    await user.type(startInput!, "2025-10-15");
+    await user.type(endInput!, "2025-10-01");
+
+    const errorAlert = await screen.findByRole("alert");
+    expect(errorAlert.compareDocumentPosition(startInput!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   it("shows the derived-semester preview and enables Suivant for a valid single period", async () => {
@@ -243,6 +271,33 @@ describe("NewStagePage", () => {
     expect(payload.tutor).toMatchObject({ data: { acceptsPhoneContact: true } });
   });
 
+  it("only allows digits and '+' in the new tutor's phone field", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await pickCreateNewOrganism(user);
+    await fillNewOrganismForm(user);
+    await user.click(await screen.findByRole("button", { name: /créer un nouveau tuteur/i }));
+
+    const phoneInput = screen.getByLabelText(/^téléphone/i);
+    await user.type(phoneInput, "06 12a34-56b78");
+
+    expect(phoneInput).toHaveValue("0612345678");
+  });
+
+  it("shows only a compact step indicator on mobile, and the full stepper on desktop", async () => {
+    setMatchMedia(true);
+    const mobile = renderPage();
+    expect(screen.getByText(/étape 1 sur 4/i)).toBeInTheDocument();
+    expect(screen.queryByText("Récapitulatif")).toBeNull();
+    mobile.unmount();
+
+    setMatchMedia(false);
+    renderPage();
+    expect(screen.queryByText(/étape 1 sur 4/i)).toBeNull();
+    expect(screen.getByText("Récapitulatif")).toBeInTheDocument();
+  });
+
   it("shows every field entered in the previous steps on the recap", async () => {
     const user = userEvent.setup();
     renderPage();
@@ -261,12 +316,31 @@ describe("NewStagePage", () => {
     await user.click(screen.getByLabelText(/^oui$/i));
     await user.click(screen.getByRole("button", { name: /suivant/i }));
 
-    expect(screen.getByText(/Fondation OVE/i)).toBeInTheDocument();
-    expect(screen.getByText(/Karim Belkacem \(Directeur, nouveau tuteur\)/i)).toBeInTheDocument();
+    expect(screen.getByText("Fondation OVE")).toBeInTheDocument();
+    expect(screen.getByText("Karim Belkacem (Directeur)")).toBeInTheDocument();
     expect(screen.getByText(/2025-10-01.*2025-10-15/)).toBeInTheDocument();
-    expect(screen.getByText(/Service : Service RH/i)).toBeInTheDocument();
-    expect(screen.getByText(/Type de handicap concerné : Moteur/i)).toBeInTheDocument();
-    expect(screen.getByText(/Motivation : Découvrir le secteur associatif/i)).toBeInTheDocument();
-    expect(screen.getByText(/Stage obligatoire/i)).toBeInTheDocument();
+    expectRecapField("Service", "Service RH");
+    expectRecapField("Type de handicap concerné", "Moteur");
+    expectRecapField("Motivation", "Découvrir le secteur associatif");
+    expectRecapField("Stage obligatoire", "Oui");
+  });
+
+  it("does not tell the student on the recap that the organism and tutor are new", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await resolveOrganismAndTutorInline(user);
+    await user.click(screen.getByRole("button", { name: /suivant/i }));
+    await user.click(screen.getByRole("button", { name: /ajouter une période/i }));
+    const [startInput, endInput] = screen.getAllByLabelText(/début|fin/i);
+    await user.type(startInput!, "2025-10-01");
+    await user.type(endInput!, "2025-10-15");
+    await user.click(screen.getByRole("button", { name: /suivant/i }));
+    await user.click(screen.getByLabelText(/^non$/i));
+    await user.click(screen.getByRole("button", { name: /suivant/i }));
+
+    expect(screen.queryByText(/nouvel organisme/i)).toBeNull();
+    expect(screen.queryByText(/nouveau tuteur/i)).toBeNull();
+    expectRecapField("Stage obligatoire", "Non");
   });
 });

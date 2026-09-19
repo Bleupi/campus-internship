@@ -32,6 +32,7 @@ import {
   uploadIdPhoto as uploadIdPhotoRequest,
   uploadInsuranceCertificate as uploadInsuranceCertificateRequest,
 } from "./api";
+import { PhoneField } from "../../components/PhoneField";
 import { useProfile } from "./useProfile";
 import { useUpdateProfile } from "./useUpdateProfile";
 import { useUploadFile } from "./useUploadFile";
@@ -117,13 +118,9 @@ function IdentityContactSection({
                 <option value="L2">L2</option>
                 <option value="L3">L3</option>
               </TextField>
-              <TextField
+              <PhoneField
                 label="Téléphone"
                 {...phoneField}
-                onChange={(event) => {
-                  event.target.value = event.target.value.replace(/[^\d+]/g, "");
-                  phoneField.onChange(event);
-                }}
                 error={!!errors.phone}
                 helperText={errors.phone?.message}
               />

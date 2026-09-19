@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setMatchMedia } from "../test/setup";
 import { AppShell } from "./AppShell";
 
+vi.mock("../lib/feature-flags", () => ({ isStageManagementEnabled: true }));
+
 const navigateMock = vi.fn();
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
@@ -61,6 +63,13 @@ describe("AppShell", () => {
     expect(screen.getByRole("link", { name: /tableau de bord/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /profil/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /déconnexion/i })).toBeInTheDocument();
+  });
+
+  it("does not list 'Nouvelle demande' in the menu, even for a student with stage management on (it lives on the dashboard)", async () => {
+    renderShell("/dashboard");
+
+    await waitFor(() => expect(getMeMock).toHaveBeenCalled());
+    expect(screen.queryByRole("link", { name: /nouvelle demande/i })).toBeNull();
   });
 
   it("renders the active route's page content via the outlet", () => {

@@ -8,6 +8,7 @@ import { LoginPage } from "./features/auth/LoginPage";
 import { ResetPasswordPage } from "./features/auth/ResetPasswordPage";
 import { SignupPage } from "./features/auth/SignupPage";
 import { useCurrentUser } from "./features/auth/useCurrentUser";
+import { DashboardPage } from "./features/dashboard/DashboardPage";
 import { NewStagePage } from "./features/stages/NewStagePage";
 import { useProfile } from "./features/students/useProfile";
 import { isStageManagementEnabled } from "./lib/feature-flags";
@@ -62,12 +63,6 @@ function RequireAdmin() {
     return <Navigate to={ROUTES.DASHBOARD} replace />;
   }
   return <Outlet />;
-}
-
-// Not a real feature — just an unblocking placeholder until the real
-// dashboard screen (issue #11) exists.
-function DashboardPage() {
-  return <Typography sx={{ mt: 8, textAlign: "center" }}>Tableau de bord (à venir)</Typography>;
 }
 
 export function App() {

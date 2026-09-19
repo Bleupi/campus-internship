@@ -23,6 +23,7 @@ import {
   type OrganismTutorSummary,
   type TutorInput,
 } from "shared";
+import { PhoneField } from "../../components/PhoneField";
 import { useOrganism } from "../organisms/useOrganism";
 import { useOrganismSearch } from "../organisms/useOrganismSearch";
 import { useStructureTypes } from "../organisms/useStructureTypes";
@@ -160,7 +161,7 @@ function TutorCreationForm({ onCreated }: { onCreated: (data: TutorInput) => voi
         error={!!errors.jobTitle}
         helperText={errors.jobTitle?.message}
       />
-      <TextField
+      <PhoneField
         label="Téléphone (facultatif)"
         {...register("phone")}
         error={!!errors.phone}

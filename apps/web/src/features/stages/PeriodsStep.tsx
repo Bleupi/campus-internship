@@ -44,12 +44,31 @@ export function PeriodsStep({ periods, onChange }: Props) {
           </Typography>
         )}
       </Stack>
+
+      {periods.length === 0 && (
+        <Alert severity="warning" variant="outlined">
+          Au moins une période est requise.
+        </Alert>
+      )}
+      {showValidation && !result.success && (
+        <Alert severity="error" variant="outlined">
+          {result.error.issues[0]?.message ?? "Périodes invalides"}
+        </Alert>
+      )}
+
       {periods.map((period) => (
-        <Stack key={period.id} direction="row" spacing={1} sx={{ alignItems: "center" }}>
+        <Stack
+          key={period.id}
+          direction="row"
+          useFlexGap
+          spacing={1}
+          sx={{ alignItems: "center", flexWrap: "wrap" }}
+        >
           <TextField
             label="Début"
             type="date"
             size="small"
+            sx={{ flex: "1 1 140px" }}
             value={period.startDate}
             slotProps={{ inputLabel: { shrink: true } }}
             onChange={(e) => updatePeriod(period.id, { startDate: e.target.value })}
@@ -58,6 +77,7 @@ export function PeriodsStep({ periods, onChange }: Props) {
             label="Fin (exclue à 00:00)"
             type="date"
             size="small"
+            sx={{ flex: "1 1 140px" }}
             value={period.endDate}
             slotProps={{ inputLabel: { shrink: true } }}
             onChange={(e) => updatePeriod(period.id, { endDate: e.target.value })}
@@ -79,17 +99,6 @@ export function PeriodsStep({ periods, onChange }: Props) {
       >
         Ajouter une période
       </Button>
-
-      {periods.length === 0 && (
-        <Alert severity="warning" variant="outlined">
-          Au moins une période est requise.
-        </Alert>
-      )}
-      {showValidation && !result.success && (
-        <Alert severity="error" variant="outlined">
-          {result.error.issues[0]?.message ?? "Périodes invalides"}
-        </Alert>
-      )}
     </Stack>
   );
 }

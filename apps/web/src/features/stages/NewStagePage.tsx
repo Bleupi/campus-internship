@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Alert,
   Box,
   Button,
-  Divider,
   FormControlLabel,
+  LinearProgress,
   Radio,
   RadioGroup,
   Stack,
@@ -14,14 +13,16 @@ import {
   Stepper,
   TextField,
   Typography,
+  useMediaQuery,
 } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 import type { CreateStageDraftInput } from "shared";
 import { ApiError } from "../../lib/api-client";
 import { ROUTES } from "../../routes";
 import { useOrganism } from "../organisms/useOrganism";
-import { formatOrganismAddress, formatTutorContact } from "./format-summary";
 import { OrganismTutorStep } from "./OrganismTutorStep";
 import { PeriodsStep, type RawPeriod } from "./PeriodsStep";
+import { RecapStep } from "./RecapStep";
 import { useCreateStageDraft } from "./useCreateStageDraft";
 import { validatePeriods } from "./validate-periods";
 
@@ -32,6 +33,8 @@ const STEPS = ["Organisme & tuteur", "Périodes", "Détails", "Récapitulatif"];
 
 export function NewStagePage() {
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const createDraft = useCreateStageDraft();
 
   const [step, setStep] = useState(0);
@@ -60,6 +63,12 @@ export function NewStagePage() {
     true,
   ][step]!;
 
+  const draftErrorMessage = !createDraft.isError
+    ? null
+    : createDraft.error instanceof ApiError
+      ? "Une erreur est survenue lors de l'enregistrement du brouillon."
+      : "Une erreur inattendue est survenue.";
+
   function handleSubmit() {
     if (!periodsResult.success || organism === null || tutor === null || mandatory === null) {
       return;
@@ -81,17 +90,28 @@ export function NewStagePage() {
   }
 
   return (
-    <Box sx={{ maxWidth: 560 }}>
+    <Box sx={{ maxWidth: 560, minWidth: 0 }}>
       <Typography variant="h5" sx={{ mb: 3 }}>
         Nouvelle demande de stage
       </Typography>
-      <Stepper activeStep={step} sx={{ mb: 4 }}>
-        {STEPS.map((label) => (
-          <Step key={label}>
-            <StepLabel>{label}</StepLabel>
-          </Step>
-        ))}
-      </Stepper>
+      {isMobile ? (
+        // Four labelled steps side by side don't fit a phone's width and
+        // push the whole page into horizontal scroll — show progress instead.
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            Étape {step + 1} sur {STEPS.length} : {STEPS[step]}
+          </Typography>
+          <LinearProgress variant="determinate" value={((step + 1) / STEPS.length) * 100} />
+        </Box>
+      ) : (
+        <Stepper activeStep={step} sx={{ mb: 4 }}>
+          {STEPS.map((label) => (
+            <Step key={label}>
+              <StepLabel>{label}</StepLabel>
+            </Step>
+          ))}
+        </Stepper>
+      )}
 
       {step === 0 && (
         <OrganismTutorStep
@@ -134,85 +154,18 @@ export function NewStagePage() {
         </Stack>
       )}
 
-      {step === 3 &&
-        periodsResult.success &&
-        organism !== null &&
-        tutor !== null &&
-        mandatory !== null && (
-          <Stack spacing={1.5} sx={{ maxWidth: 480 }}>
-            <Typography variant="subtitle1">Récapitulatif</Typography>
-
-            <Typography variant="subtitle2">Organisme & tuteur</Typography>
-            {organism.mode === "existing" ? (
-              organismDetail.data && (
-                <>
-                  <Typography variant="body2">{organismDetail.data.name}</Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {formatOrganismAddress(organismDetail.data)}
-                  </Typography>
-                </>
-              )
-            ) : (
-              <>
-                <Typography variant="body2">{organism.data.name} (nouvel organisme)</Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {formatOrganismAddress(organism.data)}
-                </Typography>
-              </>
-            )}
-            {tutor.mode === "existing" ? (
-              existingTutor && (
-                <>
-                  <Typography variant="body2">
-                    {existingTutor.firstName} {existingTutor.lastName} ({existingTutor.jobTitle})
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {formatTutorContact(existingTutor)}
-                  </Typography>
-                </>
-              )
-            ) : (
-              <>
-                <Typography variant="body2">
-                  {tutor.data.firstName} {tutor.data.lastName} ({tutor.data.jobTitle}, nouveau
-                  tuteur)
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {formatTutorContact(tutor.data)}
-                </Typography>
-              </>
-            )}
-
-            <Divider />
-            <Typography variant="subtitle2">Périodes</Typography>
-            {periods.map((p) => (
-              <Typography variant="body2" key={p.id}>
-                {p.startDate} → {p.endDate}
-              </Typography>
-            ))}
-
-            <Divider />
-            <Typography variant="subtitle2">Détails</Typography>
-            <Typography variant="body2">Service : {service.trim() || "Non renseigné"}</Typography>
-            <Typography variant="body2">
-              Type de handicap concerné : {projectType.trim() || "Non renseigné"}
-            </Typography>
-            <Typography variant="body2">
-              Motivation : {motivation.trim() || "Non renseignée"}
-            </Typography>
-            <Typography variant="body2">
-              {mandatory ? "Stage obligatoire" : "Stage optionnel"}
-            </Typography>
-
-            {createDraft.isError && (
-              <Alert severity="error">
-                {createDraft.error instanceof ApiError
-                  ? "Une erreur est survenue lors de l'enregistrement du brouillon."
-                  : "Une erreur inattendue est survenue."}
-              </Alert>
-            )}
-          </Stack>
-        )}
+      {step === 3 && periodsResult.success && mandatory !== null && (
+        <RecapStep
+          organism={organism?.mode === "new" ? organism.data : organismDetail.data}
+          tutor={tutor?.mode === "new" ? tutor.data : existingTutor}
+          periods={periods}
+          service={service}
+          projectType={projectType}
+          motivation={motivation}
+          mandatory={mandatory}
+          errorMessage={draftErrorMessage}
+        />
+      )}
 
       <Stack direction="row" spacing={1} sx={{ mt: 4 }}>
         <Button disabled={step === 0} onClick={() => setStep((s) => s - 1)}>
