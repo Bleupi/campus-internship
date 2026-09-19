@@ -6,7 +6,7 @@ import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { cookieHeader, cookieMap, requireCookie } from "./helpers/cookies";
-import { E2E_ORGANISM_TAG, purgeE2eData, sweepStaleE2eData } from "./helpers/cleanup";
+import { purgeE2eData } from "./helpers/cleanup";
 
 function uniqueEmail(): string {
   return `e2e.organisms.${randomUUID()}@etu.u-paris.fr`;
@@ -24,7 +24,6 @@ describe("Organisms search/detail (e2e)", () => {
     app.use(cookieParser());
     await app.init();
     prisma = moduleRef.get(PrismaService);
-    await sweepStaleE2eData(prisma);
   });
 
   afterAll(async () => {
@@ -62,7 +61,7 @@ describe("Organisms search/detail (e2e)", () => {
     const accessToken = await signupAndGetAccessToken();
     const organism = await prisma.hostOrganism.create({
       data: {
-        name: `Hôpital Écoblanc ${randomUUID()} ${E2E_ORGANISM_TAG}`,
+        name: `Hôpital Écoblanc ${randomUUID()}`,
         structureType: "Secteur Sanitaire",
         city: "Paris",
         postalCode: "75014",
@@ -96,7 +95,7 @@ describe("Organisms search/detail (e2e)", () => {
     const accessToken = await signupAndGetAccessToken();
     const organism = await prisma.hostOrganism.create({
       data: {
-        name: `Fondation OVE ${E2E_ORGANISM_TAG}`,
+        name: "Fondation OVE",
         structureType: "Secteur Associatif",
         city: "Lyon",
         postalCode: "69000",

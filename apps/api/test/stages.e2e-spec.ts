@@ -6,7 +6,7 @@ import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { cookieHeader, cookieMap, requireCookie } from "./helpers/cookies";
-import { E2E_ORGANISM_TAG, purgeE2eData, sweepStaleE2eData } from "./helpers/cleanup";
+import { purgeE2eData } from "./helpers/cleanup";
 
 function uniqueEmail(): string {
   return `e2e.stages.${randomUUID()}@etu.u-paris.fr`;
@@ -14,7 +14,7 @@ function uniqueEmail(): string {
 
 function organismPayload(overrides: Record<string, unknown> = {}) {
   return {
-    name: `Hôpital Cochin ${E2E_ORGANISM_TAG}`,
+    name: "Hôpital Cochin",
     structureType: "Secteur Sanitaire",
     city: "Paris",
     postalCode: "75014",
@@ -46,7 +46,6 @@ describe("Stages draft creation (e2e)", () => {
     app.use(cookieParser());
     await app.init();
     prisma = moduleRef.get(PrismaService);
-    await sweepStaleE2eData(prisma);
   });
 
   afterAll(async () => {
@@ -152,7 +151,7 @@ describe("Stages draft creation (e2e)", () => {
       .send({
         organism: {
           mode: "new",
-          data: organismPayload({ name: `Fondation OVE ${E2E_ORGANISM_TAG}` }),
+          data: organismPayload({ name: "Fondation OVE" }),
         },
         tutor: { mode: "new", data: tutorPayload({ email: "k.belkacem@example.org" }) },
         periods: [{ startDate: "2025-10-01", endDate: "2025-10-15" }],
@@ -161,7 +160,7 @@ describe("Stages draft creation (e2e)", () => {
       .expect(201);
     createdOrganismIds.push(response.body.organism.id);
 
-    expect(response.body.organism.name).toBe(`Fondation OVE ${E2E_ORGANISM_TAG}`);
+    expect(response.body.organism.name).toBe("Fondation OVE");
     expect(response.body.tutor.email).toBe("k.belkacem@example.org");
 
     const organismRow = await prisma.hostOrganism.findUnique({
@@ -174,7 +173,7 @@ describe("Stages draft creation (e2e)", () => {
     const accessToken = await signupAndGetAccessToken();
     const { tutor: unrelatedTutor } = await seedOrganismWithTutor();
 
-    const organismName = `Institut Le Val Mandé ${randomUUID()} ${E2E_ORGANISM_TAG}`;
+    const organismName = `Institut Le Val Mandé ${randomUUID()}`;
 
     await request(app.getHttpServer())
       .post("/stages")
@@ -205,7 +204,7 @@ describe("Stages draft creation (e2e)", () => {
       .send({
         organism: {
           mode: "new",
-          data: organismPayload({ name: `Fondation\u0000OVE ${E2E_ORGANISM_TAG}` }),
+          data: organismPayload({ name: "Fondation\u0000OVE" }),
         },
         tutor: { mode: "new", data: tutorPayload() },
         periods: [{ startDate: "2025-10-01", endDate: "2025-10-15" }],
@@ -221,7 +220,7 @@ describe("Stages draft creation (e2e)", () => {
 
   it("POST /stages: 500 with a clear message, and the just-created organism rolled back, when the new tutor can't be inserted", async () => {
     const accessToken = await signupAndGetAccessToken();
-    const organismName = `Rollback ${randomUUID()} ${E2E_ORGANISM_TAG}`;
+    const organismName = `Rollback ${randomUUID()}`;
     const stagesBefore = await prisma.stage.count();
 
     const response = await request(app.getHttpServer())
