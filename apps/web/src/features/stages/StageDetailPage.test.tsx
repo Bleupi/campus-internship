@@ -103,6 +103,21 @@ describe("StageDetailPage (issue #114)", () => {
     expect(screen.queryByText("non assigné")).not.toBeInTheDocument();
   });
 
+  it("shows the submission date once the request has been submitted, and none for a draft", async () => {
+    getStageMock.mockResolvedValue(
+      stageDetail({ status: "PENDING", submittedAt: "2025-09-01T08:00:00.000Z" }),
+    );
+    const { unmount } = renderPage();
+    expect(await screen.findByText("01/09/2025")).toBeInTheDocument();
+    expect(screen.getByText("Date de soumission")).toBeInTheDocument();
+    unmount();
+
+    getStageMock.mockResolvedValue(stageDetail({ submittedAt: null }));
+    renderPage();
+    await screen.findByText("Hôpital Cochin");
+    expect(screen.queryByText("Date de soumission")).not.toBeInTheDocument();
+  });
+
   it("shows the refusal reason prominently for a REFUSED stage", async () => {
     getStageMock.mockResolvedValue(
       stageDetail({ status: "REFUSED", refusalReason: "Période hors année scolaire." }),

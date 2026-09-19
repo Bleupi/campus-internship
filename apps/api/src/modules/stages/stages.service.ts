@@ -139,21 +139,31 @@ export class StagesService {
     };
   }
 
-  // Upcoming stages first (nearest start first), then past ones (most recent
-  // first): "nearest upcoming" is what a student cares about, but a plain
-  // ascending sort would bury it under last year's stages.
+  // Upcoming stages first (nearest upcoming start first), then past ones (most
+  // recent first): "nearest upcoming" is what a student cares about, but a
+  // plain ascending sort would bury it under last year's stages. A stage is
+  // upcoming as long as any of its periods still starts ahead, and is keyed on
+  // that nearest one. Periods are stored as UTC midnight, so "today" is
+  // measured from the start of the UTC day: a stage starting today is not past.
   private sortByNearestStart(items: StageListItemResponse[]): StageListItemResponse[] {
-    const now = Date.now();
-    const earliestStart = (item: StageListItemResponse) =>
-      Math.min(...item.periods.map((period) => Date.parse(period.startDate)));
+    const now = new Date();
+    const startOfToday = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
 
-    return items
-      .map((item) => ({ item, start: earliestStart(item) }))
+    const keyed = items.map((item) => {
+      const starts = item.periods.map((period) => Date.parse(period.startDate));
+      const upcoming = starts.filter((start) => start >= startOfToday);
+      return upcoming.length > 0
+        ? { item, isUpcoming: true, start: Math.min(...upcoming) }
+        : // A stage with no periods (not creatable today) has no start at all
+          // and sinks below every real one.
+          { item, isUpcoming: false, start: starts.length > 0 ? Math.max(...starts) : -Infinity };
+    });
+
+    return keyed
       .sort((a, b) => {
-        const aUpcoming = a.start >= now;
-        const bUpcoming = b.start >= now;
-        if (aUpcoming !== bUpcoming) return aUpcoming ? -1 : 1;
-        return aUpcoming ? a.start - b.start : b.start - a.start;
+        if (a.isUpcoming !== b.isUpcoming) return a.isUpcoming ? -1 : 1;
+        if (a.start === b.start) return 0;
+        return a.isUpcoming ? a.start - b.start : b.start - a.start;
       })
       .map(({ item }) => item);
   }

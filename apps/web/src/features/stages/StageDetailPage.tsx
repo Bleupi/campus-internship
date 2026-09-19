@@ -3,7 +3,12 @@ import ArrowBackOutlinedIcon from "@mui/icons-material/ArrowBackOutlined";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { ApiError } from "../../lib/api-client";
 import { ROUTES } from "../../routes";
-import { formatOrganismAddress, formatPeriodRange, formatTutorContact } from "./format-summary";
+import {
+  formatDate,
+  formatOrganismAddress,
+  formatPeriodRange,
+  formatTutorContact,
+} from "./format-summary";
 import { SEMESTER_LABELS, formatStageKind } from "./stage-labels";
 import { StageStatusChip } from "./StageStatusChip";
 import { RecapField, RecapSection, SecondaryLine } from "./StageSummaryParts";
@@ -78,6 +83,9 @@ export function StageDetailPage() {
             <RecapField label="Année scolaire">{stage.schoolYear}</RecapField>
             <RecapField label="Semestre">{SEMESTER_LABELS[stage.semester]}</RecapField>
             <RecapField label="Type de stage">{formatStageKind(stage.mandatory)}</RecapField>
+            {stage.submittedAt && (
+              <RecapField label="Date de soumission">{formatDate(stage.submittedAt)}</RecapField>
+            )}
             <RecapField label="Service">{stage.service?.trim() || "Non renseigné"}</RecapField>
             <RecapField label="Type de handicap concerné">
               {stage.projectType?.trim() || "Non renseigné"}

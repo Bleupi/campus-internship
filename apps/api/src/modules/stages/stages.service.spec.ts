@@ -403,6 +403,51 @@ describe("StagesService", () => {
       expect(result.map((s) => s.id)).toEqual(["multi", "single"]);
     });
 
+    it("classes a stage as upcoming when any of its periods is still ahead, keyed on that nearest upcoming start", async () => {
+      prisma.stage.findMany.mockResolvedValue([
+        listRow("upcoming-later", { periods: [periodRow("a", "2025-11-20", "2025-11-25")] }),
+        listRow("first-period-passed", {
+          periods: [
+            periodRow("b1", "2025-06-01", "2025-06-10"),
+            periodRow("b2", "2025-10-05", "2025-10-10"),
+          ],
+        }),
+        listRow("fully-past", { periods: [periodRow("c", "2025-03-01", "2025-03-10")] }),
+      ]);
+
+      const result = await service.list(USER_ID, { sort: "startDate" });
+
+      expect(result.map((s) => s.id)).toEqual([
+        "first-period-passed",
+        "upcoming-later",
+        "fully-past",
+      ]);
+    });
+
+    it("treats a stage starting today (stored as UTC midnight) as upcoming, not past", async () => {
+      prisma.stage.findMany.mockResolvedValue([
+        listRow("past", { periods: [periodRow("a", "2025-09-01", "2025-09-10")] }),
+        listRow("later", { periods: [periodRow("c", "2025-10-01", "2025-10-05")] }),
+        listRow("today", { periods: [periodRow("b", "2025-09-19", "2025-09-30")] }),
+      ]);
+
+      const result = await service.list(USER_ID, { sort: "startDate" });
+
+      expect(result.map((s) => s.id)).toEqual(["today", "later", "past"]);
+    });
+
+    it("does not break the sort on a stage with no periods: it goes last", async () => {
+      prisma.stage.findMany.mockResolvedValue([
+        listRow("empty", { periods: [] }),
+        listRow("upcoming", { periods: [periodRow("a", "2025-10-01", "2025-10-05")] }),
+        listRow("past", { periods: [periodRow("b", "2025-01-01", "2025-01-05")] }),
+      ]);
+
+      const result = await service.list(USER_ID, { sort: "startDate" });
+
+      expect(result.map((s) => s.id)).toEqual(["upcoming", "past", "empty"]);
+    });
+
     it("sorts by submission date via the database, never-submitted drafts last", async () => {
       prisma.stage.findMany.mockResolvedValue([listRow("a")]);
 
