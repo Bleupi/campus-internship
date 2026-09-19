@@ -26,9 +26,12 @@ async function bootstrap() {
 
   const port = configService.get("API_PORT", { infer: true });
   await app.listen(port);
-  // getUrl() reports the address the server actually bound to, not just the
-  // configured API_PORT — the one to trust when the web app can't reach us.
-  logger.log(`API listening on ${await app.getUrl()} (port ${port})`);
+  // Read the port off the socket rather than trusting API_PORT alone. The URL
+  // is built with "localhost": Nest's getUrl() would print "[::1]" here, since
+  // listen(port) binds the IPv6 wildcard, which is accurate but unhelpful.
+  const address = app.getHttpServer().address();
+  const boundPort = typeof address === "object" && address ? address.port : port;
+  logger.log(`API listening on http://localhost:${boundPort}`);
 }
 
 bootstrap();
