@@ -78,6 +78,23 @@ describe("AppShell", () => {
     expect(screen.queryByRole("link", { name: /nouvelle demande/i })).toBeNull();
   });
 
+  it("lists 'Mes demandes' in the menu for a student with stage management on (issue #114)", async () => {
+    renderShell("/dashboard");
+
+    expect(await screen.findByRole("link", { name: /mes demandes/i })).toHaveAttribute(
+      "href",
+      "/stages",
+    );
+  });
+
+  it("does not list 'Mes demandes' for a user without the STUDENT role (issue #114)", async () => {
+    getMeMock.mockResolvedValue({ user: { ...studentUser, roles: ["ADMIN"] } });
+    renderShell("/dashboard");
+
+    expect(await screen.findByRole("link", { name: /certificats à valider/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /mes demandes/i })).toBeNull();
+  });
+
   it("renders the active route's page content via the outlet", () => {
     renderShell("/profile");
 

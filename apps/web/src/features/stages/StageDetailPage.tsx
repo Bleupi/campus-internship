@@ -1,0 +1,101 @@
+import { Alert, AlertTitle, Button, LinearProgress, Stack, Typography } from "@mui/material";
+import ArrowBackOutlinedIcon from "@mui/icons-material/ArrowBackOutlined";
+import { Link, useLocation, useParams } from "react-router-dom";
+import { ApiError } from "../../lib/api-client";
+import { ROUTES } from "../../routes";
+import { formatOrganismAddress, formatPeriodRange, formatTutorContact } from "./format-summary";
+import { SEMESTER_LABELS, formatStageKind } from "./stage-labels";
+import { StageStatusChip } from "./StageStatusChip";
+import { RecapField, RecapSection, SecondaryLine } from "./StageSummaryParts";
+import { useStage } from "./useStage";
+
+export function StageDetailPage() {
+  const { id = "" } = useParams();
+  const location = useLocation();
+  const { data: stage, isPending, error } = useStage(id);
+  const backSearch = (location.state as { from?: string } | null)?.from ?? "";
+
+  const backLink = (
+    <Button
+      component={Link}
+      to={{ pathname: ROUTES.STAGES, search: backSearch }}
+      startIcon={<ArrowBackOutlinedIcon />}
+      sx={{ alignSelf: "flex-start" }}
+    >
+      Mes demandes
+    </Button>
+  );
+
+  return (
+    <Stack spacing={2} sx={{ maxWidth: 700, mx: "auto" }}>
+      {backLink}
+
+      {isPending && <LinearProgress />}
+      {error && (
+        <Alert severity="error">
+          {error instanceof ApiError && error.status === 404
+            ? "Demande introuvable."
+            : "Impossible de charger cette demande de stage."}
+        </Alert>
+      )}
+
+      {stage && (
+        <>
+          <Stack direction="row" sx={{ alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
+            <Typography variant="h5" component="h1">
+              Demande de stage
+            </Typography>
+            <StageStatusChip status={stage.status} />
+          </Stack>
+
+          {stage.status === "REFUSED" && stage.refusalReason && (
+            <Alert severity="error" variant="filled">
+              <AlertTitle>Demande refusée</AlertTitle>
+              {stage.refusalReason}
+            </Alert>
+          )}
+
+          <RecapSection title="Organisme & tuteur">
+            <RecapField label="Organisme">
+              {stage.organism.name}
+              <SecondaryLine>{formatOrganismAddress(stage.organism)}</SecondaryLine>
+            </RecapField>
+            <RecapField label="Tuteur">
+              {`${stage.tutor.firstName} ${stage.tutor.lastName} (${stage.tutor.jobTitle})`}
+              <SecondaryLine>{formatTutorContact(stage.tutor)}</SecondaryLine>
+            </RecapField>
+          </RecapSection>
+
+          <RecapSection title="Périodes">
+            {stage.periods.map((period, index) => (
+              <RecapField key={period.id} label={`Période ${index + 1}`}>
+                {formatPeriodRange(period)}
+              </RecapField>
+            ))}
+          </RecapSection>
+
+          <RecapSection title="Détails">
+            <RecapField label="Année scolaire">{stage.schoolYear}</RecapField>
+            <RecapField label="Semestre">{SEMESTER_LABELS[stage.semester]}</RecapField>
+            <RecapField label="Type de stage">{formatStageKind(stage.mandatory)}</RecapField>
+            <RecapField label="Service">{stage.service?.trim() || "Non renseigné"}</RecapField>
+            <RecapField label="Type de handicap concerné">
+              {stage.projectType?.trim() || "Non renseigné"}
+            </RecapField>
+            <RecapField label="Motivation">
+              {stage.motivation?.trim() || "Non renseignée"}
+            </RecapField>
+          </RecapSection>
+
+          <RecapSection title="Référent">
+            <RecapField label="Référent">
+              {stage.referent
+                ? `${stage.referent.firstName} ${stage.referent.lastName}`
+                : "non assigné"}
+            </RecapField>
+          </RecapSection>
+        </>
+      )}
+    </Stack>
+  );
+}

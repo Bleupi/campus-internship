@@ -29,9 +29,9 @@ export interface StageDraftPeriodResponse {
   endDate: string;
 }
 
-// Deliberately not the full future stage-detail shape (list/detail is
-// issue #114) — just enough for this wizard's own recap step and the
-// redirect after saving.
+// Just enough for the wizard's own recap step and the redirect after saving;
+// the full read shape (referent, refusal reason, submission date) is
+// StageDetailResponse below.
 export interface StageDraftResponse {
   id: string;
   status: StageStatus;
@@ -47,3 +47,31 @@ export interface StageDraftResponse {
 }
 
 export type CreateStageDraftResponse = StageDraftResponse;
+
+export interface StageReferentResponse {
+  id: string;
+  firstName: string;
+  lastName: string;
+}
+
+// Issue #114. Same shape whatever the status (ADR-0003's single read path):
+// for DRAFT/PENDING the referent is derived on the fly from ReferentAssignment
+// (null when none exists yet), for VALIDATED/REFUSED it comes from the snapshot.
+export interface StageDetailResponse extends StageDraftResponse {
+  submittedAt: string | null;
+  refusalReason: string | null;
+  referent: StageReferentResponse | null;
+}
+
+export interface StageListItemResponse {
+  id: string;
+  status: StageStatus;
+  schoolYear: string;
+  semester: Semester;
+  mandatory: boolean;
+  // Read from the live organism, so only present while DRAFT/PENDING — a
+  // frozen stage's display source is its snapshot (ADR-0003, BR-08).
+  organismName: string | null;
+  submittedAt: string | null;
+  periods: StageDraftPeriodResponse[];
+}

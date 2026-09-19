@@ -4,13 +4,18 @@ import {
   InternalServerErrorException,
   Logger,
   NotFoundException,
+  NotImplementedException,
 } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import {
   deriveSemester,
   getCurrentSchoolYear,
   type CreateStageDraftRequest,
+  type ListStagesQuery,
+  type StageDetailResponse,
+  type StageDraftPeriodResponse,
   type StageDraftResponse,
+  type StageListItemResponse,
 } from "shared";
 import { PrismaService } from "../../prisma/prisma.service";
 
@@ -65,6 +70,122 @@ export class StagesService {
     });
 
     return this.toResponse(stage);
+  }
+
+  // Issue #114. Scoped by the caller's own student profile, so a student can
+  // never list someone else's stages whatever the query says.
+  async list(userId: string, query: ListStagesQuery): Promise<StageListItemResponse[]> {
+    const profile = await this.prisma.studentProfile.findUnique({ where: { userId } });
+    if (!profile) {
+      throw new NotFoundException("Profil étudiant introuvable");
+    }
+
+    const stages = await this.prisma.stage.findMany({
+      where: {
+        studentId: profile.id,
+        ...(query.status && { status: query.status }),
+        ...(query.semester && { semester: query.semester }),
+      },
+      include: { periods: true, organism: { select: { name: true } } },
+      // Never-submitted drafts have no submittedAt: they go last, newest first.
+      orderBy: [{ submittedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+    });
+
+    const items = stages.map((stage) => this.toListItem(stage));
+    return query.sort === "startDate" ? this.sortByNearestStart(items) : items;
+  }
+
+  // Issue #114, ADR-0003's single read path. The 404 is keyed on id AND owner
+  // in one query, so another student's stage is indistinguishable from a
+  // non-existent one (no existence leak).
+  async getById(userId: string, stageId: string): Promise<StageDetailResponse> {
+    const stage = await this.prisma.stage.findFirst({
+      where: { id: stageId, student: { userId } },
+      include: { periods: true, organism: true, tutor: true },
+    });
+    if (!stage) {
+      throw new NotFoundException("Demande de stage introuvable");
+    }
+
+    if (stage.status === "VALIDATED" || stage.status === "REFUSED") {
+      // The frozen-snapshot branch is deliberately stubbed: nothing writes a
+      // snapshot yet (validate/refuse are later issues), so there is no
+      // schema to parse it with. Reading the live relations here instead
+      // would violate BR-08.
+      throw new NotImplementedException("Lecture du snapshot non implémentée");
+    }
+
+    const assignment = await this.prisma.referentAssignment.findUnique({
+      where: {
+        studentId_schoolYear_semester_mandatory: {
+          studentId: stage.studentId,
+          schoolYear: stage.schoolYear,
+          semester: stage.semester,
+          mandatory: stage.mandatory,
+        },
+      },
+      include: { referent: { include: { user: true } } },
+    });
+
+    return {
+      ...this.toResponse(stage),
+      submittedAt: stage.submittedAt?.toISOString() ?? null,
+      refusalReason: stage.refusalReason,
+      referent: assignment && {
+        id: assignment.referent.id,
+        firstName: assignment.referent.user.firstName,
+        lastName: assignment.referent.user.lastName,
+      },
+    };
+  }
+
+  // Upcoming stages first (nearest start first), then past ones (most recent
+  // first): "nearest upcoming" is what a student cares about, but a plain
+  // ascending sort would bury it under last year's stages.
+  private sortByNearestStart(items: StageListItemResponse[]): StageListItemResponse[] {
+    const now = Date.now();
+    const earliestStart = (item: StageListItemResponse) =>
+      Math.min(...item.periods.map((period) => Date.parse(period.startDate)));
+
+    return items
+      .map((item) => ({ item, start: earliestStart(item) }))
+      .sort((a, b) => {
+        const aUpcoming = a.start >= now;
+        const bUpcoming = b.start >= now;
+        if (aUpcoming !== bUpcoming) return aUpcoming ? -1 : 1;
+        return aUpcoming ? a.start - b.start : b.start - a.start;
+      })
+      .map(({ item }) => item);
+  }
+
+  private toListItem(
+    stage: Prisma.StageGetPayload<{
+      include: { periods: true; organism: { select: { name: true } } };
+    }>,
+  ): StageListItemResponse {
+    const live = stage.status === "DRAFT" || stage.status === "PENDING";
+    return {
+      id: stage.id,
+      status: stage.status,
+      schoolYear: stage.schoolYear,
+      semester: stage.semester,
+      mandatory: stage.mandatory,
+      organismName: live ? (stage.organism?.name ?? null) : null,
+      submittedAt: stage.submittedAt?.toISOString() ?? null,
+      periods: stage.periods.map((period) => this.toPeriodResponse(period)),
+    };
+  }
+
+  private toPeriodResponse(period: {
+    id: string;
+    startDate: Date;
+    endDate: Date;
+  }): StageDraftPeriodResponse {
+    return {
+      id: period.id,
+      startDate: period.startDate.toISOString(),
+      endDate: period.endDate.toISOString(),
+    };
   }
 
   private async resolveOrganism(
@@ -151,11 +272,7 @@ export class StagesService {
         phone: stage.tutor!.phone,
         acceptsPhoneContact: stage.tutor!.acceptsPhoneContact,
       },
-      periods: stage.periods.map((period) => ({
-        id: period.id,
-        startDate: period.startDate.toISOString(),
-        endDate: period.endDate.toISOString(),
-      })),
+      periods: stage.periods.map((period) => this.toPeriodResponse(period)),
     };
   }
 }

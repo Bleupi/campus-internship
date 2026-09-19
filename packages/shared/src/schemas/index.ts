@@ -12,3 +12,4 @@ export * from "./reject-profile.schema";
 export * from "./stage-period.schema";
 export * from "./create-stage-draft.schema";
 export * from "./search-organisms.schema";
+export * from "./list-stages-query.schema";

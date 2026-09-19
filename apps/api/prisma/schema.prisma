@@ -221,6 +221,7 @@ model Stage {
   projectType   String?
   motivation    String?
   refusalReason String?
+  submittedAt   DateTime?
 
   student   StudentProfile @relation(fields: [studentId], references: [id])
   studentId String

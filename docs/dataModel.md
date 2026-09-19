@@ -277,6 +277,7 @@ model Stage {
   projectType   String?                     // type of disability the student will face — required at submission
   motivation    String?                     // required at submission
   refusalReason String?                     // set only when REFUSED
+  submittedAt   DateTime?                   // set when a DRAFT is submitted (DRAFT → PENDING); null while never submitted. Sort key of the student's request list (issue #114)
 
   // Live relations — authoritative while DRAFT/PENDING
   student     StudentProfile @relation(fields: [studentId], references: [id])

@@ -24,3 +24,13 @@ export function formatTutorContact(tutor: TutorContact) {
     .filter(Boolean)
     .join(" · ");
 }
+
+// Periods are calendar dates stored as UTC midnight, so they are formatted in
+// UTC: local-time formatting would shift them a day for a browser west of it.
+export function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString("fr-FR", { timeZone: "UTC" });
+}
+
+export function formatPeriodRange(period: { startDate: string; endDate: string }) {
+  return `${formatDate(period.startDate)} → ${formatDate(period.endDate)}`;
+}
