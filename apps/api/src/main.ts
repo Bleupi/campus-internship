@@ -26,6 +26,9 @@ async function bootstrap() {
 
   const port = configService.get("API_PORT", { infer: true });
   await app.listen(port);
+  // getUrl() reports the address the server actually bound to, not just the
+  // configured API_PORT — the one to trust when the web app can't reach us.
+  logger.log(`API listening on ${await app.getUrl()} (port ${port})`);
 }
 
 bootstrap();
