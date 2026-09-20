@@ -1,5 +1,6 @@
 import type { ProfileStatus } from "../enums";
 import { stagePeriodsSchema } from "./stage-period.schema";
+import { getCurrentSchoolYear } from "./school-year.schema";
 
 // What the submission gate needs to know about a draft. Deliberately flat and
 // primitive so the API (Prisma rows) and the web (StageDetailResponse) can
@@ -25,7 +26,10 @@ function isBlank(value: string | null): boolean {
 // reasons rather than codes because both consumers show them as is: the API
 // puts them in its 400 body, and the web prints them next to the disabled
 // "Soumettre" button. An empty array means the draft can be submitted.
-export function getSubmissionBlockers(candidate: SubmissionCandidate): string[] {
+export function getSubmissionBlockers(
+  candidate: SubmissionCandidate,
+  today: Date = new Date(),
+): string[] {
   const blockers: string[] = [];
 
   if (candidate.profileStatus !== "VALID") {
@@ -38,9 +42,24 @@ export function getSubmissionBlockers(candidate: SubmissionCandidate): string[] 
   if (isBlank(candidate.service)) blockers.push("Renseignez le service.");
   if (isBlank(candidate.projectType)) blockers.push("Renseignez le type de handicap concerné.");
   if (isBlank(candidate.motivation)) blockers.push("Renseignez votre motivation.");
-  if (!stagePeriodsSchema.safeParse(candidate.periods).success) {
+  const periods = stagePeriodsSchema.safeParse(candidate.periods);
+  if (!periods.success) {
     blockers.push("Ajoutez au moins une période valide.");
+  } else if (isBeforeCurrentSchoolYear(periods.data[0]!.startDate, today)) {
+    blockers.push(
+      "Les demandes de l'année scolaire précédente ne peuvent plus être soumises : l'année en cours a commencé.",
+    );
   }
 
   return blockers;
+}
+
+// A stage may start before today (a request filed a posteriori is legitimate),
+// but not in a school year that has already ended: submission is closed for
+// those. Compared by school year, so the cut-off is the half-open 09-01 00:00
+// boundary (BR-01), not "before today". "YYYY-YYYY" strings order correctly as
+// text. `periodStart` is any period's start: stagePeriodsSchema keeps every
+// period of a stage in the same school year.
+export function isBeforeCurrentSchoolYear(periodStart: Date, today: Date = new Date()): boolean {
+  return getCurrentSchoolYear(periodStart) < getCurrentSchoolYear(today);
 }

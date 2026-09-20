@@ -577,7 +577,30 @@ describe("StagesService", () => {
       });
     }
 
+    // The fixture periods are in October 2025: freeze only Date inside that
+    // school year so the previous-year rule doesn't depend on the real clock.
+    function freezeToday(isoDate: string) {
+      jest.useFakeTimers({
+        now: new Date(isoDate),
+        doNotFake: [
+          "nextTick",
+          "setImmediate",
+          "clearImmediate",
+          "setTimeout",
+          "clearTimeout",
+          "setInterval",
+          "clearInterval",
+          "queueMicrotask",
+          "hrtime",
+          "performance",
+        ],
+      });
+    }
+
+    afterEach(() => jest.useRealTimers());
+
     beforeEach(() => {
+      freezeToday("2025-11-01T10:00:00.000Z");
       prisma.stage.updateMany.mockResolvedValue({ count: 1 });
       prisma.user.findMany.mockResolvedValue([{ email: "admin@example.org" }]);
       prisma.referentAssignment.findUnique.mockResolvedValue(null);
@@ -647,6 +670,29 @@ describe("StagesService", () => {
         expect(mailerService.sendSafely).not.toHaveBeenCalled();
       },
     );
+
+    it("BR-01: rejects a draft whose periods are in the previous school year, leaving it DRAFT", async () => {
+      freezeToday("2026-09-20T10:00:00.000Z");
+      prisma.stage.findFirst.mockResolvedValue(draftForSubmit());
+
+      const error = await service.submit(USER_ID, "stage-1").catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(BadRequestException);
+      expect(JSON.stringify((error as BadRequestException).getResponse())).toMatch(
+        /année scolaire précédente/,
+      );
+      expect(prisma.stage.updateMany).not.toHaveBeenCalled();
+      expect(mailerService.sendSafely).not.toHaveBeenCalled();
+    });
+
+    it("allows submitting a draft whose period already started, within the current school year (a posteriori request)", async () => {
+      freezeToday("2026-02-01T10:00:00.000Z");
+      primeSuccess();
+
+      await expect(service.submit(USER_ID, "stage-1")).resolves.toMatchObject({
+        status: "PENDING",
+      });
+    });
 
     it("moves a complete DRAFT to PENDING, sets submittedAt, and returns the fresh detail", async () => {
       primeSuccess();

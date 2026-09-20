@@ -3,6 +3,7 @@ import type { INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import cookieParser from "cookie-parser";
 import request from "supertest";
+import { getCurrentSchoolYear } from "shared";
 import { AppModule } from "../src/app.module";
 import { MailerService } from "../src/modules/mailer/mailer.service";
 import { PrismaService } from "../src/prisma/prisma.service";
@@ -12,6 +13,10 @@ import { purgeE2eData } from "./helpers/cleanup";
 function uniqueEmail(prefix: string): string {
   return `e2e.submit.${prefix}.${randomUUID()}@etu.u-paris.fr`;
 }
+
+// Periods sit in the current school year, so the previous-year rule never
+// depends on when the suite runs.
+const schoolYearStartYear = getCurrentSchoolYear().slice(0, 4);
 
 describe("Stage submission (e2e, issue #115)", () => {
   let app: INestApplication;
@@ -89,7 +94,9 @@ describe("Stage submission (e2e, issue #115)", () => {
       .send({
         organism: { mode: "existing", id: organism.id },
         tutor: { mode: "existing", id: organism.tutors[0]!.id },
-        periods: [{ startDate: "2025-10-01", endDate: "2025-10-15" }],
+        periods: [
+          { startDate: `${schoolYearStartYear}-10-01`, endDate: `${schoolYearStartYear}-10-15` },
+        ],
         mandatory: true,
         service: "Cardiologie",
         projectType: "Handicap moteur",
@@ -173,6 +180,23 @@ describe("Stage submission (e2e, issue #115)", () => {
       .post(`/stages/${stageId}/submit`)
       .set("Cookie", cookie)
       .expect(409);
+  });
+
+  it("BR-01: 400 for a draft in the previous school year, which can still be saved as a draft", async () => {
+    const { cookie, email } = await signup();
+    await setProfileStatus(email, "VALID");
+    const previousYear = Number(schoolYearStartYear) - 1;
+    const stageId = await createDraft(cookie, {
+      periods: [{ startDate: `${previousYear}-10-01`, endDate: `${previousYear}-10-15` }],
+    });
+
+    const response = await request(app.getHttpServer())
+      .post(`/stages/${stageId}/submit`)
+      .set("Cookie", cookie)
+      .expect(400);
+
+    expect(JSON.stringify(response.body.message)).toMatch(/année scolaire précédente/);
+    expect((await prisma.stage.findUniqueOrThrow({ where: { id: stageId } })).status).toBe("DRAFT");
   });
 
   it("404 when the stage belongs to another student", async () => {

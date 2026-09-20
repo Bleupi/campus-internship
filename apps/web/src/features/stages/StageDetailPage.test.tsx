@@ -186,10 +186,26 @@ describe("StageDetailPage (issue #114)", () => {
 });
 
 describe("StageDetailPage submission (issue #115)", () => {
+  // The fixture periods are in October 2025: freeze only Date inside that
+  // school year so the previous-year rule doesn't depend on the real clock.
   beforeEach(() => {
     getProfileMock.mockResolvedValue({ profileStatus: "VALID" });
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2025-11-01T10:00:00.000Z"));
   });
-  afterEach(() => vi.clearAllMocks());
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.useRealTimers();
+  });
+
+  it("disables 'Soumettre' with the school-year reason for a previous-year draft", async () => {
+    vi.setSystemTime(new Date("2026-09-20T10:00:00.000Z"));
+    getStageMock.mockResolvedValue(stageDetail());
+    renderPage();
+
+    expect(await screen.findByText(/demandes de l'année scolaire précédente/i)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Soumettre" })).toBeDisabled();
+  });
 
   it("enables 'Soumettre' on a complete DRAFT with a VALID profile", async () => {
     getStageMock.mockResolvedValue(stageDetail());
