@@ -37,6 +37,11 @@ export class StagesController {
     return this.stagesService.list(currentUserId(req), query);
   }
 
+  @Post(":id/submit")
+  submit(@Param("id") id: string, @Req() req: Request) {
+    return this.stagesService.submit(currentUserId(req), id);
+  }
+
   @Get(":id")
   getById(@Param("id") id: string, @Req() req: Request) {
     return this.stagesService.getById(currentUserId(req), id);

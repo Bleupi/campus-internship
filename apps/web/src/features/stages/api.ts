@@ -21,3 +21,9 @@ export function listStages(query: ListStagesQuery) {
 export function getStage(id: string) {
   return apiClient.get<StageDetailResponse>(`/stages/${encodeURIComponent(id)}`);
 }
+
+// Bodyless on the server (the stage id is the whole request); the empty object
+// only satisfies apiClient.post's required body argument.
+export function submitStage(id: string) {
+  return apiClient.post<StageDetailResponse>(`/stages/${encodeURIComponent(id)}/submit`, {});
+}

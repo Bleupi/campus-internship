@@ -1,14 +1,22 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import type { StageDetailResponse } from "shared";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../../lib/api-client";
 import { StageDetailPage } from "./StageDetailPage";
 
 const getStageMock = vi.fn();
+const submitStageMock = vi.fn();
 vi.mock("./api", () => ({
   getStage: (...args: unknown[]) => getStageMock(...args),
+  submitStage: (...args: unknown[]) => submitStageMock(...args),
+}));
+
+const getProfileMock = vi.fn();
+vi.mock("../students/api", () => ({
+  getProfile: (...args: unknown[]) => getProfileMock(...args),
 }));
 
 function stageDetail(overrides: Partial<StageDetailResponse> = {}): StageDetailResponse {
@@ -63,6 +71,9 @@ function renderPage() {
 }
 
 describe("StageDetailPage (issue #114)", () => {
+  beforeEach(() => {
+    getProfileMock.mockResolvedValue({ profileStatus: "VALID" });
+  });
   afterEach(() => vi.clearAllMocks());
 
   it("fetches the stage named in the URL and shows all its fields and every period", async () => {
@@ -172,4 +183,109 @@ describe("StageDetailPage (issue #114)", () => {
       "/stages",
     );
   });
+});
+
+describe("StageDetailPage submission (issue #115)", () => {
+  // The fixture periods are in October 2025: freeze only Date inside that
+  // school year so the previous-year rule doesn't depend on the real clock.
+  beforeEach(() => {
+    getProfileMock.mockResolvedValue({ profileStatus: "VALID" });
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2025-11-01T10:00:00.000Z"));
+  });
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.useRealTimers();
+  });
+
+  it("disables 'Soumettre' with the school-year reason for a previous-year draft", async () => {
+    vi.setSystemTime(new Date("2026-09-20T10:00:00.000Z"));
+    getStageMock.mockResolvedValue(stageDetail());
+    renderPage();
+
+    expect(await screen.findByText(/demandes de l'année scolaire précédente/i)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Soumettre" })).toBeDisabled();
+  });
+
+  it("enables 'Soumettre' on a complete DRAFT with a VALID profile", async () => {
+    getStageMock.mockResolvedValue(stageDetail());
+    renderPage();
+
+    const button = await screen.findByRole("button", { name: "Soumettre" });
+    await waitFor(() => expect(button).toBeEnabled());
+  });
+
+  it.each(["INCOMPLETE", "PENDING_VALIDATION", "EXPIRED"])(
+    "BR-02: disables 'Soumettre' and says the profile must be validated when it is %s",
+    async (profileStatus) => {
+      getProfileMock.mockResolvedValue({ profileStatus });
+      getStageMock.mockResolvedValue(stageDetail());
+      renderPage();
+
+      expect(await screen.findByText(/profil de stage doit d'abord être validé/)).toBeVisible();
+      expect(screen.getByRole("button", { name: "Soumettre" })).toBeDisabled();
+    },
+  );
+
+  it("disables 'Soumettre' and names each missing field of an incomplete draft", async () => {
+    getStageMock.mockResolvedValue(stageDetail({ service: null, motivation: null }));
+    renderPage();
+
+    expect(await screen.findByText("Renseignez le service.")).toBeVisible();
+    expect(screen.getByText("Renseignez votre motivation.")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Soumettre" })).toBeDisabled();
+  });
+
+  it("keeps 'Soumettre' disabled, without a false reason, while the profile is still loading", async () => {
+    getProfileMock.mockReturnValue(new Promise(() => {}));
+    getStageMock.mockResolvedValue(stageDetail());
+    renderPage();
+
+    const button = await screen.findByRole("button", { name: "Soumettre" });
+    expect(button).toBeDisabled();
+    expect(screen.queryByText(/profil de stage doit d'abord/)).not.toBeInTheDocument();
+  });
+
+  it("submits the stage, then shows it as submitted with no 'Soumettre' action left", async () => {
+    getStageMock.mockResolvedValueOnce(stageDetail());
+    getStageMock.mockResolvedValue(
+      stageDetail({ status: "PENDING", submittedAt: "2025-09-05T08:00:00.000Z" }),
+    );
+    submitStageMock.mockResolvedValue(undefined);
+    renderPage();
+
+    const button = await screen.findByRole("button", { name: "Soumettre" });
+    await waitFor(() => expect(button).toBeEnabled());
+    await userEvent.click(button);
+
+    expect(submitStageMock).toHaveBeenCalledWith("stage-1");
+    expect(await screen.findByText("En attente")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Soumettre" })).not.toBeInTheDocument();
+  });
+
+  it("shows a French explanation, not the raw response body, when the submission is refused", async () => {
+    getStageMock.mockResolvedValue(stageDetail());
+    submitStageMock.mockRejectedValue(
+      new ApiError(409, '{"message":"Conflit","error":"Conflict","statusCode":409}'),
+    );
+    renderPage();
+
+    const button = await screen.findByRole("button", { name: "Soumettre" });
+    await waitFor(() => expect(button).toBeEnabled());
+    await userEvent.click(button);
+
+    expect(await screen.findByText(/a déjà été soumise ou modifiée/)).toBeVisible();
+    expect(screen.queryByText(/statusCode/)).not.toBeInTheDocument();
+  });
+
+  it.each(["PENDING", "VALIDATED", "REFUSED"] as const)(
+    "offers no 'Soumettre' action on a %s stage",
+    async (status) => {
+      getStageMock.mockResolvedValue(stageDetail({ status }));
+      renderPage();
+
+      await screen.findByText("Hôpital Cochin");
+      expect(screen.queryByRole("button", { name: "Soumettre" })).not.toBeInTheDocument();
+    },
+  );
 });

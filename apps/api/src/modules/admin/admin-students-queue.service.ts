@@ -19,21 +19,28 @@ export class AdminStudentsQueueService {
   // No pagination at this scale (~300 rows). `id` is a pure tie-breaker for
   // deterministic ordering when two rows share the same updatedAt.
   async list(): Promise<CertificateQueueResponse> {
-    const profiles = await this.prisma.studentProfile.findMany({
-      where: { profileStatus: "PENDING_VALIDATION" satisfies ProfileStatus },
-      orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
-      include: {
-        user: { select: { firstName: true, lastName: true } },
-        // Same "current file" semantics as StudentsService.currentFiles():
-        // most recent non-expired row of this type, if any.
-        files: {
-          where: { type: CERTIFICATE_TYPE, ...currentFileFilter() },
-          orderBy: { uploadedAt: "desc" },
-          take: 1,
-          select: { uploadedAt: true },
-        },
-      },
-    });
+    // Prisma loads each relation with a separate statement. Read them all from
+    // one snapshot: a user deleted between two statements would otherwise leave
+    // `profile.user` null and the endpoint would 500.
+    const profiles = await this.prisma.$transaction(
+      (tx) =>
+        tx.studentProfile.findMany({
+          where: { profileStatus: "PENDING_VALIDATION" satisfies ProfileStatus },
+          orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
+          include: {
+            user: { select: { firstName: true, lastName: true } },
+            // Same "current file" semantics as StudentsService.currentFiles():
+            // most recent non-expired row of this type, if any.
+            files: {
+              where: { type: CERTIFICATE_TYPE, ...currentFileFilter() },
+              orderBy: { uploadedAt: "desc" },
+              take: 1,
+              select: { uploadedAt: true },
+            },
+          },
+        }),
+      { isolationLevel: "RepeatableRead" },
+    );
 
     return profiles.map((profile) => {
       const certificate = profile.files[0];

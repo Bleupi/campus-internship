@@ -205,7 +205,6 @@ describe("Stages draft creation (e2e)", () => {
   it("POST /stages: 500 with a clear message and no stage when the new organism can't be inserted", async () => {
     const accessToken = await signupAndGetAccessToken();
     const stagesBefore = await ownStageCount();
-
     const response = await request(app.getHttpServer())
       .post("/stages")
       .set("Cookie", authCookie(accessToken))

@@ -4,10 +4,14 @@ import { AdminStudentsQueueService } from "./admin-students-queue.service";
 
 describe("AdminStudentsQueueService", () => {
   let service: AdminStudentsQueueService;
-  let prisma: { studentProfile: { findMany: jest.Mock } };
+  let prisma: { studentProfile: { findMany: jest.Mock }; $transaction: jest.Mock };
 
   beforeEach(async () => {
-    prisma = { studentProfile: { findMany: jest.fn() } };
+    prisma = {
+      studentProfile: { findMany: jest.fn() },
+      // Runs the callback against the same mock, standing in for the tx client.
+      $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(prisma)),
+    };
 
     const module = await Test.createTestingModule({
       providers: [AdminStudentsQueueService, { provide: PrismaService, useValue: prisma }],
@@ -28,6 +32,21 @@ describe("AdminStudentsQueueService", () => {
           orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
         }),
       );
+    });
+
+    // The race can't be triggered deterministically through a mock: Prisma
+    // loads the profile and its `user` with separate statements, so a user
+    // deleted in between makes `profile.user` null and the endpoint 500s
+    // ("Inconsistent query result"). One RepeatableRead transaction reads a
+    // single snapshot, which closes that window.
+    it("reads the queue in one RepeatableRead transaction, so a concurrent user deletion can't null out `user`", async () => {
+      prisma.studentProfile.findMany.mockResolvedValue([]);
+
+      await service.list();
+
+      expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+        isolationLevel: "RepeatableRead",
+      });
     });
 
     it("maps each profile to student identity, promotion, waiting-since and current certificate metadata", async () => {
