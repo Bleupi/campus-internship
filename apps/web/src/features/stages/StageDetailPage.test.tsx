@@ -23,6 +23,7 @@ function stageDetail(overrides: Partial<StageDetailResponse> = {}): StageDetailR
   return {
     id: "stage-1",
     status: "DRAFT",
+    version: 0,
     schoolYear: "2025-2026",
     semester: "S1",
     mandatory: true,
@@ -36,6 +37,7 @@ function stageDetail(overrides: Partial<StageDetailResponse> = {}): StageDetailR
       city: "Paris",
       postalCode: "75014",
       street: "27 Rue du Faubourg Saint-Jacques",
+      editable: true,
     },
     tutor: {
       id: "tut-1",
@@ -45,6 +47,7 @@ function stageDetail(overrides: Partial<StageDetailResponse> = {}): StageDetailR
       jobTitle: "Médecin",
       phone: null,
       acceptsPhoneContact: false,
+      editable: true,
     },
     periods: [
       { id: "p1", startDate: "2025-10-01T00:00:00.000Z", endDate: "2025-10-15T00:00:00.000Z" },
@@ -89,6 +92,20 @@ describe("StageDetailPage (issue #114)", () => {
     expect(screen.getByText("Je souhaite découvrir le métier.")).toBeInTheDocument();
     expect(screen.getByText(/01\/10\/2025/)).toBeInTheDocument();
     expect(screen.getByText(/03\/11\/2025/)).toBeInTheDocument();
+  });
+
+  it("offers a DRAFT a 'Modifier' link to its edit page, and no other status (issue #116)", async () => {
+    getStageMock.mockResolvedValue(stageDetail({ status: "DRAFT" }));
+    const { unmount } = renderPage();
+
+    const edit = await screen.findByRole("link", { name: /modifier/i });
+    expect(edit).toHaveAttribute("href", "/stages/stage-1/edit");
+    unmount();
+
+    getStageMock.mockResolvedValue(stageDetail({ status: "PENDING" }));
+    renderPage();
+    await screen.findByText("Hôpital Cochin");
+    expect(screen.queryByRole("link", { name: /modifier/i })).toBeNull();
   });
 
   it("explains when the referent of a DRAFT will be assigned, instead of 'non assigné'", async () => {

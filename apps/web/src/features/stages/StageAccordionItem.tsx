@@ -9,6 +9,7 @@ import {
 import ExpandMoreOutlinedIcon from "@mui/icons-material/ExpandMoreOutlined";
 import type { StageListItemResponse } from "shared";
 import { StageDetailLink } from "./StageDetailLink";
+import { StageEditLink } from "./StageEditLink";
 import { StageListItemBody } from "./StageListItemBody";
 import { formatFirstPeriod, organismLabel } from "./stage-labels";
 import { StageStatusChip } from "./StageStatusChip";
@@ -34,6 +35,7 @@ export function StageAccordionItem({ stage }: { stage: StageListItemResponse }) 
         <StageListItemBody stage={stage} />
       </AccordionDetails>
       <AccordionActions>
+        {stage.status === "DRAFT" && <StageEditLink stageId={stage.id} labelled />}
         <StageDetailLink stageId={stage.id} labelled />
       </AccordionActions>
     </Accordion>

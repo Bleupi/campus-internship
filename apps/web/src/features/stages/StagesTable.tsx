@@ -10,12 +10,13 @@ import {
 } from "@mui/material";
 import type { StageListItemResponse } from "shared";
 import { StageDetailLink } from "./StageDetailLink";
+import { StageEditLink } from "./StageEditLink";
 import { SEMESTER_LABELS, formatFirstPeriod, organismLabel } from "./stage-labels";
 import { StageStatusChip } from "./StageStatusChip";
 
 // Desktop layout (chosen prototype, variant A's table): the location first,
 // then status, first period, semester and kind, with the row's actions in the
-// last column. Never expanded: the eye button opens the full page.
+// last column. Never expanded: the eye button opens the full page, and a DRAFT also gets a pen.
 export function StagesTable({ stages }: { stages: StageListItemResponse[] }) {
   return (
     <TableContainer component={Paper} variant="outlined">
@@ -46,6 +47,7 @@ export function StagesTable({ stages }: { stages: StageListItemResponse[] }) {
               </TableCell>
               <TableCell>{stage.mandatory ? "Obligatoire" : "Facultatif"}</TableCell>
               <TableCell align="right">
+                {stage.status === "DRAFT" && <StageEditLink stageId={stage.id} />}
                 <StageDetailLink stageId={stage.id} />
               </TableCell>
             </TableRow>

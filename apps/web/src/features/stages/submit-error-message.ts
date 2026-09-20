@@ -11,3 +11,8 @@ export function describeSubmitError(error: unknown): string {
   }
   return "La demande n'a pas pu être soumise. Réessayez.";
 }
+
+// Shown when the draft itself was saved but the submission that followed failed.
+export function describeDraftSavedButNotSubmitted(error: unknown): string {
+  return `Votre brouillon a bien été enregistré, mais il n'a pas été soumis. ${describeSubmitError(error)} Vous pouvez le retrouver dans « Mes demandes ».`;
+}

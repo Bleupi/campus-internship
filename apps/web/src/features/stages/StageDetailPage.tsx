@@ -1,9 +1,10 @@
 import { Alert, AlertTitle, Button, LinearProgress, Stack, Typography } from "@mui/material";
 import ArrowBackOutlinedIcon from "@mui/icons-material/ArrowBackOutlined";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import { Link, useLocation, useParams } from "react-router-dom";
 import type { StageDetailResponse } from "shared";
 import { ApiError } from "../../lib/api-client";
-import { ROUTES } from "../../routes";
+import { ROUTES, stageEditPath } from "../../routes";
 import {
   formatDate,
   formatOrganismAddress,
@@ -62,6 +63,17 @@ export function StageDetailPage() {
               Demande de stage
             </Typography>
             <StageStatusChip status={stage.status} />
+            {stage.status === "DRAFT" && (
+              <Button
+                component={Link}
+                to={stageEditPath(stage.id)}
+                size="small"
+                startIcon={<EditOutlinedIcon />}
+                sx={{ ml: "auto" }}
+              >
+                Modifier
+              </Button>
+            )}
           </Stack>
 
           {stage.status === "REFUSED" && stage.refusalReason && (
