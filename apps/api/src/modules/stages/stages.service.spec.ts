@@ -312,7 +312,7 @@ describe("StagesService", () => {
       }),
     );
   });
-  describe("list (issue #114)", () => {
+  describe("list: a student's own stage requests, filtered and sorted (issue #114)", () => {
     const periodRow = (id: string, start: string, end: string) => ({
       id,
       startDate: new Date(start),
@@ -379,7 +379,7 @@ describe("StagesService", () => {
 
       const result = await service.list(USER_ID, { sort: "startDate" });
 
-      expect(result.map((s) => s.id)).toEqual([
+      expect(result.map((stage) => stage.id)).toEqual([
         "upcoming-near",
         "upcoming-far",
         "past-recent",
@@ -400,7 +400,7 @@ describe("StagesService", () => {
 
       const result = await service.list(USER_ID, { sort: "startDate" });
 
-      expect(result.map((s) => s.id)).toEqual(["multi", "single"]);
+      expect(result.map((stage) => stage.id)).toEqual(["multi", "single"]);
     });
 
     it("classes a stage as upcoming when any of its periods is still ahead, keyed on that nearest upcoming start", async () => {
@@ -417,7 +417,7 @@ describe("StagesService", () => {
 
       const result = await service.list(USER_ID, { sort: "startDate" });
 
-      expect(result.map((s) => s.id)).toEqual([
+      expect(result.map((stage) => stage.id)).toEqual([
         "first-period-passed",
         "upcoming-later",
         "fully-past",
@@ -433,7 +433,7 @@ describe("StagesService", () => {
 
       const result = await service.list(USER_ID, { sort: "startDate" });
 
-      expect(result.map((s) => s.id)).toEqual(["today", "later", "past"]);
+      expect(result.map((stage) => stage.id)).toEqual(["today", "later", "past"]);
     });
 
     it("does not break the sort on a stage with no periods: it goes last", async () => {
@@ -445,7 +445,7 @@ describe("StagesService", () => {
 
       const result = await service.list(USER_ID, { sort: "startDate" });
 
-      expect(result.map((s) => s.id)).toEqual(["upcoming", "past", "empty"]);
+      expect(result.map((stage) => stage.id)).toEqual(["upcoming", "past", "empty"]);
     });
 
     it("sorts by submission date via the database, never-submitted drafts last", async () => {
@@ -467,8 +467,8 @@ describe("StagesService", () => {
 
       const result = await service.list(USER_ID, { sort: "submittedAt" });
 
-      expect(result.find((s) => s.id === "live")!.organismName).toBe("Hôpital Cochin");
-      expect(result.find((s) => s.id === "frozen")!.organismName).toBeNull();
+      expect(result.find((stage) => stage.id === "live")!.organismName).toBe("Hôpital Cochin");
+      expect(result.find((stage) => stage.id === "frozen")!.organismName).toBeNull();
     });
 
     it("serialises dates as ISO strings", async () => {
@@ -483,7 +483,7 @@ describe("StagesService", () => {
     });
   });
 
-  describe("getById (issue #114, ADR-0003 read path)", () => {
+  describe("getById: one stage request, live or frozen depending on its status (issue #114, ADR-0003)", () => {
     const referentRow = {
       referent: { id: "ref-1", user: { firstName: "Jean", lastName: "Valjean" } },
     };

@@ -21,6 +21,19 @@ import { PrismaService } from "../../prisma/prisma.service";
 
 type Tx = Prisma.TransactionClient;
 
+// A stage with the single start time it is ranked by in the list.
+interface RankedStage {
+  stage: StageListItemResponse;
+  rankingStartTime: number;
+}
+
+// Periods are stored as UTC midnight, so "today" is measured from the start of
+// the UTC day: a stage starting today is not in the past yet.
+function startOfTodayUtc(): number {
+  const now = new Date();
+  return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+}
+
 @Injectable()
 export class StagesService {
   private readonly logger = new Logger(StagesService.name);
@@ -139,33 +152,48 @@ export class StagesService {
     };
   }
 
-  // Upcoming stages first (nearest upcoming start first), then past ones (most
-  // recent first): "nearest upcoming" is what a student cares about, but a
-  // plain ascending sort would bury it under last year's stages. A stage is
-  // upcoming as long as any of its periods still starts ahead, and is keyed on
-  // that nearest one. Periods are stored as UTC midnight, so "today" is
-  // measured from the start of the UTC day: a stage starting today is not past.
-  private sortByNearestStart(items: StageListItemResponse[]): StageListItemResponse[] {
-    const now = new Date();
-    const startOfToday = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  // Orders the list in three blocks, each with its own rule:
+  //   1. stages with a period still ahead, nearest upcoming start first: what a
+  //      student cares about most, so it must not be buried under old stages;
+  //   2. stages entirely in the past, most recent start first;
+  //   3. stages without any period (not creatable today), last.
+  // A stage counts as upcoming while any of its periods starts today or later,
+  // and is ranked by that nearest period. Within a block the database order
+  // (submission date, newest first) is kept for ties, as Array#sort is stable.
+  private sortByNearestStart(stages: StageListItemResponse[]): StageListItemResponse[] {
+    const startOfTodayTime = startOfTodayUtc();
 
-    const keyed = items.map((item) => {
-      const starts = item.periods.map((period) => Date.parse(period.startDate));
-      const upcoming = starts.filter((start) => start >= startOfToday);
-      return upcoming.length > 0
-        ? { item, isUpcoming: true, start: Math.min(...upcoming) }
-        : // A stage with no periods (not creatable today) has no start at all
-          // and sinks below every real one.
-          { item, isUpcoming: false, start: starts.length > 0 ? Math.max(...starts) : -Infinity };
-    });
+    const upcomingStages: RankedStage[] = [];
+    const pastStages: RankedStage[] = [];
+    const stagesWithoutPeriod: StageListItemResponse[] = [];
 
-    return keyed
-      .sort((a, b) => {
-        if (a.isUpcoming !== b.isUpcoming) return a.isUpcoming ? -1 : 1;
-        if (a.start === b.start) return 0;
-        return a.isUpcoming ? a.start - b.start : b.start - a.start;
-      })
-      .map(({ item }) => item);
+    for (const stage of stages) {
+      const startTimes = stage.periods.map((period) => Date.parse(period.startDate));
+      if (startTimes.length === 0) {
+        stagesWithoutPeriod.push(stage);
+        continue;
+      }
+
+      const upcomingStartTimes = startTimes.filter((startTime) => startTime >= startOfTodayTime);
+      if (upcomingStartTimes.length > 0) {
+        upcomingStages.push({ stage, rankingStartTime: Math.min(...upcomingStartTimes) });
+      } else {
+        pastStages.push({ stage, rankingStartTime: Math.max(...startTimes) });
+      }
+    }
+
+    const nearestFirst = upcomingStages.sort(
+      (earlier, later) => earlier.rankingStartTime - later.rankingStartTime,
+    );
+    const mostRecentFirst = pastStages.sort(
+      (earlier, later) => later.rankingStartTime - earlier.rankingStartTime,
+    );
+
+    return [
+      ...nearestFirst.map(({ stage }) => stage),
+      ...mostRecentFirst.map(({ stage }) => stage),
+      ...stagesWithoutPeriod,
+    ];
   }
 
   private toListItem(
