@@ -292,7 +292,8 @@ model Stage {
   periods     StagePeriod[]
 
   // Immutable frozen copy — authoritative once VALIDATED/REFUSED (Zod-validated).
-  // Includes the (non-null) referent (BR-03) and the acting admin's identity.
+  // Includes the (non-null) referent (BR-03), the acting admin's identity, and the
+  // student's promotion at decision time (labels past stages, e.g. "L2 · S1").
   snapshot        Json?
   snapshotVersion Int?
   // Set when the stage becomes VALIDATED/REFUSED; sorts/paginates the admin history.
