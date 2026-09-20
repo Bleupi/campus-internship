@@ -34,3 +34,4 @@ Every structuring decision is recorded here as an ADR. Format: lightweight [MADR
 | [0028](0028-dependency-vulnerability-automation.md) | Dependency-vulnerability remediation & branch-protection automation | Accepted |
 | [0029](0029-feature-flag-module-gating.md) | Feature flags via conditional module registration, not a guard | Accepted |
 | [0030](0030-e2e-dedicated-database-and-bucket.md) | E2E tests run against a dedicated database and bucket | Accepted |
+| [0031](0031-derived-organism-tutor-freeze.md) | The freeze of a host organism / tutor is derived, not stored | Accepted |
