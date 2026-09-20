@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -10,6 +11,7 @@ import type { Prisma } from "@prisma/client";
 import {
   deriveSemester,
   getCurrentSchoolYear,
+  getSubmissionBlockers,
   type CreateStageDraftRequest,
   type ListStagesQuery,
   type StageDetailResponse,
@@ -18,6 +20,7 @@ import {
   type StageListItemResponse,
 } from "shared";
 import { PrismaService } from "../../prisma/prisma.service";
+import { MailerService } from "../mailer/mailer.service";
 
 type Tx = Prisma.TransactionClient;
 
@@ -38,7 +41,10 @@ function startOfTodayUtc(): number {
 export class StagesService {
   private readonly logger = new Logger(StagesService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mailerService: MailerService,
+  ) {}
 
   // Issue #113: organism/tutor find-or-create + Stage/StagePeriod creation
   // all happen in one transaction, so a mid-wizard failure (e.g. a supplied
@@ -150,6 +156,97 @@ export class StagesService {
         lastName: assignment.referent.user.lastName,
       },
     };
+  }
+
+  // Issue #115 (BR-02, BR-07, BR-09): DRAFT -> PENDING. Ownership is part of
+  // the lookup, so another student's stage is a 404, never a 403.
+  async submit(userId: string, stageId: string): Promise<StageDetailResponse> {
+    const stage = await this.prisma.stage.findFirst({
+      where: { id: stageId, student: { userId } },
+      include: {
+        periods: true,
+        organism: true,
+        tutor: true,
+        student: { include: { user: { select: { firstName: true, lastName: true } } } },
+      },
+    });
+    if (!stage) {
+      throw new NotFoundException("Demande de stage introuvable");
+    }
+    if (stage.status !== "DRAFT") {
+      throw new ConflictException("Seul un brouillon peut être soumis");
+    }
+
+    // The same function the web uses to disable "Soumettre": the UI hint and
+    // the server-side enforcement cannot drift apart.
+    const blockers = getSubmissionBlockers({
+      profileStatus: stage.student.profileStatus,
+      hasOrganism: stage.organism !== null,
+      hasTutor: stage.tutor !== null,
+      service: stage.service,
+      projectType: stage.projectType,
+      motivation: stage.motivation,
+      periods: stage.periods,
+    });
+    if (blockers.length > 0) {
+      throw new BadRequestException(blockers);
+    }
+
+    // BR-09: a single conditional write. Matching on status and the version we
+    // just read means a double submit, or any concurrent write to this stage,
+    // updates zero rows instead of silently overwriting.
+    const { count } = await this.prisma.stage.updateMany({
+      where: { id: stage.id, status: "DRAFT", version: stage.version },
+      data: { status: "PENDING", submittedAt: new Date(), version: { increment: 1 } },
+    });
+    if (count === 0) {
+      throw new ConflictException(
+        "Cette demande a été modifiée entre-temps. Rechargez la page et réessayez.",
+      );
+    }
+
+    await this.notifyAdminsOfSubmission(stage);
+
+    return this.getById(userId, stageId);
+  }
+
+  // BR-07. Runs after the transition committed, so nothing here may fail the
+  // request: (ADR-0026) a failed send is logged by MailerService.sendSafely(),
+  // and the admin lookup is guarded the same way. Otherwise a transient error
+  // would answer 500 for a stage that is already PENDING, and the student's
+  // retry would hit a confusing 409.
+  private async notifyAdminsOfSubmission(stage: {
+    schoolYear: string;
+    semester: string;
+    organism: { name: string } | null;
+    student: { user: { firstName: string; lastName: string } };
+  }): Promise<void> {
+    try {
+      const admins = await this.prisma.user.findMany({
+        where: { roles: { has: "ADMIN" } },
+        select: { email: true },
+      });
+      if (admins.length === 0) {
+        this.logger.warn("A stage request was submitted but no ADMIN user exists to notify");
+        return;
+      }
+
+      const { firstName, lastName } = stage.student.user;
+      const subject = "Nouvelle demande de stage à traiter";
+      const text = `${firstName} ${lastName} a soumis une demande de stage auprès de ${stage.organism?.name ?? "un organisme"} (${stage.schoolYear}, ${stage.semester}).\n\nConnectez-vous à l'application pour la valider ou la refuser.`;
+
+      for (const admin of admins) {
+        await this.mailerService.sendSafely(
+          { to: { email: admin.email }, subject, text },
+          this.logger,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        "Failed to notify admins of a submission",
+        error instanceof Error ? error.stack : error,
+      );
+    }
   }
 
   // Orders the list in three blocks, each with its own rule:

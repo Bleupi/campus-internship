@@ -1,7 +1,7 @@
 import { Alert, Button, IconButton, Stack, TextField, Typography } from "@mui/material";
 import AddOutlinedIcon from "@mui/icons-material/AddOutlined";
 import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
-import { deriveSemester } from "shared";
+import { deriveSemester, isBeforeCurrentSchoolYear } from "shared";
 import { validatePeriods } from "./validate-periods";
 
 export interface RawPeriod {
@@ -15,9 +15,34 @@ interface Props {
   onChange: (periods: RawPeriod[]) => void;
 }
 
+// Periods are stored as UTC midnight, so "today" is measured from the start of
+// the UTC day: a period starting today is not in the past.
+function startOfTodayUtc(): number {
+  const now = new Date();
+  return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+}
+
+// A period starting before today is legitimate (a request filed a posteriori,
+// validated orally first), so this only ever warns. A period in a school year
+// that has already ended can still be saved as a draft but not submitted.
+function pastPeriodWarning(periods: RawPeriod[]): string | null {
+  const starts = periods
+    .map((p) => new Date(p.startDate))
+    .filter((start) => !Number.isNaN(start.getTime()));
+
+  if (starts.some((start) => isBeforeCurrentSchoolYear(start))) {
+    return "Cette demande porte sur l'année scolaire précédente. Vous pourrez enregistrer le brouillon, mais pas le soumettre.";
+  }
+  if (starts.some((start) => start.getTime() < startOfTodayUtc())) {
+    return "Une période commence avant aujourd'hui. C'est possible pour une demande faite a posteriori, vérifiez simplement les dates.";
+  }
+  return null;
+}
+
 export function PeriodsStep({ periods, onChange }: Props) {
   const result = validatePeriods(periods);
   const filledPeriods = periods.filter((p) => p.startDate && p.endDate);
+  const pastWarning = pastPeriodWarning(periods);
   const showValidation = periods.length > 0 && filledPeriods.length === periods.length;
 
   function updatePeriod(id: string, patch: Partial<RawPeriod>) {
@@ -48,6 +73,11 @@ export function PeriodsStep({ periods, onChange }: Props) {
       {periods.length === 0 && (
         <Alert severity="warning" variant="outlined">
           Au moins une période est requise.
+        </Alert>
+      )}
+      {pastWarning && (
+        <Alert severity="warning" variant="outlined">
+          {pastWarning}
         </Alert>
       )}
       {showValidation && !result.success && (
