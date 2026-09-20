@@ -189,3 +189,70 @@ describe("StagesListPage (issue #114)", () => {
     });
   });
 });
+
+// Issue #114 QA: matches the chosen prototype (variant C for mobile, action
+// buttons on the side on desktop, "Nouvelle demande" always at the bottom so
+// the call to action is in the same place in every state).
+describe("StagesListPage prototype layout (issue #114)", () => {
+  beforeEach(() => {
+    listStagesMock.mockResolvedValue([
+      stageItem(),
+      stageItem({ id: "stage-2", status: "PENDING", organismName: "Fondation OVE" }),
+    ]);
+  });
+
+  afterEach(() => {
+    setMatchMedia(false);
+    vi.clearAllMocks();
+  });
+
+  it("puts the 'Nouvelle demande' call to action after the list, not above it", async () => {
+    renderPage();
+
+    const rows = await screen.findAllByRole("listitem");
+    const cta = screen.getByRole("link", { name: /nouvelle demande/i });
+    expect(cta).toHaveAttribute("href", "/stages/new");
+    expect(rows[rows.length - 1]!.compareDocumentPosition(cta)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
+  it("keeps the call to action at the bottom on mobile and on an empty list", async () => {
+    setMatchMedia(true);
+    const { unmount } = renderPage();
+    const firstAccordion = (await screen.findAllByRole("button", { expanded: false }))[0]!;
+    expect(
+      firstAccordion.compareDocumentPosition(
+        screen.getByRole("link", { name: /nouvelle demande/i }),
+      ),
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    unmount();
+
+    setMatchMedia(false);
+    listStagesMock.mockResolvedValue([]);
+    renderPage();
+    const empty = await screen.findByText(/aucune demande de stage/i);
+    expect(
+      empty.compareDocumentPosition(screen.getByRole("link", { name: /nouvelle demande/i })),
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it("leads each desktop row with its status, then the organism, then its first period", async () => {
+    renderPage();
+
+    const row = (await screen.findAllByRole("listitem"))[0]!;
+    const text = row.textContent ?? "";
+    expect(text.indexOf("Brouillon")).toBeLessThan(text.indexOf("Hôpital Cochin"));
+    expect(text.indexOf("Hôpital Cochin")).toBeLessThan(text.indexOf("01/10/2025"));
+  });
+
+  it("shows the period in the collapsed mobile row, before anything is expanded", async () => {
+    setMatchMedia(true);
+    renderPage();
+
+    const summary = (await screen.findAllByRole("button", { expanded: false }))[0]!;
+    expect(within(summary).getByText("Brouillon")).toBeInTheDocument();
+    expect(within(summary).getByText("Hôpital Cochin")).toBeInTheDocument();
+    expect(within(summary).getByText(/01\/10\/2025/)).toBeInTheDocument();
+  });
+});

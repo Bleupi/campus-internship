@@ -78,20 +78,23 @@ describe("AppShell", () => {
     expect(screen.queryByRole("link", { name: /nouvelle demande/i })).toBeNull();
   });
 
-  it("lists 'Mes demandes' in the menu for a student with stage management on (issue #114)", async () => {
-    renderShell("/dashboard");
+  it("replaces 'Tableau de bord' with 'Mes demandes' for a student with stage management on (issue #114)", async () => {
+    renderShell("/profile");
 
     expect(await screen.findByRole("link", { name: /mes demandes/i })).toHaveAttribute(
       "href",
       "/stages",
     );
+    expect(screen.queryByRole("link", { name: /tableau de bord/i })).toBeNull();
+    expect(screen.getByRole("link", { name: /profil/i })).toBeInTheDocument();
   });
 
-  it("does not list 'Mes demandes' for a user without the STUDENT role (issue #114)", async () => {
+  it("keeps 'Tableau de bord' and no 'Mes demandes' for a user without the STUDENT role (issue #114)", async () => {
     getMeMock.mockResolvedValue({ user: { ...studentUser, roles: ["ADMIN"] } });
-    renderShell("/dashboard");
+    renderShell("/profile");
 
     expect(await screen.findByRole("link", { name: /certificats à valider/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /tableau de bord/i })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /mes demandes/i })).toBeNull();
   });
 
@@ -163,7 +166,9 @@ describe("AppShell", () => {
 
       await user.click(screen.getByRole("button", { name: /ouvrir le menu/i }));
 
-      expect(screen.getByRole("link", { name: /tableau de bord/i })).toBeInTheDocument();
+      // The mocked student (stage management on) sees "Mes demandes" in the
+      // dashboard's place once the current user has loaded.
+      expect(await screen.findByRole("link", { name: /mes demandes/i })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: /profil/i })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: /déconnexion/i })).toBeInTheDocument();
     });

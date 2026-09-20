@@ -4,6 +4,11 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 
+// Pinned off: these tests cover the legacy dashboard routing, and must not
+// depend on the VITE_FEATURE_STAGE_MANAGEMENT value of the local .env (the flag-on
+// default page is covered in App.home.test.tsx).
+vi.mock("./lib/feature-flags", () => ({ isStageManagementEnabled: false }));
+
 const getMeMock = vi.fn();
 vi.mock("./features/auth/api", () => ({
   getMe: (...args: unknown[]) => getMeMock(...args),

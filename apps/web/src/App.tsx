@@ -67,6 +67,18 @@ function RequireAdmin() {
   return <Outlet />;
 }
 
+// Issue #114: a student's default page is their request list, not the
+// dashboard placeholder. Sits inside RequireCompleteProfile, so a student whose
+// profile is incomplete/refused/expired is still sent to /profile first (BR-06).
+function HomeRoute() {
+  const { data: me } = useCurrentUser();
+  const isStudent = me?.user.roles.includes("STUDENT") ?? false;
+  if (isStageManagementEnabled && isStudent) {
+    return <Navigate to={ROUTES.STAGES} replace />;
+  }
+  return <DashboardPage />;
+}
+
 export function App() {
   return (
     <Routes>
@@ -77,7 +89,7 @@ export function App() {
       <Route element={<RequireAuth />}>
         <Route element={<RequireCompleteProfile />}>
           <Route element={<AppShell />}>
-            <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
+            <Route path={ROUTES.DASHBOARD} element={<HomeRoute />} />
             <Route path={ROUTES.PROFILE} element={<ProfilePage />} />
             {isStageManagementEnabled && (
               <>

@@ -1,10 +1,11 @@
 import type { Semester, StageListItemResponse, StageStatus } from "shared";
+import { formatPeriodRange } from "./format-summary";
 
 export const STAGE_STATUS_LABELS: Record<StageStatus, string> = {
   DRAFT: "Brouillon",
   PENDING: "En attente",
-  VALIDATED: "Validée",
-  REFUSED: "Refusée",
+  VALIDATED: "Validé",
+  REFUSED: "Refusé",
 };
 
 export const SEMESTER_LABELS: Record<Semester, string> = {
@@ -19,4 +20,14 @@ export function formatStageKind(mandatory: boolean) {
 // A frozen stage carries no organism name until it is read from its snapshot.
 export function organismLabel(stage: StageListItemResponse) {
   return stage.organismName ?? "Organisme indisponible";
+}
+
+// The dense row shows the first period only (as the chosen prototype does);
+// the others are one tap away in the expanded row / detail page.
+export function formatFirstPeriod(stage: StageListItemResponse) {
+  const [first, ...others] = stage.periods;
+  if (!first) return "Aucune période";
+  return others.length > 0
+    ? `${formatPeriodRange(first)} (+${others.length})`
+    : formatPeriodRange(first);
 }

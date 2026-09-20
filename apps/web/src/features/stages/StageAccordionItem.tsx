@@ -3,29 +3,32 @@ import {
   AccordionActions,
   AccordionDetails,
   AccordionSummary,
+  Box,
   Typography,
 } from "@mui/material";
 import ExpandMoreOutlinedIcon from "@mui/icons-material/ExpandMoreOutlined";
 import type { StageListItemResponse } from "shared";
 import { StageDetailLink } from "./StageDetailLink";
 import { StageListItemBody } from "./StageListItemBody";
-import { organismLabel } from "./stage-labels";
+import { formatFirstPeriod, organismLabel } from "./stage-labels";
 import { StageStatusChip } from "./StageStatusChip";
 
-// Mobile layout: a dense accordion, collapsed by default (uncontrolled, so no
-// row is ever forced open). Opening the full request is a separate action.
+// Mobile layout (chosen prototype, variant C): a dense accordion line with the
+// status, organism and first period, collapsed by default (uncontrolled, so no
+// row is ever forced open). The full request is a separate, explicit action.
 export function StageAccordionItem({ stage }: { stage: StageListItemResponse }) {
   return (
-    <Accordion
-      disableGutters
-      variant="outlined"
-      slotProps={{ transition: { unmountOnExit: true } }}
-    >
+    <Accordion slotProps={{ transition: { unmountOnExit: true } }}>
       <AccordionSummary expandIcon={<ExpandMoreOutlinedIcon />}>
-        <Typography sx={{ flexGrow: 1, fontWeight: 700, alignSelf: "center" }}>
-          {organismLabel(stage)}
-        </Typography>
-        <StageStatusChip status={stage.status} />
+        <Box
+          sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1, width: "100%" }}
+        >
+          <StageStatusChip status={stage.status} />
+          <Typography sx={{ flexGrow: 1 }}>{organismLabel(stage)}</Typography>
+          <Typography variant="caption" color="text.secondary">
+            {formatFirstPeriod(stage)}
+          </Typography>
+        </Box>
       </AccordionSummary>
       <AccordionDetails>
         <StageListItemBody stage={stage} />

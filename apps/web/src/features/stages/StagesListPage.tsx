@@ -15,6 +15,7 @@ import { ROUTES } from "../../routes";
 import { StageAccordionItem } from "./StageAccordionItem";
 import { StageRow } from "./StageRow";
 import { StagesFilters } from "./StagesFilters";
+import { StagesSortSelect } from "./StagesSortSelect";
 import { useStages } from "./useStages";
 
 // The URL is the source of truth for filter/sort, so the browser's back button
@@ -44,23 +45,21 @@ export function StagesListPage() {
   const query = parseQuery(searchParams);
   const { data: stages, isPending, isError } = useStages(query);
 
+  const updateQuery = (next: ListStagesQuery) => setSearchParams(toSearchParams(next));
+
   return (
     <Stack spacing={3} sx={{ maxWidth: 900, mx: "auto" }}>
-      <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", gap: 2 }}>
+      <Stack
+        direction="row"
+        sx={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 2 }}
+      >
         <Typography variant="h5" component="h1">
           Mes demandes de stage
         </Typography>
-        <Button
-          component={Link}
-          to={ROUTES.STAGE_NEW}
-          variant="contained"
-          startIcon={<AddOutlinedIcon />}
-        >
-          Nouvelle demande
-        </Button>
+        <StagesSortSelect value={query.sort} onChange={(sort) => updateQuery({ ...query, sort })} />
       </Stack>
 
-      <StagesFilters query={query} onChange={(next) => setSearchParams(toSearchParams(next))} />
+      <StagesFilters query={query} onChange={updateQuery} />
 
       {isPending && <LinearProgress />}
       {isError && <Alert severity="error">Impossible de charger vos demandes de stage.</Alert>}
@@ -81,6 +80,18 @@ export function StagesListPage() {
           )}
         </Box>
       )}
+
+      {/* Always last, whatever the list holds, so the call to action never moves. */}
+      <Button
+        component={Link}
+        to={ROUTES.STAGE_NEW}
+        variant="contained"
+        startIcon={<AddOutlinedIcon />}
+        fullWidth={isMobile}
+        sx={{ alignSelf: isMobile ? "stretch" : "flex-end" }}
+      >
+        Nouvelle demande
+      </Button>
     </Stack>
   );
 }

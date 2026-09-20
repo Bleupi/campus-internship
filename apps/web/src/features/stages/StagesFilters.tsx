@@ -1,20 +1,15 @@
-import { Box, MenuItem, Stack, TextField, ToggleButton, ToggleButtonGroup } from "@mui/material";
-import type { ListStagesQuery, Semester, StageListSort, StageStatus } from "shared";
+import { Box, Stack, ToggleButton, ToggleButtonGroup } from "@mui/material";
+import type { ListStagesQuery, Semester, StageStatus } from "shared";
 import { SEMESTERS, STAGE_STATUSES } from "shared";
 import { SEMESTER_LABELS, STAGE_STATUS_LABELS } from "./stage-labels";
-
-const SORT_LABELS: Record<StageListSort, string> = {
-  startDate: "Date de début la plus proche",
-  submittedAt: "Date de soumission",
-};
 
 interface Props {
   query: ListStagesQuery;
   onChange: (next: ListStagesQuery) => void;
 }
 
-// Filters are the primary controls (full-size toggle groups, always visible);
-// sort is a secondary, compact select that stays out of their way.
+// Filters are the primary controls: full-size toggle groups, always visible
+// (the sort is a separate compact select in the page header).
 export function StagesFilters({ query, onChange }: Props) {
   // MUI's exclusive group reports `null` when the selected button is clicked
   // again: that is "clear this filter", the same as picking "Tous".
@@ -41,10 +36,7 @@ export function StagesFilters({ query, onChange }: Props) {
           ))}
         </ToggleButtonGroup>
       </Box>
-      <Stack
-        direction="row"
-        sx={{ flexWrap: "wrap", gap: 2, alignItems: "center", justifyContent: "space-between" }}
-      >
+      <Box sx={{ overflowX: "auto" }}>
         <ToggleButtonGroup
           exclusive
           color="primary"
@@ -59,22 +51,7 @@ export function StagesFilters({ query, onChange }: Props) {
             </ToggleButton>
           ))}
         </ToggleButtonGroup>
-        <TextField
-          select
-          size="small"
-          variant="standard"
-          label="Trier par"
-          value={query.sort}
-          onChange={(event) => onChange({ ...query, sort: event.target.value as StageListSort })}
-          sx={{ minWidth: 200 }}
-        >
-          {(Object.keys(SORT_LABELS) as StageListSort[]).map((sort) => (
-            <MenuItem key={sort} value={sort}>
-              {SORT_LABELS[sort]}
-            </MenuItem>
-          ))}
-        </TextField>
-      </Stack>
+      </Box>
     </Stack>
   );
 }

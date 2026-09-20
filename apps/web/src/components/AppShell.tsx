@@ -28,13 +28,20 @@ import { useLogout } from "../features/auth/useLogout";
 import { isStageManagementEnabled } from "../lib/feature-flags";
 import { ROUTES } from "../routes";
 
-const baseNavItems = [
-  { to: ROUTES.DASHBOARD, label: "Tableau de bord", icon: <SpaceDashboardOutlinedIcon /> },
-  { to: ROUTES.PROFILE, label: "Profil", icon: <PersonOutlineOutlinedIcon /> },
-];
+const dashboardNavItem = {
+  to: ROUTES.DASHBOARD,
+  label: "Tableau de bord",
+  icon: <SpaceDashboardOutlinedIcon />,
+};
+const profileNavItem = {
+  to: ROUTES.PROFILE,
+  label: "Profil",
+  icon: <PersonOutlineOutlinedIcon />,
+};
 
-// Issue #114: the student's own request list, only while the feature flag is
-// on and only for a STUDENT (the endpoint behind it is student-only).
+// Issue #114: the student's own request list takes the dashboard's place, only
+// while the feature flag is on and only for a STUDENT (the endpoint behind it
+// is student-only). It is the student's default page (see App.tsx HomeRoute).
 const stagesNavItem = {
   to: ROUTES.STAGES,
   label: "Mes demandes",
@@ -121,8 +128,8 @@ export function AppShell() {
   const isAdmin = me?.user.roles.includes("ADMIN") ?? false;
   const isStudent = me?.user.roles.includes("STUDENT") ?? false;
   const navItems = [
-    ...baseNavItems,
-    ...(isStageManagementEnabled && isStudent ? [stagesNavItem] : []),
+    isStageManagementEnabled && isStudent ? stagesNavItem : dashboardNavItem,
+    profileNavItem,
     ...(isAdmin ? [adminNavItem] : []),
   ];
 
