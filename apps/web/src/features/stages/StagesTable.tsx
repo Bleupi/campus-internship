@@ -38,7 +38,7 @@ export function StagesTable({ stages }: { stages: StageListItemResponse[] }) {
                 <StageStatusChip status={stage.status} />
               </TableCell>
               <TableCell sx={{ whiteSpace: "nowrap" }}>{formatFirstPeriod(stage)}</TableCell>
-              <TableCell>
+              <TableCell sx={{ whiteSpace: "nowrap" }}>
                 {SEMESTER_LABELS[stage.semester]}
                 <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                   {stage.schoolYear}

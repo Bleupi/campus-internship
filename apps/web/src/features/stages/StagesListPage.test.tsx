@@ -164,16 +164,15 @@ describe("StagesListPage (issue #114)", () => {
       expect(text).toContain("01/10/2025");
     });
 
-    it("expanding a request reveals an eye button to its full-page detail", async () => {
+    it("expanding a request reveals a labelled 'Voir le détail' button, not a bare icon", async () => {
       const user = userEvent.setup();
       renderPage();
 
       await user.click(await screen.findByRole("button", { name: /fondation ove/i }));
 
-      expect(await screen.findByRole("link", { name: "Voir le détail" })).toHaveAttribute(
-        "href",
-        "/stages/stage-2",
-      );
+      const link = await screen.findByRole("link", { name: "Voir le détail" });
+      expect(link).toHaveAttribute("href", "/stages/stage-2");
+      expect(within(link).getByText("Voir le détail")).toBeVisible();
     });
   });
 

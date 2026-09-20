@@ -34,7 +34,7 @@ export function StageAccordionItem({ stage }: { stage: StageListItemResponse }) 
         <StageListItemBody stage={stage} />
       </AccordionDetails>
       <AccordionActions>
-        <StageDetailLink stageId={stage.id} />
+        <StageDetailLink stageId={stage.id} labelled />
       </AccordionActions>
     </Accordion>
   );

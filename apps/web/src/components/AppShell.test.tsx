@@ -40,6 +40,8 @@ function renderShell(initialPath: string) {
           <Route element={<AppShell />}>
             <Route path="/dashboard" element={<div>Contenu tableau de bord</div>} />
             <Route path="/profile" element={<div>Contenu profil</div>} />
+            <Route path="/stages" element={<div>Contenu liste</div>} />
+            <Route path="/stages/:id" element={<div>Contenu détail</div>} />
           </Route>
         </Routes>
       </MemoryRouter>
@@ -96,6 +98,24 @@ describe("AppShell", () => {
     expect(await screen.findByRole("link", { name: /certificats à valider/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /tableau de bord/i })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /mes demandes/i })).toBeNull();
+  });
+
+  it("keeps 'Mes demandes' underlined and current on a request's detail page (issue #114)", async () => {
+    renderShell("/stages/stage-1");
+
+    const link = await screen.findByRole("link", { name: /mes demandes/i });
+    expect(link).toHaveAttribute("aria-current", "page");
+    expect(link).toHaveStyle({ fontWeight: "700" });
+    expect(screen.getByRole("link", { name: /profil/i })).not.toHaveAttribute("aria-current");
+  });
+
+  it("still marks 'Mes demandes' current on the list itself (issue #114)", async () => {
+    renderShell("/stages");
+
+    expect(await screen.findByRole("link", { name: /mes demandes/i })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 
   it("renders the active route's page content via the outlet", () => {
