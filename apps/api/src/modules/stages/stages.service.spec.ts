@@ -2,6 +2,7 @@ import {
   BadRequestException,
   InternalServerErrorException,
   NotFoundException,
+  NotImplementedException,
 } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import type { CreateStageDraftRequest } from "shared";
@@ -78,7 +79,8 @@ describe("StagesService", () => {
     studentProfile: { findUnique: jest.Mock };
     hostOrganism: { findUnique: jest.Mock; create: jest.Mock };
     tutor: { findFirst: jest.Mock; create: jest.Mock };
-    stage: { create: jest.Mock };
+    stage: { create: jest.Mock; findMany: jest.Mock; findFirst: jest.Mock };
+    referentAssignment: { findUnique: jest.Mock };
     $transaction: jest.Mock;
   };
 
@@ -87,7 +89,8 @@ describe("StagesService", () => {
       studentProfile: { findUnique: jest.fn() },
       hostOrganism: { findUnique: jest.fn(), create: jest.fn() },
       tutor: { findFirst: jest.fn(), create: jest.fn() },
-      stage: { create: jest.fn() },
+      stage: { create: jest.fn(), findMany: jest.fn(), findFirst: jest.fn() },
+      referentAssignment: { findUnique: jest.fn() },
       $transaction: jest.fn((arg) => arg(prisma)),
     };
     prisma.studentProfile.findUnique.mockResolvedValue({ id: PROFILE_ID, userId: USER_ID });
@@ -307,6 +310,241 @@ describe("StagesService", () => {
           schoolYear: "2025-2026",
         }),
       }),
+    );
+  });
+  describe("list: a student's own stage requests, filtered and sorted (issue #114)", () => {
+    const periodRow = (id: string, start: string, end: string) => ({
+      id,
+      startDate: new Date(start),
+      endDate: new Date(end),
+    });
+    const listRow = (id: string, overrides: Record<string, unknown> = {}) => ({
+      id,
+      status: "DRAFT",
+      schoolYear: "2025-2026",
+      semester: "S1",
+      mandatory: true,
+      submittedAt: null,
+      organism: { name: "Hôpital Cochin" },
+      periods: [periodRow(`${id}-p`, "2025-10-01", "2025-10-15")],
+      ...overrides,
+    });
+
+    beforeEach(() => {
+      jest.useFakeTimers().setSystemTime(new Date("2025-09-19T12:00:00Z"));
+    });
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it("only queries the caller's own stages, scoped by their student profile", async () => {
+      prisma.stage.findMany.mockResolvedValue([]);
+
+      await service.list(USER_ID, { sort: "startDate" });
+
+      expect(prisma.stage.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ studentId: PROFILE_ID }) }),
+      );
+    });
+
+    it("throws NotFoundException when the caller has no student profile", async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue(null);
+
+      await expect(service.list(USER_ID, { sort: "startDate" })).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+
+    it("passes the status and semester filters to the query, and omits absent ones", async () => {
+      prisma.stage.findMany.mockResolvedValue([]);
+
+      await service.list(USER_ID, { status: "PENDING", semester: "S2", sort: "startDate" });
+      expect(prisma.stage.findMany.mock.calls[0][0].where).toEqual({
+        studentId: PROFILE_ID,
+        status: "PENDING",
+        semester: "S2",
+      });
+
+      await service.list(USER_ID, { sort: "startDate" });
+      expect(prisma.stage.findMany.mock.calls[1][0].where).toEqual({ studentId: PROFILE_ID });
+    });
+
+    it("sorts by nearest upcoming start date: upcoming first ascending, then past, most recent first", async () => {
+      prisma.stage.findMany.mockResolvedValue([
+        listRow("past-old", { periods: [periodRow("a", "2025-01-10", "2025-01-20")] }),
+        listRow("upcoming-far", { periods: [periodRow("b", "2026-03-01", "2026-03-10")] }),
+        listRow("past-recent", { periods: [periodRow("c", "2025-06-01", "2025-06-10")] }),
+        listRow("upcoming-near", { periods: [periodRow("d", "2025-10-01", "2025-10-10")] }),
+      ]);
+
+      const result = await service.list(USER_ID, { sort: "startDate" });
+
+      expect(result.map((stage) => stage.id)).toEqual([
+        "upcoming-near",
+        "upcoming-far",
+        "past-recent",
+        "past-old",
+      ]);
+    });
+
+    it("uses the earliest period's start when a stage has several periods", async () => {
+      prisma.stage.findMany.mockResolvedValue([
+        listRow("multi", {
+          periods: [
+            periodRow("p2", "2025-12-01", "2025-12-10"),
+            periodRow("p1", "2025-10-05", "2025-10-10"),
+          ],
+        }),
+        listRow("single", { periods: [periodRow("s", "2025-11-01", "2025-11-10")] }),
+      ]);
+
+      const result = await service.list(USER_ID, { sort: "startDate" });
+
+      expect(result.map((stage) => stage.id)).toEqual(["multi", "single"]);
+    });
+
+    it("classes a stage as upcoming when any of its periods is still ahead, keyed on that nearest upcoming start", async () => {
+      prisma.stage.findMany.mockResolvedValue([
+        listRow("upcoming-later", { periods: [periodRow("a", "2025-11-20", "2025-11-25")] }),
+        listRow("first-period-passed", {
+          periods: [
+            periodRow("b1", "2025-06-01", "2025-06-10"),
+            periodRow("b2", "2025-10-05", "2025-10-10"),
+          ],
+        }),
+        listRow("fully-past", { periods: [periodRow("c", "2025-03-01", "2025-03-10")] }),
+      ]);
+
+      const result = await service.list(USER_ID, { sort: "startDate" });
+
+      expect(result.map((stage) => stage.id)).toEqual([
+        "first-period-passed",
+        "upcoming-later",
+        "fully-past",
+      ]);
+    });
+
+    it("treats a stage starting today (stored as UTC midnight) as upcoming, not past", async () => {
+      prisma.stage.findMany.mockResolvedValue([
+        listRow("past", { periods: [periodRow("a", "2025-09-01", "2025-09-10")] }),
+        listRow("later", { periods: [periodRow("c", "2025-10-01", "2025-10-05")] }),
+        listRow("today", { periods: [periodRow("b", "2025-09-19", "2025-09-30")] }),
+      ]);
+
+      const result = await service.list(USER_ID, { sort: "startDate" });
+
+      expect(result.map((stage) => stage.id)).toEqual(["today", "later", "past"]);
+    });
+
+    it("does not break the sort on a stage with no periods: it goes last", async () => {
+      prisma.stage.findMany.mockResolvedValue([
+        listRow("empty", { periods: [] }),
+        listRow("upcoming", { periods: [periodRow("a", "2025-10-01", "2025-10-05")] }),
+        listRow("past", { periods: [periodRow("b", "2025-01-01", "2025-01-05")] }),
+      ]);
+
+      const result = await service.list(USER_ID, { sort: "startDate" });
+
+      expect(result.map((stage) => stage.id)).toEqual(["upcoming", "past", "empty"]);
+    });
+
+    it("sorts by submission date via the database, never-submitted drafts last", async () => {
+      prisma.stage.findMany.mockResolvedValue([listRow("a")]);
+
+      await service.list(USER_ID, { sort: "submittedAt" });
+
+      expect(prisma.stage.findMany.mock.calls[0][0].orderBy).toEqual([
+        { submittedAt: { sort: "desc", nulls: "last" } },
+        { createdAt: "desc" },
+      ]);
+    });
+
+    it("shows the organism name for a live stage but never reads it for a frozen one (BR-08)", async () => {
+      prisma.stage.findMany.mockResolvedValue([
+        listRow("live", { status: "PENDING" }),
+        listRow("frozen", { status: "VALIDATED" }),
+      ]);
+
+      const result = await service.list(USER_ID, { sort: "submittedAt" });
+
+      expect(result.find((stage) => stage.id === "live")!.organismName).toBe("Hôpital Cochin");
+      expect(result.find((stage) => stage.id === "frozen")!.organismName).toBeNull();
+    });
+
+    it("serialises dates as ISO strings", async () => {
+      prisma.stage.findMany.mockResolvedValue([
+        listRow("a", { submittedAt: new Date("2025-09-01T08:00:00Z") }),
+      ]);
+
+      const [item] = await service.list(USER_ID, { sort: "submittedAt" });
+
+      expect(item!.submittedAt).toBe("2025-09-01T08:00:00.000Z");
+      expect(item!.periods[0]!.startDate).toBe("2025-10-01T00:00:00.000Z");
+    });
+  });
+
+  describe("getById: one stage request, live or frozen depending on its status (issue #114, ADR-0003)", () => {
+    const referentRow = {
+      referent: { id: "ref-1", user: { firstName: "Jean", lastName: "Valjean" } },
+    };
+
+    it("looks the stage up by id AND owner, so another student's stage is a 404, not a 403", async () => {
+      prisma.stage.findFirst.mockResolvedValue(null);
+
+      await expect(service.getById(USER_ID, "someone-elses")).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(prisma.stage.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: "someone-elses", student: { userId: USER_ID } } }),
+      );
+    });
+
+    it("assembles a DRAFT from live relations with the referent derived from the exact (year, semester, mandatory) tuple (BR-03)", async () => {
+      prisma.stage.findFirst.mockResolvedValue(
+        stageRow({ studentId: PROFILE_ID, submittedAt: null, refusalReason: null }),
+      );
+      prisma.referentAssignment.findUnique.mockResolvedValue(referentRow);
+
+      const result = await service.getById(USER_ID, "stage-1");
+
+      expect(prisma.referentAssignment.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            studentId_schoolYear_semester_mandatory: {
+              studentId: PROFILE_ID,
+              schoolYear: "2025-2026",
+              semester: "S1",
+              mandatory: true,
+            },
+          },
+        }),
+      );
+      expect(result.referent).toEqual({ id: "ref-1", firstName: "Jean", lastName: "Valjean" });
+      expect(result.organism.name).toBe("Hôpital Cochin");
+    });
+
+    it("returns a null referent when no assignment exists for the tuple (a referent for the other mandatory value does not count)", async () => {
+      prisma.stage.findFirst.mockResolvedValue(
+        stageRow({ studentId: PROFILE_ID, status: "PENDING", submittedAt: new Date("2025-09-01") }),
+      );
+      prisma.referentAssignment.findUnique.mockResolvedValue(null);
+
+      const result = await service.getById(USER_ID, "stage-1");
+
+      expect(result.referent).toBeNull();
+      expect(result.submittedAt).toBe("2025-09-01T00:00:00.000Z");
+    });
+
+    it.each(["VALIDATED", "REFUSED"])(
+      "does not assemble a %s stage from live relations: it is served from its snapshot, not implemented yet",
+      async (status) => {
+        prisma.stage.findFirst.mockResolvedValue(stageRow({ studentId: PROFILE_ID, status }));
+
+        await expect(service.getById(USER_ID, "stage-1")).rejects.toBeInstanceOf(
+          NotImplementedException,
+        );
+        expect(prisma.referentAssignment.findUnique).not.toHaveBeenCalled();
+      },
     );
   });
 });

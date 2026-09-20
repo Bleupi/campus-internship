@@ -45,6 +45,11 @@ describe("Stage management feature flag off (e2e)", () => {
     await request(app.getHttpServer()).post("/stages").send({}).expect(404);
   });
 
+  it("GET /stages and GET /stages/:id: 404 (module never registered), not 401 (issue #114)", async () => {
+    await request(app.getHttpServer()).get("/stages").expect(404);
+    await request(app.getHttpServer()).get("/stages/some-id").expect(404);
+  });
+
   it("GET /organisms/search: 404 (module never registered), not 401", async () => {
     await request(app.getHttpServer()).get("/organisms/search?q=test").expect(404);
   });

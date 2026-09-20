@@ -10,6 +10,8 @@ import { SignupPage } from "./features/auth/SignupPage";
 import { useCurrentUser } from "./features/auth/useCurrentUser";
 import { DashboardPage } from "./features/dashboard/DashboardPage";
 import { NewStagePage } from "./features/stages/NewStagePage";
+import { StageDetailPage } from "./features/stages/StageDetailPage";
+import { StagesListPage } from "./features/stages/StagesListPage";
 import { useProfile } from "./features/students/useProfile";
 import { isStageManagementEnabled } from "./lib/feature-flags";
 import { ROUTES } from "./routes";
@@ -65,6 +67,18 @@ function RequireAdmin() {
   return <Outlet />;
 }
 
+// Issue #114: a student's default page is their request list, not the
+// dashboard placeholder. Sits inside RequireCompleteProfile, so a student whose
+// profile is incomplete/refused/expired is still sent to /profile first (BR-06).
+function HomeRoute() {
+  const { data: me } = useCurrentUser();
+  const isStudent = me?.user.roles.includes("STUDENT") ?? false;
+  if (isStageManagementEnabled && isStudent) {
+    return <Navigate to={ROUTES.STAGES} replace />;
+  }
+  return <DashboardPage />;
+}
+
 export function App() {
   return (
     <Routes>
@@ -75,10 +89,14 @@ export function App() {
       <Route element={<RequireAuth />}>
         <Route element={<RequireCompleteProfile />}>
           <Route element={<AppShell />}>
-            <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
+            <Route path={ROUTES.DASHBOARD} element={<HomeRoute />} />
             <Route path={ROUTES.PROFILE} element={<ProfilePage />} />
             {isStageManagementEnabled && (
-              <Route path={ROUTES.STAGE_NEW} element={<NewStagePage />} />
+              <>
+                <Route path={ROUTES.STAGES} element={<StagesListPage />} />
+                <Route path={ROUTES.STAGE_NEW} element={<NewStagePage />} />
+                <Route path={ROUTES.STAGE_DETAIL} element={<StageDetailPage />} />
+              </>
             )}
             <Route element={<RequireAdmin />}>
               <Route path={ROUTES.CERTIFICATE_QUEUE} element={<CertificateQueuePage />} />

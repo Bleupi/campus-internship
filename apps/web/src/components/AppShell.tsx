@@ -14,6 +14,7 @@ import {
   useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
+import AssignmentOutlinedIcon from "@mui/icons-material/AssignmentOutlined";
 import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
 import LogoutIcon from "@mui/icons-material/LogoutOutlined";
 import MenuIcon from "@mui/icons-material/MenuOutlined";
@@ -24,16 +25,42 @@ import { useState } from "react";
 import { NavLink, Outlet, useMatch, useNavigate } from "react-router-dom";
 import { useCurrentUser } from "../features/auth/useCurrentUser";
 import { useLogout } from "../features/auth/useLogout";
+import { isStageManagementEnabled } from "../lib/feature-flags";
 import { ROUTES } from "../routes";
 
-const baseNavItems = [
-  { to: ROUTES.DASHBOARD, label: "Tableau de bord", icon: <SpaceDashboardOutlinedIcon /> },
-  { to: ROUTES.PROFILE, label: "Profil", icon: <PersonOutlineOutlinedIcon /> },
-];
+interface NavItemConfig {
+  to: string;
+  label: string;
+  icon: ReactNode;
+  // Default true (exact match). false keeps the item current on sub-routes.
+  end?: boolean;
+}
+
+const dashboardNavItem: NavItemConfig = {
+  to: ROUTES.DASHBOARD,
+  label: "Tableau de bord",
+  icon: <SpaceDashboardOutlinedIcon />,
+};
+const profileNavItem: NavItemConfig = {
+  to: ROUTES.PROFILE,
+  label: "Profil",
+  icon: <PersonOutlineOutlinedIcon />,
+};
+
+// Issue #114: the student's own request list takes the dashboard's place, only
+// while the feature flag is on and only for a STUDENT (the endpoint behind it
+// is student-only). It is the student's default page (see App.tsx HomeRoute).
+// `end: false`: it stays current on the request detail page (/stages/:id) too.
+const stagesNavItem: NavItemConfig = {
+  to: ROUTES.STAGES,
+  label: "Mes demandes",
+  icon: <AssignmentOutlinedIcon />,
+  end: false,
+};
 
 // Issue #42: the queue-list link only makes sense (and only avoids a 403)
 // for an ADMIN — same role check as App.tsx's RequireAdmin route guard.
-const adminNavItem = {
+const adminNavItem: NavItemConfig = {
   to: ROUTES.CERTIFICATE_QUEUE,
   label: "Certificats à valider",
   icon: <FactCheckOutlinedIcon />,
@@ -42,18 +69,28 @@ const adminNavItem = {
 // useMatch is the same matching react-router uses internally for NavLink's
 // own active state (aria-current) — deriving the visual style from it too
 // keeps a single source of truth instead of a parallel pathname comparison.
-function useIsActive(to: string) {
-  return useMatch({ path: to, end: true }) !== null;
+function useIsActive(to: string, end: boolean) {
+  return useMatch({ path: to, end }) !== null;
 }
 
-function NavItem({ to, label, icon }: { to: string; label: string; icon: ReactNode }) {
-  const isActive = useIsActive(to);
+function NavItem({
+  to,
+  label,
+  icon,
+  end = true,
+}: {
+  to: string;
+  label: string;
+  icon: ReactNode;
+  end?: boolean;
+}) {
+  const isActive = useIsActive(to, end);
 
   return (
     <Button
       component={NavLink}
       to={to}
-      end
+      end={end}
       startIcon={icon}
       sx={{
         color: "inherit",
@@ -73,20 +110,22 @@ function DrawerNavItem({
   to,
   label,
   icon,
+  end = true,
   onNavigate,
 }: {
   to: string;
   label: string;
   icon: ReactNode;
+  end?: boolean;
   onNavigate: () => void;
 }) {
-  const isActive = useIsActive(to);
+  const isActive = useIsActive(to, end);
 
   return (
     <ListItemButton
       component={NavLink}
       to={to}
-      end
+      end={end}
       onClick={onNavigate}
       sx={{
         color: isActive ? "primary.main" : "text.secondary",
@@ -109,7 +148,12 @@ export function AppShell() {
   const logout = useLogout();
   const { data: me } = useCurrentUser();
   const isAdmin = me?.user.roles.includes("ADMIN") ?? false;
-  const navItems = [...baseNavItems, ...(isAdmin ? [adminNavItem] : [])];
+  const isStudent = me?.user.roles.includes("STUDENT") ?? false;
+  const navItems: NavItemConfig[] = [
+    isStageManagementEnabled && isStudent ? stagesNavItem : dashboardNavItem,
+    profileNavItem,
+    ...(isAdmin ? [adminNavItem] : []),
+  ];
 
   const handleLogout = () => {
     setDrawerOpen(false);
@@ -136,7 +180,13 @@ export function AppShell() {
           {!isMobile && (
             <>
               {navItems.map((item) => (
-                <NavItem key={item.to} to={item.to} label={item.label} icon={item.icon} />
+                <NavItem
+                  key={item.to}
+                  to={item.to}
+                  label={item.label}
+                  icon={item.icon}
+                  end={item.end}
+                />
               ))}
               <Button
                 color="inherit"
@@ -167,6 +217,7 @@ export function AppShell() {
                   to={item.to}
                   label={item.label}
                   icon={item.icon}
+                  end={item.end}
                   onNavigate={() => setDrawerOpen(false)}
                 />
               ))}

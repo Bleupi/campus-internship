@@ -103,7 +103,7 @@ export function NewStagePage() {
     };
 
     createDraft.mutate(payload, {
-      onSuccess: () => navigate(ROUTES.DASHBOARD),
+      onSuccess: () => navigate(ROUTES.STAGES),
     });
   }
 

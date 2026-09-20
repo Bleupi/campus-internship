@@ -1,5 +1,10 @@
-import { Body, Controller, Post, Req, UseGuards } from "@nestjs/common";
-import { createStageDraftSchema, type CreateStageDraftRequest } from "shared";
+import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
+import {
+  createStageDraftSchema,
+  listStagesQuerySchema,
+  type CreateStageDraftRequest,
+  type ListStagesQuery,
+} from "shared";
 import type { Request } from "express";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { RolesGuard } from "../../common/guards/roles.guard";
@@ -22,5 +27,18 @@ export class StagesController {
     @Req() req: Request,
   ) {
     return this.stagesService.createDraft(currentUserId(req), dto);
+  }
+
+  @Get()
+  list(
+    @Query(new ZodValidationPipe(listStagesQuerySchema)) query: ListStagesQuery,
+    @Req() req: Request,
+  ) {
+    return this.stagesService.list(currentUserId(req), query);
+  }
+
+  @Get(":id")
+  getById(@Param("id") id: string, @Req() req: Request) {
+    return this.stagesService.getById(currentUserId(req), id);
   }
 }

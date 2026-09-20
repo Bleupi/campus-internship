@@ -1,7 +1,7 @@
-import type { ReactNode } from "react";
-import { Alert, Box, Card, CardContent, Stack, Typography } from "@mui/material";
+import { Alert, Stack, Typography } from "@mui/material";
 import { formatOrganismAddress, formatTutorContact } from "./format-summary";
 import type { RawPeriod } from "./PeriodsStep";
+import { RecapField, RecapSection, SecondaryLine } from "./StageSummaryParts";
 
 // Deliberately no "new organism / new tutor" wording anywhere on this screen:
 // whether a record already existed is an implementation detail the student
@@ -32,57 +32,6 @@ interface Props {
   motivation: string;
   mandatory: boolean;
   errorMessage: string | null;
-}
-
-// Three visual levels so nothing the student typed can be mistaken for chrome:
-// section title (bold, brand colour) > field label (small, muted) > value
-// (regular body text, full contrast).
-function RecapSection({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <Card variant="outlined" component="section">
-      <CardContent>
-        <Typography
-          variant="subtitle1"
-          component="h3"
-          sx={{ color: "primary.main", fontWeight: 700, mb: 1.5 }}
-        >
-          {title}
-        </Typography>
-        <Stack component="dl" spacing={1.5} sx={{ m: 0 }}>
-          {children}
-        </Stack>
-      </CardContent>
-    </Card>
-  );
-}
-
-function RecapField({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <Box>
-      <Typography
-        component="dt"
-        variant="caption"
-        sx={{ display: "block", color: "text.secondary", fontWeight: 600 }}
-      >
-        {label}
-      </Typography>
-      <Typography
-        component="dd"
-        variant="body1"
-        sx={{ m: 0, overflowWrap: "anywhere", whiteSpace: "pre-wrap" }}
-      >
-        {children}
-      </Typography>
-    </Box>
-  );
-}
-
-function SecondaryLine({ children }: { children: ReactNode }) {
-  return (
-    <Typography component="span" variant="body2" color="text.secondary" sx={{ display: "block" }}>
-      {children}
-    </Typography>
-  );
 }
 
 export function RecapStep({

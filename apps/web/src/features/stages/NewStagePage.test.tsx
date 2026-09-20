@@ -289,7 +289,7 @@ describe("NewStagePage", () => {
     expect(screen.getByRole("button", { name: /suivant/i })).toBeEnabled();
   });
 
-  it("submits the expected payload shape and navigates to the dashboard on success", async () => {
+  it("submits the expected payload shape and navigates to the request list on success", async () => {
     const user = userEvent.setup();
     createStageDraftMock.mockResolvedValue({ id: "stage-1" });
     renderPage();
@@ -309,7 +309,7 @@ describe("NewStagePage", () => {
     // No `semester` key is ever sent — it's server-derived (BR-04b).
     expect(payload).not.toHaveProperty("semester");
 
-    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/dashboard"));
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/stages"));
   });
 
   it.each([

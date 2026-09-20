@@ -40,6 +40,8 @@ function renderShell(initialPath: string) {
           <Route element={<AppShell />}>
             <Route path="/dashboard" element={<div>Contenu tableau de bord</div>} />
             <Route path="/profile" element={<div>Contenu profil</div>} />
+            <Route path="/stages" element={<div>Contenu liste</div>} />
+            <Route path="/stages/:id" element={<div>Contenu détail</div>} />
           </Route>
         </Routes>
       </MemoryRouter>
@@ -76,6 +78,44 @@ describe("AppShell", () => {
 
     expect(await screen.findByRole("link", { name: /certificats à valider/i })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /nouvelle demande/i })).toBeNull();
+  });
+
+  it("replaces 'Tableau de bord' with 'Mes demandes' for a student with stage management on (issue #114)", async () => {
+    renderShell("/profile");
+
+    expect(await screen.findByRole("link", { name: /mes demandes/i })).toHaveAttribute(
+      "href",
+      "/stages",
+    );
+    expect(screen.queryByRole("link", { name: /tableau de bord/i })).toBeNull();
+    expect(screen.getByRole("link", { name: /profil/i })).toBeInTheDocument();
+  });
+
+  it("keeps 'Tableau de bord' and no 'Mes demandes' for a user without the STUDENT role (issue #114)", async () => {
+    getMeMock.mockResolvedValue({ user: { ...studentUser, roles: ["ADMIN"] } });
+    renderShell("/profile");
+
+    expect(await screen.findByRole("link", { name: /certificats à valider/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /tableau de bord/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /mes demandes/i })).toBeNull();
+  });
+
+  it("keeps 'Mes demandes' underlined and current on a request's detail page (issue #114)", async () => {
+    renderShell("/stages/stage-1");
+
+    const link = await screen.findByRole("link", { name: /mes demandes/i });
+    expect(link).toHaveAttribute("aria-current", "page");
+    expect(link).toHaveStyle({ fontWeight: "700" });
+    expect(screen.getByRole("link", { name: /profil/i })).not.toHaveAttribute("aria-current");
+  });
+
+  it("still marks 'Mes demandes' current on the list itself (issue #114)", async () => {
+    renderShell("/stages");
+
+    expect(await screen.findByRole("link", { name: /mes demandes/i })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 
   it("renders the active route's page content via the outlet", () => {
@@ -146,7 +186,9 @@ describe("AppShell", () => {
 
       await user.click(screen.getByRole("button", { name: /ouvrir le menu/i }));
 
-      expect(screen.getByRole("link", { name: /tableau de bord/i })).toBeInTheDocument();
+      // The mocked student (stage management on) sees "Mes demandes" in the
+      // dashboard's place once the current user has loaded.
+      expect(await screen.findByRole("link", { name: /mes demandes/i })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: /profil/i })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: /déconnexion/i })).toBeInTheDocument();
     });
