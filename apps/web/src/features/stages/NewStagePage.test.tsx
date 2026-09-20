@@ -23,9 +23,24 @@ vi.mock("../organisms/api", () => ({
 }));
 
 const createStageDraftMock = vi.fn();
+const submitStageMock = vi.fn();
 vi.mock("./api", () => ({
   createStageDraft: (...args: unknown[]) => createStageDraftMock(...args),
+  submitStage: (...args: unknown[]) => submitStageMock(...args),
 }));
+
+const getProfileMock = vi.fn();
+vi.mock("../students/api", () => ({
+  getProfile: (...args: unknown[]) => getProfileMock(...args),
+}));
+
+// The wizard's periods are in October 2025 (school year 2025-2026). Only Date
+// is faked, so user-event and testing-library keep their real timers; the
+// default "today" precedes the periods, so no past-period warning shows.
+function setToday(isoDate: string) {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(isoDate));
+}
 
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -110,13 +125,17 @@ describe("NewStagePage", () => {
       .mockReset()
       .mockResolvedValue([{ id: "st-1", label: "Secteur Associatif" }]);
     createStageDraftMock.mockReset();
+    submitStageMock.mockReset();
+    getProfileMock.mockReset().mockResolvedValue({ profileStatus: "VALID" });
     navigateMock.mockReset();
+    setToday("2025-09-15T10:00:00.000Z");
   });
 
   // The mobile-stepper test flips the global matchMedia; reset it so a failure
   // there can't leak "mobile" into the following tests.
   afterEach(() => {
     setMatchMedia(false);
+    vi.useRealTimers();
   });
 
   it("finds and selects an existing organism, prefilling structureType/address read-only", async () => {
@@ -452,5 +471,189 @@ describe("NewStagePage", () => {
     expect(screen.queryByText(/nouvel organisme/i)).toBeNull();
     expect(screen.queryByText(/nouveau tuteur/i)).toBeNull();
     expectRecapField("Stage obligatoire", "Non");
+  });
+
+  describe("a period starting before today (issue #115 QA)", () => {
+    async function enterPeriod(user: ReturnType<typeof userEvent.setup>) {
+      await resolveOrganismAndTutorInline(user);
+      await user.click(screen.getByRole("button", { name: /suivant/i }));
+      await user.click(screen.getByRole("button", { name: /ajouter une période/i }));
+      const [startInput, endInput] = screen.getAllByLabelText(/début|fin/i);
+      await user.type(startInput!, "2025-10-01");
+      await user.type(endInput!, "2025-10-15");
+    }
+
+    it("warns, without blocking Suivant, when a period starts before today in the current school year", async () => {
+      setToday("2025-11-01T10:00:00.000Z");
+      const user = userEvent.setup();
+      renderPage();
+
+      await enterPeriod(user);
+
+      expect(await screen.findByText(/commence avant aujourd'hui/i)).toBeVisible();
+      expect(screen.queryByText(/année scolaire précédente/i)).toBeNull();
+      expect(screen.getByRole("button", { name: /suivant/i })).toBeEnabled();
+    });
+
+    it("warns that the draft can be saved but not submitted when the period is in the previous school year, still without blocking", async () => {
+      setToday("2026-09-20T10:00:00.000Z");
+      const user = userEvent.setup();
+      renderPage();
+
+      await enterPeriod(user);
+
+      expect(await screen.findByText(/année scolaire précédente/i)).toBeVisible();
+      expect(screen.getByRole("button", { name: /suivant/i })).toBeEnabled();
+    });
+
+    it("shows no warning for a period that starts today or later", async () => {
+      setToday("2025-10-01T10:00:00.000Z");
+      const user = userEvent.setup();
+      renderPage();
+
+      await enterPeriod(user);
+
+      await screen.findByText(/semestre s1/i);
+      expect(screen.queryByText(/commence avant aujourd'hui/i)).toBeNull();
+    });
+  });
+
+  describe("direct submission from the recap (issue #115)", () => {
+    async function fillDetails(user: ReturnType<typeof userEvent.setup>, fill = true) {
+      if (fill) {
+        await user.type(screen.getByLabelText(/^service$/i), "Cardiologie");
+        await user.type(screen.getByLabelText(/type de handicap/i), "Handicap moteur");
+        await user.type(screen.getByLabelText(/motivation/i), "Découvrir le métier");
+      }
+      await user.click(screen.getByLabelText(/^oui$/i));
+      await user.click(screen.getByRole("button", { name: /suivant/i }));
+    }
+
+    async function reachRecap(user: ReturnType<typeof userEvent.setup>, fill = true) {
+      await resolveOrganismAndTutorInline(user);
+      await goToDetailsStep(user);
+      await fillDetails(user, fill);
+    }
+
+    it("creates the draft, then submits the created stage, then goes to the request list", async () => {
+      createStageDraftMock.mockResolvedValue({ id: "stage-1" });
+      submitStageMock.mockResolvedValue({ id: "stage-1", status: "PENDING" });
+      const user = userEvent.setup();
+      renderPage();
+      await reachRecap(user);
+
+      const submit = screen.getByRole("button", { name: "Soumettre" });
+      await waitFor(() => expect(submit).toBeEnabled());
+      await user.click(submit);
+
+      await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/stages"));
+      expect(createStageDraftMock).toHaveBeenCalledTimes(1);
+      expect(submitStageMock).toHaveBeenCalledWith("stage-1");
+    });
+
+    it("still offers 'Enregistrer le brouillon', which never submits", async () => {
+      createStageDraftMock.mockResolvedValue({ id: "stage-1" });
+      const user = userEvent.setup();
+      renderPage();
+      await reachRecap(user);
+
+      await user.click(screen.getByRole("button", { name: /enregistrer le brouillon/i }));
+
+      await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/stages"));
+      expect(submitStageMock).not.toHaveBeenCalled();
+    });
+
+    it("disables 'Soumettre' and names what is missing, while the draft can still be saved", async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await reachRecap(user, false);
+
+      expect(await screen.findByText("Renseignez le service.")).toBeVisible();
+      expect(screen.getByText("Renseignez votre motivation.")).toBeVisible();
+      expect(screen.getByRole("button", { name: "Soumettre" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: /enregistrer le brouillon/i })).toBeEnabled();
+    });
+
+    it.each(["INCOMPLETE", "PENDING_VALIDATION", "EXPIRED"])(
+      "BR-02: disables 'Soumettre' with the profile reason when the profile is %s, while the draft can still be saved",
+      async (profileStatus) => {
+        getProfileMock.mockResolvedValue({ profileStatus });
+        const user = userEvent.setup();
+        renderPage();
+        await reachRecap(user);
+
+        expect(await screen.findByText(/profil de stage doit d'abord être validé/)).toBeVisible();
+        expect(screen.getByRole("button", { name: "Soumettre" })).toBeDisabled();
+        expect(screen.getByRole("button", { name: /enregistrer le brouillon/i })).toBeEnabled();
+      },
+    );
+
+    it("disables 'Soumettre' for a previous-school-year stage, while the draft can still be saved", async () => {
+      setToday("2026-09-20T10:00:00.000Z");
+      const user = userEvent.setup();
+      renderPage();
+      await reachRecap(user);
+
+      expect(await screen.findByText(/demandes de l'année scolaire précédente/i)).toBeVisible();
+      expect(screen.getByRole("button", { name: "Soumettre" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: /enregistrer le brouillon/i })).toBeEnabled();
+    });
+
+    it("keeps the student on the recap when the draft could not be created, and submits nothing", async () => {
+      createStageDraftMock.mockRejectedValue(new ApiError(500, "boom"));
+      const user = userEvent.setup();
+      renderPage();
+      await reachRecap(user);
+
+      const submit = screen.getByRole("button", { name: "Soumettre" });
+      await waitFor(() => expect(submit).toBeEnabled());
+      await user.click(submit);
+
+      expect(
+        await screen.findByText(/erreur est survenue lors de l'enregistrement/i),
+      ).toBeVisible();
+      expect(submitStageMock).not.toHaveBeenCalled();
+      expect(navigateMock).not.toHaveBeenCalled();
+    });
+
+    it("when the draft is saved but the submission fails, says so and retries only the submission (no duplicate draft)", async () => {
+      createStageDraftMock.mockResolvedValue({ id: "stage-1" });
+      submitStageMock
+        .mockRejectedValueOnce(new ApiError(500, "boom"))
+        .mockResolvedValueOnce({ id: "stage-1", status: "PENDING" });
+      const user = userEvent.setup();
+      renderPage();
+      await reachRecap(user);
+
+      const submit = screen.getByRole("button", { name: "Soumettre" });
+      await waitFor(() => expect(submit).toBeEnabled());
+      await user.click(submit);
+
+      expect(await screen.findByText(/brouillon a bien été enregistré/i)).toBeVisible();
+      expect(navigateMock).not.toHaveBeenCalled();
+
+      await user.click(screen.getByRole("button", { name: "Soumettre" }));
+
+      await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/stages"));
+      expect(createStageDraftMock).toHaveBeenCalledTimes(1);
+      expect(submitStageMock).toHaveBeenCalledTimes(2);
+      expect(submitStageMock).toHaveBeenLastCalledWith("stage-1");
+    });
+
+    it("explains a permanent refusal (400) after the draft was saved, instead of only inviting a retry", async () => {
+      createStageDraftMock.mockResolvedValue({ id: "stage-1" });
+      submitStageMock.mockRejectedValue(new ApiError(400, '{"message":["x"]}'));
+      const user = userEvent.setup();
+      renderPage();
+      await reachRecap(user);
+
+      const submit = screen.getByRole("button", { name: "Soumettre" });
+      await waitFor(() => expect(submit).toBeEnabled());
+      await user.click(submit);
+
+      expect(await screen.findByText(/brouillon a bien été enregistré/i)).toBeVisible();
+      expect(screen.getByText(/incomplète ou votre profil n'est pas validé/i)).toBeVisible();
+      expect(screen.queryByText(/"message"/)).toBeNull();
+    });
   });
 });

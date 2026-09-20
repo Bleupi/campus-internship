@@ -15,6 +15,7 @@ import {
   Typography,
   useMediaQuery,
 } from "@mui/material";
+import SendOutlinedIcon from "@mui/icons-material/SendOutlined";
 import { useTheme } from "@mui/material/styles";
 import type { CreateStageDraftInput } from "shared";
 import { ApiError } from "../../lib/api-client";
@@ -23,7 +24,11 @@ import { useOrganism } from "../organisms/useOrganism";
 import { OrganismTutorStep, type CreationMode } from "./OrganismTutorStep";
 import { PeriodsStep, type RawPeriod } from "./PeriodsStep";
 import { RecapStep } from "./RecapStep";
+import { SubmissionGateAlerts } from "./SubmissionGateAlerts";
+import { describeSubmitError } from "./submit-error-message";
 import { useCreateStageDraft } from "./useCreateStageDraft";
+import { useSubmissionGate } from "./useSubmissionGate";
+import { useSubmitStage } from "./useSubmitStage";
 import { validatePeriods } from "./validate-periods";
 
 type OrganismSelection = CreateStageDraftInput["organism"];
@@ -36,6 +41,7 @@ export function NewStagePage() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const createDraft = useCreateStageDraft();
+  const submitStage = useSubmitStage();
 
   const [step, setStep] = useState(0);
   const [creating, setCreating] = useState<CreationMode>(null);
@@ -48,6 +54,9 @@ export function NewStagePage() {
   // No default: an explicit true/false choice is required before the draft
   // can be saved (issue #113 AC — no silent default reaches the server).
   const [mandatory, setMandatory] = useState<boolean | null>(null);
+  // Set once the draft is saved. If the submission that follows fails, a retry
+  // must submit this draft, not create a second one.
+  const [savedStageId, setSavedStageId] = useState<string | null>(null);
 
   // The window is the scroll container and stays where it was when the step's
   // content is swapped: the long recap would otherwise open scrolled to its
@@ -76,6 +85,9 @@ export function NewStagePage() {
     : createDraft.error instanceof ApiError
       ? "Une erreur est survenue lors de l'enregistrement du brouillon."
       : "Une erreur inattendue est survenue.";
+  const submitErrorMessage = submitStage.isError
+    ? `Votre brouillon a bien été enregistré, mais il n'a pas été soumis. ${describeSubmitError(submitStage.error)} Vous pouvez le retrouver dans « Mes demandes ».`
+    : null;
 
   // On the first step there is no earlier step to go to, but while an inline
   // creation form is open "Précédent" backs out of it, to the search/picker.
@@ -87,25 +99,54 @@ export function NewStagePage() {
     setStep((s) => s - 1);
   }
 
-  function handleSubmit() {
+  // "Enregistrer le brouillon" saves only; "Soumettre" saves, then submits the
+  // saved draft through the same endpoint as the detail page, so the API's
+  // gate (BR-02, completeness) checks what was actually stored.
+  async function save(andSubmit: boolean) {
     if (!periodsResult.success || organism === null || tutor === null || mandatory === null) {
       return;
     }
 
-    const payload: CreateStageDraftInput = {
-      organism,
-      tutor,
-      periods: periodsResult.data,
-      mandatory,
-      service: service.trim() || undefined,
-      projectType: projectType.trim() || undefined,
-      motivation: motivation.trim() || undefined,
-    };
+    let stageId = savedStageId;
+    if (stageId === null) {
+      const payload: CreateStageDraftInput = {
+        organism,
+        tutor,
+        periods: periodsResult.data,
+        mandatory,
+        service: service.trim() || undefined,
+        projectType: projectType.trim() || undefined,
+        motivation: motivation.trim() || undefined,
+      };
+      try {
+        stageId = (await createDraft.mutateAsync(payload)).id;
+      } catch {
+        return; // surfaced through createDraft.isError
+      }
+      setSavedStageId(stageId);
+    }
 
-    createDraft.mutate(payload, {
-      onSuccess: () => navigate(ROUTES.STAGES),
-    });
+    if (!andSubmit) {
+      navigate(ROUTES.STAGES);
+      return;
+    }
+    try {
+      await submitStage.mutateAsync(stageId);
+      navigate(ROUTES.STAGES);
+    } catch {
+      // surfaced through submitStage.isError; the draft stays saved
+    }
   }
+
+  const gate = useSubmissionGate({
+    hasOrganism: organism !== null,
+    hasTutor: tutor !== null,
+    service,
+    projectType,
+    motivation,
+    periods: periodsResult.success ? periodsResult.data : [],
+  });
+  const saving = createDraft.isPending || submitStage.isPending;
 
   return (
     <Box sx={{ maxWidth: 560, minWidth: 0 }}>
@@ -183,12 +224,20 @@ export function NewStagePage() {
           projectType={projectType}
           motivation={motivation}
           mandatory={mandatory}
-          errorMessage={draftErrorMessage}
+          errorMessage={draftErrorMessage ?? submitErrorMessage}
         />
+      )}
+      {step === 3 && (
+        <Stack spacing={1.5} sx={{ mt: 2 }}>
+          <SubmissionGateAlerts blockers={gate.blockers} profileFailed={gate.profileFailed} />
+        </Stack>
       )}
 
       <Stack direction="row" spacing={1} sx={{ mt: 4 }}>
-        <Button disabled={step === 0 && creating === null} onClick={handleBack}>
+        <Button
+          disabled={(step === 0 && creating === null) || savedStageId !== null}
+          onClick={handleBack}
+        >
           Précédent
         </Button>
         {step < STEPS.length - 1 && (
@@ -197,9 +246,19 @@ export function NewStagePage() {
           </Button>
         )}
         {step === STEPS.length - 1 && (
-          <Button variant="contained" disabled={createDraft.isPending} onClick={handleSubmit}>
-            Enregistrer le brouillon
-          </Button>
+          <>
+            <Button variant="outlined" disabled={saving} onClick={() => save(false)}>
+              Enregistrer le brouillon
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<SendOutlinedIcon />}
+              disabled={!gate.canSubmit || saving}
+              onClick={() => save(true)}
+            >
+              Soumettre
+            </Button>
+          </>
         )}
       </Stack>
     </Box>
