@@ -1,6 +1,7 @@
 import { Alert, AlertTitle, Button, LinearProgress, Stack, Typography } from "@mui/material";
 import ArrowBackOutlinedIcon from "@mui/icons-material/ArrowBackOutlined";
 import { Link, useLocation, useParams } from "react-router-dom";
+import type { StageDetailResponse } from "shared";
 import { ApiError } from "../../lib/api-client";
 import { ROUTES } from "../../routes";
 import {
@@ -13,6 +14,15 @@ import { SEMESTER_LABELS, formatStageKind } from "./stage-labels";
 import { StageStatusChip } from "./StageStatusChip";
 import { RecapField, RecapSection, SecondaryLine } from "./StageSummaryParts";
 import { useStage } from "./useStage";
+
+// A draft has no referent yet by design: it is derived once the request is
+// submitted (or the admin assigns one), so "non assigné" would read as a fault.
+function referentLabel(stage: StageDetailResponse) {
+  if (stage.referent) return `${stage.referent.firstName} ${stage.referent.lastName}`;
+  return stage.status === "DRAFT"
+    ? "Sera attribué lors de la soumission du stage ou par l'administrateur"
+    : "non assigné";
+}
 
 export function StageDetailPage() {
   const { id = "" } = useParams();
@@ -96,11 +106,7 @@ export function StageDetailPage() {
           </RecapSection>
 
           <RecapSection title="Référent">
-            <RecapField label="Référent">
-              {stage.referent
-                ? `${stage.referent.firstName} ${stage.referent.lastName}`
-                : "non assigné"}
-            </RecapField>
+            <RecapField label="Référent">{referentLabel(stage)}</RecapField>
           </RecapSection>
         </>
       )}

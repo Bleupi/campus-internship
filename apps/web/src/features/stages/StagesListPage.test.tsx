@@ -45,6 +45,22 @@ function renderPage(initialEntry = "/stages") {
   );
 }
 
+async function dataRows() {
+  const table = await screen.findByRole("table");
+  // First row is the header.
+  return within(table).getAllByRole("row").slice(1);
+}
+
+async function pickOption(
+  user: ReturnType<typeof userEvent.setup>,
+  label: RegExp | string,
+  option: RegExp | string,
+) {
+  const group = screen.getByRole("group", { name: /filtres/i });
+  await user.click(within(group).getByLabelText(label));
+  await user.click(await screen.findByRole("option", { name: option }));
+}
+
 describe("StagesListPage (issue #114)", () => {
   beforeEach(() => {
     listStagesMock.mockResolvedValue([
@@ -58,19 +74,48 @@ describe("StagesListPage (issue #114)", () => {
     vi.clearAllMocks();
   });
 
-  describe("desktop", () => {
-    it("renders one row per request with a link to its own detail page", async () => {
+  describe("desktop (table)", () => {
+    it("renders a table with the location first, one row per request", async () => {
       renderPage();
 
-      const rows = await screen.findAllByRole("listitem");
+      const table = await screen.findByRole("table");
+      const headers = within(table)
+        .getAllByRole("columnheader")
+        .map((header) => header.textContent);
+      expect(headers).toEqual(["Organisme", "Statut", "Période", "Semestre", "Type", "Actions"]);
+
+      const rows = await dataRows();
       expect(rows).toHaveLength(2);
-      expect(within(rows[0]!).getByText("Hôpital Cochin")).toBeInTheDocument();
-      expect(within(rows[0]!).getByText("Brouillon")).toBeInTheDocument();
-      expect(within(rows[1]!).getByText("En attente")).toBeInTheDocument();
-      expect(within(rows[1]!).getByRole("link", { name: /voir le détail/i })).toHaveAttribute(
-        "href",
-        "/stages/stage-2",
-      );
+      const cells = within(rows[0]!).getAllByRole("cell");
+      expect(cells[0]).toHaveTextContent("Hôpital Cochin");
+      expect(cells[1]).toHaveTextContent("Brouillon");
+      expect(cells[2]).toHaveTextContent("01/10/2025 → 15/10/2025");
+      expect(cells[3]).toHaveTextContent("Semestre 1");
+      expect(cells[4]).toHaveTextContent("Obligatoire");
+    });
+
+    it("gives each row an eye icon button to its own detail page, not a text link", async () => {
+      renderPage();
+
+      const rows = await dataRows();
+      const eye = within(rows[1]!).getByRole("link", { name: "Voir le détail" });
+      expect(eye).toHaveAttribute("href", "/stages/stage-2");
+      expect(within(rows[1]!).queryByText(/voir le détail/i)).not.toBeInTheDocument();
+    });
+
+    it("notes the extra periods next to the first one", async () => {
+      listStagesMock.mockResolvedValue([
+        stageItem({
+          periods: [
+            { id: "a", startDate: "2025-10-01T00:00:00.000Z", endDate: "2025-10-15T00:00:00.000Z" },
+            { id: "b", startDate: "2025-11-03T00:00:00.000Z", endDate: "2025-11-07T00:00:00.000Z" },
+          ],
+        }),
+      ]);
+      renderPage();
+
+      const rows = await dataRows();
+      expect(rows[0]).toHaveTextContent("01/10/2025 → 15/10/2025 (+1)");
     });
 
     it("shows a placeholder instead of an organism name for a frozen stage (no live read, BR-08)", async () => {
@@ -80,11 +125,12 @@ describe("StagesListPage (issue #114)", () => {
       expect(await screen.findByText("Organisme indisponible")).toBeInTheDocument();
     });
 
-    it("shows an empty state with a way to create a request when there is none", async () => {
+    it("shows an empty state instead of a table when there is no request", async () => {
       listStagesMock.mockResolvedValue([]);
       renderPage();
 
       expect(await screen.findByText(/aucune demande de stage/i)).toBeInTheDocument();
+      expect(screen.queryByRole("table")).not.toBeInTheDocument();
     });
 
     it("shows an error message when the list can't be loaded", async () => {
@@ -95,25 +141,36 @@ describe("StagesListPage (issue #114)", () => {
     });
   });
 
-  describe("mobile", () => {
+  describe("mobile (accordion)", () => {
     beforeEach(() => setMatchMedia(true));
 
-    it("renders an accordion per request and none of them starts expanded", async () => {
+    it("renders an accordion per request, none expanded, and no table", async () => {
       renderPage();
 
-      const summaries = await screen.findAllByRole("button", { expanded: false });
-      const accordionSummaries = summaries.filter((el) => el.hasAttribute("aria-expanded"));
-      expect(accordionSummaries).toHaveLength(2);
+      const summaries = (await screen.findAllByRole("button", { expanded: false })).filter((el) =>
+        el.hasAttribute("aria-expanded"),
+      );
+      expect(summaries).toHaveLength(2);
       expect(screen.queryByRole("button", { expanded: true })).not.toBeInTheDocument();
+      expect(screen.queryByRole("table")).not.toBeInTheDocument();
     });
 
-    it("expanding a request reveals a link to its full-page detail", async () => {
+    it("leads the collapsed row with the location, then status and first period", async () => {
+      renderPage();
+
+      const summary = (await screen.findAllByRole("button", { expanded: false }))[0]!;
+      const text = summary.textContent ?? "";
+      expect(text.indexOf("Hôpital Cochin")).toBeLessThan(text.indexOf("Brouillon"));
+      expect(text).toContain("01/10/2025");
+    });
+
+    it("expanding a request reveals an eye button to its full-page detail", async () => {
       const user = userEvent.setup();
       renderPage();
 
       await user.click(await screen.findByRole("button", { name: /fondation ove/i }));
 
-      expect(await screen.findByRole("link", { name: /voir le détail/i })).toHaveAttribute(
+      expect(await screen.findByRole("link", { name: "Voir le détail" })).toHaveAttribute(
         "href",
         "/stages/stage-2",
       );
@@ -121,19 +178,34 @@ describe("StagesListPage (issue #114)", () => {
   });
 
   describe("filters and sort", () => {
+    it("groups status, semester and sort together, as dropdowns, above the list", async () => {
+      renderPage();
+
+      const group = screen.getByRole("group", { name: /filtres/i });
+      expect(within(group).getByLabelText("Statut")).toBeInTheDocument();
+      expect(within(group).getByLabelText("Semestre")).toBeInTheDocument();
+      expect(within(group).getByLabelText("Trier par")).toBeInTheDocument();
+      // Dropdowns, not toggle buttons.
+      expect(screen.queryByRole("button", { name: "Brouillon" })).not.toBeInTheDocument();
+      await screen.findByRole("table");
+      expect(group.compareDocumentPosition(screen.getByRole("table"))).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+    });
+
     it("queries with the default sort (nearest start date) and no filter", async () => {
       renderPage();
 
-      await screen.findAllByRole("listitem");
+      await dataRows();
       expect(listStagesMock).toHaveBeenCalledWith({ sort: "startDate" });
     });
 
     it("filtering by status refetches with it and records it in the URL", async () => {
       const user = userEvent.setup();
       renderPage();
-      await screen.findAllByRole("listitem");
+      await dataRows();
 
-      await user.click(screen.getByRole("button", { name: "En attente" }));
+      await pickOption(user, "Statut", "En attente");
 
       await vi.waitFor(() =>
         expect(listStagesMock).toHaveBeenLastCalledWith({ sort: "startDate", status: "PENDING" }),
@@ -144,22 +216,33 @@ describe("StagesListPage (issue #114)", () => {
     it("filtering by semester refetches with it", async () => {
       const user = userEvent.setup();
       renderPage();
-      await screen.findAllByRole("listitem");
+      await dataRows();
 
-      await user.click(screen.getByRole("button", { name: "Semestre 2" }));
+      await pickOption(user, "Semestre", "Semestre 2");
 
       await vi.waitFor(() =>
         expect(listStagesMock).toHaveBeenLastCalledWith({ sort: "startDate", semester: "S2" }),
       );
     });
 
+    it("picking 'Tous' clears a filter", async () => {
+      const user = userEvent.setup();
+      renderPage("/stages?status=PENDING");
+      await dataRows();
+
+      await pickOption(user, "Statut", "Tous");
+
+      await vi.waitFor(() =>
+        expect(listStagesMock).toHaveBeenLastCalledWith({ sort: "startDate" }),
+      );
+    });
+
     it("choosing the submission-date sort refetches with it", async () => {
       const user = userEvent.setup();
       renderPage();
-      await screen.findAllByRole("listitem");
+      await dataRows();
 
-      await user.click(screen.getByLabelText(/trier par/i));
-      await user.click(await screen.findByRole("option", { name: /date de soumission/i }));
+      await pickOption(user, "Trier par", /date de soumission/i);
 
       await vi.waitFor(() =>
         expect(listStagesMock).toHaveBeenLastCalledWith({ sort: "submittedAt" }),
@@ -169,90 +252,53 @@ describe("StagesListPage (issue #114)", () => {
     it("restores filter and sort from the URL, so back from a detail page lands on the same view", async () => {
       renderPage("/stages?status=PENDING&semester=S2&sort=submittedAt");
 
-      await screen.findAllByRole("listitem");
+      await dataRows();
       expect(listStagesMock).toHaveBeenCalledWith({
         status: "PENDING",
         semester: "S2",
         sort: "submittedAt",
       });
-      expect(screen.getByRole("button", { name: "En attente" })).toHaveAttribute(
-        "aria-pressed",
-        "true",
-      );
+      const group = screen.getByRole("group", { name: /filtres/i });
+      expect(within(group).getByLabelText("Statut")).toHaveTextContent("En attente");
+      expect(within(group).getByLabelText("Semestre")).toHaveTextContent("Semestre 2");
     });
 
     it("ignores an invalid value in the URL instead of sending it to the API", async () => {
       renderPage("/stages?status=BOGUS&sort=nope");
 
-      await screen.findAllByRole("listitem");
+      await dataRows();
       expect(listStagesMock).toHaveBeenCalledWith({ sort: "startDate" });
     });
   });
-});
 
-// Issue #114 QA: matches the chosen prototype (variant C for mobile, action
-// buttons on the side on desktop, "Nouvelle demande" always at the bottom so
-// the call to action is in the same place in every state).
-describe("StagesListPage prototype layout (issue #114)", () => {
-  beforeEach(() => {
-    listStagesMock.mockResolvedValue([
-      stageItem(),
-      stageItem({ id: "stage-2", status: "PENDING", organismName: "Fondation OVE" }),
-    ]);
-  });
+  describe("call to action", () => {
+    it("sits after the list, never above it", async () => {
+      renderPage();
 
-  afterEach(() => {
-    setMatchMedia(false);
-    vi.clearAllMocks();
-  });
+      const table = await screen.findByRole("table");
+      const cta = screen.getByRole("link", { name: /nouvelle demande/i });
+      expect(cta).toHaveAttribute("href", "/stages/new");
+      expect(table.compareDocumentPosition(cta)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    });
 
-  it("puts the 'Nouvelle demande' call to action after the list, not above it", async () => {
-    renderPage();
+    it("stays at the bottom on mobile and on an empty list", async () => {
+      setMatchMedia(true);
+      const { unmount } = renderPage();
+      const firstAccordion = (await screen.findAllByRole("button", { expanded: false }))[0]!;
+      expect(
+        firstAccordion.compareDocumentPosition(
+          screen.getByRole("link", { name: /nouvelle demande/i }),
+        ),
+      ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      unmount();
 
-    const rows = await screen.findAllByRole("listitem");
-    const cta = screen.getByRole("link", { name: /nouvelle demande/i });
-    expect(cta).toHaveAttribute("href", "/stages/new");
-    expect(rows[rows.length - 1]!.compareDocumentPosition(cta)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING,
-    );
-  });
-
-  it("keeps the call to action at the bottom on mobile and on an empty list", async () => {
-    setMatchMedia(true);
-    const { unmount } = renderPage();
-    const firstAccordion = (await screen.findAllByRole("button", { expanded: false }))[0]!;
-    expect(
-      firstAccordion.compareDocumentPosition(
-        screen.getByRole("link", { name: /nouvelle demande/i }),
-      ),
-    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    unmount();
-
-    setMatchMedia(false);
-    listStagesMock.mockResolvedValue([]);
-    renderPage();
-    const empty = await screen.findByText(/aucune demande de stage/i);
-    expect(
-      empty.compareDocumentPosition(screen.getByRole("link", { name: /nouvelle demande/i })),
-    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-  });
-
-  it("leads each desktop row with its status, then the organism, then its first period", async () => {
-    renderPage();
-
-    const row = (await screen.findAllByRole("listitem"))[0]!;
-    const text = row.textContent ?? "";
-    expect(text.indexOf("Brouillon")).toBeLessThan(text.indexOf("Hôpital Cochin"));
-    expect(text.indexOf("Hôpital Cochin")).toBeLessThan(text.indexOf("01/10/2025"));
-  });
-
-  it("shows the period in the collapsed mobile row, before anything is expanded", async () => {
-    setMatchMedia(true);
-    renderPage();
-
-    const summary = (await screen.findAllByRole("button", { expanded: false }))[0]!;
-    expect(within(summary).getByText("Brouillon")).toBeInTheDocument();
-    expect(within(summary).getByText("Hôpital Cochin")).toBeInTheDocument();
-    expect(within(summary).getByText(/01\/10\/2025/)).toBeInTheDocument();
+      setMatchMedia(false);
+      listStagesMock.mockResolvedValue([]);
+      renderPage();
+      const empty = await screen.findByText(/aucune demande de stage/i);
+      expect(
+        empty.compareDocumentPosition(screen.getByRole("link", { name: /nouvelle demande/i })),
+      ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    });
   });
 });

@@ -23,8 +23,8 @@ export function StageAccordionItem({ stage }: { stage: StageListItemResponse }) 
         <Box
           sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1, width: "100%" }}
         >
+          <Typography sx={{ flexGrow: 1, fontWeight: 700 }}>{organismLabel(stage)}</Typography>
           <StageStatusChip status={stage.status} />
-          <Typography sx={{ flexGrow: 1 }}>{organismLabel(stage)}</Typography>
           <Typography variant="caption" color="text.secondary">
             {formatFirstPeriod(stage)}
           </Typography>

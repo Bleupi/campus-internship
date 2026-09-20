@@ -80,15 +80,24 @@ describe("StageDetailPage (issue #114)", () => {
     expect(screen.getByText(/03\/11\/2025/)).toBeInTheDocument();
   });
 
-  it.each(["DRAFT", "PENDING"] as const)(
-    "shows 'non assigné' for a %s stage with no referent yet",
-    async (status) => {
-      getStageMock.mockResolvedValue(stageDetail({ status, referent: null }));
-      renderPage();
+  it("explains when the referent of a DRAFT will be assigned, instead of 'non assigné'", async () => {
+    getStageMock.mockResolvedValue(stageDetail({ status: "DRAFT", referent: null }));
+    renderPage();
 
-      expect(await screen.findByText("non assigné")).toBeInTheDocument();
-    },
-  );
+    expect(
+      await screen.findByText(
+        "Sera attribué lors de la soumission du stage ou par l'administrateur",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("non assigné")).not.toBeInTheDocument();
+  });
+
+  it("shows 'non assigné' for a PENDING stage with no referent yet", async () => {
+    getStageMock.mockResolvedValue(stageDetail({ status: "PENDING", referent: null }));
+    renderPage();
+
+    expect(await screen.findByText("non assigné")).toBeInTheDocument();
+  });
 
   it("shows the derived referent's name when one is assigned", async () => {
     getStageMock.mockResolvedValue(

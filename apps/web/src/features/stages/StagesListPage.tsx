@@ -1,21 +1,12 @@
-import {
-  Alert,
-  Box,
-  Button,
-  LinearProgress,
-  Stack,
-  Typography,
-  useMediaQuery,
-} from "@mui/material";
+import { Alert, Button, LinearProgress, Stack, Typography, useMediaQuery } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import AddOutlinedIcon from "@mui/icons-material/AddOutlined";
 import { Link, useSearchParams } from "react-router-dom";
 import { listStagesQuerySchema, type ListStagesQuery } from "shared";
 import { ROUTES } from "../../routes";
 import { StageAccordionItem } from "./StageAccordionItem";
-import { StageRow } from "./StageRow";
 import { StagesFilters } from "./StagesFilters";
-import { StagesSortSelect } from "./StagesSortSelect";
+import { StagesTable } from "./StagesTable";
 import { useStages } from "./useStages";
 
 // The URL is the source of truth for filter/sort, so the browser's back button
@@ -49,15 +40,9 @@ export function StagesListPage() {
 
   return (
     <Stack spacing={3} sx={{ maxWidth: 900, mx: "auto" }}>
-      <Stack
-        direction="row"
-        sx={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 2 }}
-      >
-        <Typography variant="h5" component="h1">
-          Mes demandes de stage
-        </Typography>
-        <StagesSortSelect value={query.sort} onChange={(sort) => updateQuery({ ...query, sort })} />
-      </Stack>
+      <Typography variant="h5" component="h1">
+        Mes demandes de stage
+      </Typography>
 
       <StagesFilters query={query} onChange={updateQuery} />
 
@@ -66,20 +51,17 @@ export function StagesListPage() {
       {stages?.length === 0 && (
         <Typography color="text.secondary">Aucune demande de stage.</Typography>
       )}
-      {stages && stages.length > 0 && (
-        <Box
-          component={isMobile ? "div" : "ul"}
-          sx={{ display: "flex", flexDirection: "column", gap: isMobile ? 1 : 1.5, m: 0, p: 0 }}
-        >
-          {stages.map((stage) =>
-            isMobile ? (
+      {stages &&
+        stages.length > 0 &&
+        (isMobile ? (
+          <Stack spacing={1}>
+            {stages.map((stage) => (
               <StageAccordionItem key={stage.id} stage={stage} />
-            ) : (
-              <StageRow key={stage.id} stage={stage} />
-            ),
-          )}
-        </Box>
-      )}
+            ))}
+          </Stack>
+        ) : (
+          <StagesTable stages={stages} />
+        ))}
 
       {/* Always last, whatever the list holds, so the call to action never moves. */}
       <Button
