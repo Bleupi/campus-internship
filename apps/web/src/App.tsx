@@ -3,6 +3,7 @@ import { Typography } from "@mui/material";
 import { blocksNavigation } from "shared";
 import { AppShell } from "./components/AppShell";
 import { CertificateQueuePage } from "./features/admin/CertificateQueuePage";
+import { StageRequestsPrototypePage } from "./features/admin/stage-requests-prototype/StageRequestsPrototypePage"; // PROTOTYPE
 import { ForgotPasswordPage } from "./features/auth/ForgotPasswordPage";
 import { LoginPage } from "./features/auth/LoginPage";
 import { ResetPasswordPage } from "./features/auth/ResetPasswordPage";
@@ -100,6 +101,10 @@ export function App() {
             )}
             <Route element={<RequireAdmin />}>
               <Route path={ROUTES.CERTIFICATE_QUEUE} element={<CertificateQueuePage />} />
+              <Route
+                path={ROUTES.STAGE_REQUESTS_PROTOTYPE}
+                element={<StageRequestsPrototypePage />}
+              />
             </Route>
           </Route>
         </Route>

@@ -16,6 +16,7 @@ import {
 import { useTheme } from "@mui/material/styles";
 import AssignmentOutlinedIcon from "@mui/icons-material/AssignmentOutlined";
 import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
+import InboxOutlinedIcon from "@mui/icons-material/InboxOutlined";
 import LogoutIcon from "@mui/icons-material/LogoutOutlined";
 import MenuIcon from "@mui/icons-material/MenuOutlined";
 import PersonOutlineOutlinedIcon from "@mui/icons-material/PersonOutlineOutlined";
@@ -64,6 +65,13 @@ const adminNavItem: NavItemConfig = {
   to: ROUTES.CERTIFICATE_QUEUE,
   label: "Certificats à valider",
   icon: <FactCheckOutlinedIcon />,
+};
+
+// PROTOTYPE — throwaway nav entry for the stage-requests admin page.
+const prototypeNavItem: NavItemConfig = {
+  to: ROUTES.STAGE_REQUESTS_PROTOTYPE,
+  label: "Demandes (prototype)",
+  icon: <InboxOutlinedIcon />,
 };
 
 // useMatch is the same matching react-router uses internally for NavLink's
@@ -152,7 +160,7 @@ export function AppShell() {
   const navItems: NavItemConfig[] = [
     isStageManagementEnabled && isStudent ? stagesNavItem : dashboardNavItem,
     profileNavItem,
-    ...(isAdmin ? [adminNavItem] : []),
+    ...(isAdmin ? [adminNavItem, prototypeNavItem] : []),
   ];
 
   const handleLogout = () => {
