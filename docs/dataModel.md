@@ -48,7 +48,7 @@ model User {
 }
 ```
 
-`ADMIN`/`REFERENT` accounts are provisioned out-of-band by an operator, not through self-service signup, and `email` for these roles is not validated against any institutional domain (unlike `STUDENT`, see below) — see ADR-0025.
+`ADMIN`/`REFERENT` accounts are never created through self-service signup, and `email` for these roles is not validated against any institutional domain (unlike `STUDENT`, see below) — see ADR-0025. `ADMIN` accounts are provisioned out-of-band by an operator; a `REFERENT` can also be created by an admin from the referent assignment picker (`User` with a non-usable password + `ReferentProfile`) — see ADR-0031.
 
 Login issues a short-lived JWT access token plus a refresh token (see ADR-0018). The refresh token is a high-entropy random value, never a JWT itself — only its SHA-256 hash is persisted, so a leaked database dump doesn't hand out usable tokens. Sessions are **multi-device**: each login creates its own `RefreshToken` row, so a student staying logged in on a phone and a laptop at the same time has two independent, independently-revocable rows.
 
@@ -291,9 +291,12 @@ model Stage {
 
   periods     StagePeriod[]
 
-  // Immutable frozen copy — authoritative once VALIDATED/REFUSED (Zod-validated)
+  // Immutable frozen copy — authoritative once VALIDATED/REFUSED (Zod-validated).
+  // Includes the (non-null) referent (BR-03) and the acting admin's identity.
   snapshot        Json?
   snapshotVersion Int?
+  // Set when the stage becomes VALIDATED/REFUSED; sorts/paginates the admin history.
+  decidedAt       DateTime?
 
   // Duplication lineage (resubmission after refusal, or new request from an old one)
   parentStage   Stage?  @relation("StageLineage", fields: [parentStageId], references: [id])

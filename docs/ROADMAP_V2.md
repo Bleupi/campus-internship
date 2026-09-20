@@ -58,3 +58,15 @@ BR-11's validation/refusal emails name the acting admin with a function/title ap
 ## Production file deletion
 
 No path exists to remove a `FileObject`'s underlying bucket content in production (e.g. when an admin needs to purge a file, or a GDPR-style erasure request). Distinct from the dev-cleanup item above: this is a real, audited deletion capability, not a test-teardown convenience. Needs its own design pass: whether it's triggered automatically (e.g. old object removed on re-upload) or only ever by an explicit admin action, whether the `FileObject` row is hard- or soft-deleted, and how it's authorized/audited.
+
+## Mobile-friendly admin view for stage requests
+
+A version of the admin's stage-request processing screen (validate/refuse with reasons, assign a referent, add a referent on the fly — BR-03) that is usable on a phone. V1's admin screens are desktop-only, same as the certificate queue (issue #42/#43), and the prototyped dense table with bulk actions and a multi-column detail panel does not fit a narrow viewport. This needs its own layout design (e.g. list → detail navigation, touch-sized actions), not a responsive tweak of the desktop table.
+
+## Concurrent referent change guard on stage decisions
+
+The referent of a live stage is derived from `ReferentAssignment`, which is not versioned: reassigning it does not touch `Stage.version`, so BR-09's optimistic lock does not notice it. With two admins, one can validate/refuse a stage on a stale view of its referent and freeze a referent they never saw into the immutable snapshot (BR-08). V1 accepts this risk (one to two admins). Two candidate guards: the decision request also carries an `expectedReferentId` (409 if it no longer matches), or every (re)assignment bumps `version` on the live stages sharing the tuple so BR-09 covers it with no second token — the latter amends ADR-0007/ADR-0014 and warrants its own ADR.
+
+## Pagination of the admin "Demandes à traiter" list
+
+V1 loads every `PENDING` stage in one response, ordered by submission date (oldest first), with search and status tabs done client-side. Add server-side pagination if the pending volume outgrows that. (The "Historique des demandes" page is paginated from V1: it grows without bound.)
