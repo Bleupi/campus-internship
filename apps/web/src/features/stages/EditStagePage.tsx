@@ -67,7 +67,10 @@ function EditStageForm({ draft, onReload }: { draft: StageDetailResponse; onRelo
       locked={saved}
       errorMessage={draftErrorMessage ?? submitErrorMessage}
       errorAction={
-        conflict?.code === STAGE_CONFLICT_CODES.VERSION_CONFLICT ? (
+        // Both a stale version and a row frozen since the load are fixed the same
+        // way: fetch the draft again (its `editable` flags included) and restart.
+        conflict?.code === STAGE_CONFLICT_CODES.VERSION_CONFLICT ||
+        conflict?.code === STAGE_CONFLICT_CODES.ROW_FROZEN ? (
           <Button color="inherit" size="small" onClick={onReload}>
             Recharger
           </Button>
@@ -79,7 +82,14 @@ function EditStageForm({ draft, onReload }: { draft: StageDetailResponse; onRelo
 
 export function EditStagePage() {
   const { id = "" } = useParams();
-  const { data: stage, isPending, error, refetch } = useStage(id);
+  const { data: stage, isPending, isFetching, error, refetch } = useStage(id);
+  // The wizard reads its draft once, on mount, so it must not start from a copy
+  // the cache kept from an earlier visit: its `version` would be stale and the
+  // first save would conflict. Wait for the first fetch that ends after this
+  // page mounted, then keep that snapshot (later refetches, e.g. the
+  // invalidation after a save, must not restart the wizard).
+  const [initial, setInitial] = useState<StageDetailResponse>();
+  if (!initial && stage && !isFetching) setInitial(stage);
   // Set by a reload: the draft fetched at that moment, and the wizard key that
   // restarts it on that draft.
   const [reloaded, setReloaded] = useState<{ draft: StageDetailResponse; generation: number }>();
@@ -89,7 +99,7 @@ export function EditStagePage() {
     if (data) setReloaded({ draft: data, generation: (reloaded?.generation ?? 0) + 1 });
   }
 
-  const draft = reloaded?.draft ?? stage;
+  const draft = reloaded?.draft ?? initial;
 
   return (
     <Stack spacing={2}>
@@ -102,7 +112,7 @@ export function EditStagePage() {
         Mes demandes
       </Button>
 
-      {isPending && <LinearProgress />}
+      {(isPending || (!draft && isFetching)) && <LinearProgress />}
       {error && (
         <Alert severity="error">
           {error instanceof ApiError && error.status === 404

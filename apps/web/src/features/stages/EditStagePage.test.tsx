@@ -94,8 +94,9 @@ function conflictError(code: string, message: string) {
   return new ApiError(409, JSON.stringify({ statusCode: 409, code, message }));
 }
 
-function renderPage() {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function renderPage(
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) {
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={["/stages/stage-1/edit"]}>
@@ -158,6 +159,28 @@ describe("EditStagePage (issue #116)", () => {
   });
 
   describe("pre-fill", () => {
+    it("waits for the fresh draft instead of pre-filling from a cached one, so the version it sends is current", async () => {
+      const user = userEvent.setup();
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      // A detail page visited earlier left an older copy in the cache.
+      queryClient.setQueryData(
+        ["stages", "detail", "stage-1"],
+        draft({ version: 1, service: "Ancien" }),
+      );
+      getStageMock.mockResolvedValue(draft({ version: 5, service: "À jour" }));
+      renderPage(queryClient);
+
+      await screen.findByText("Hôpital Cochin");
+      await nextStep(user);
+      await nextStep(user);
+      expect(screen.getByLabelText("Service")).toHaveValue("À jour");
+      await nextStep(user);
+      await saveDraft(user);
+
+      await waitFor(() => expect(updateStageDraftMock).toHaveBeenCalledTimes(1));
+      expect(updateStageDraftMock.mock.calls[0]![1]).toMatchObject({ version: 5 });
+    });
+
     it("shows the draft's organism and tutor on the first step", async () => {
       renderPage();
 
@@ -468,7 +491,9 @@ describe("EditStagePage (issue #116)", () => {
       expect(
         await screen.findByText(/cet organisme est utilisé par d'autres demandes/i),
       ).toBeVisible();
-      expect(screen.queryByRole("button", { name: /recharger/i })).toBeNull();
+      // Reloading is the way back: the wizard restarts on the row's fresh state,
+      // where the steering to a new organism shows.
+      expect(screen.getByRole("button", { name: /recharger/i })).toBeVisible();
     });
   });
 

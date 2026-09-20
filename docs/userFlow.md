@@ -40,9 +40,12 @@ As a student I want to:
   - sort by submission date or by stage date
   - if validated, download the associated PDF
 - access a stage detail page
+- edit one of my `DRAFT` requests (pen button on "Mes demandes" and on the detail page): the wizard reopens pre-filled and saves back to the same draft
 - duplicate a stage request to create a new one (keeps a `parentStageId` link)
 
 When filling a request I can add **several work periods** (e.g. 1 week in October + 2 weeks in November). Front-end validation: at least one period, `end >= start` per period, no overlap, all periods in the same school year, and every period ending strictly before `01 September 00:00` of the next school year (half-open bound, see BR-04, BR-05). The semester is **not** chosen by the student — it is derived server-side from the periods, semester 1 winning when a stage straddles both (BR-04b).
+
+**Editing a draft (BR-09, BR-14).** Only a `DRAFT` can be edited; once submitted, the request is read-only for me. While editing, I can also correct the host organism or tutor I created earlier, but only while no one else depends on it: if another student has picked the same organism/tutor in a draft, or any request using it has been submitted, validated or refused, it is _frozen_. The wizard then hides the edit button, explains why, and steers me to create a new organism/tutor through the same inline form as for a new request. Adding a brand-new tutor to an organism that is frozen is always possible. If the draft changed since I opened it (or a row froze in the meantime), saving shows a "this request was modified" message with a "Recharger" button that restarts the wizard on the current data, never a silent overwrite.
 
 ---
 
