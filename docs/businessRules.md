@@ -28,7 +28,7 @@
 
 ## Profile & submission
 
-**BR-02 — Submission requires a valid profile.** A stage request can be **submitted** only if the student profile is `VALID` (insurance certificate verified by the admin). Drafts can be created at any profile status.
+**BR-02 — Submission requires a valid profile.** A stage request can be **submitted** only if the student profile is `VALID` (insurance certificate verified by the admin). Drafts can be created at any profile status. Submission also requires the request to be **complete**: an organism, a tutor, a service, a project type, a motivation, and at least one valid `StagePeriod` (`mandatory` is always an explicit choice already, enforced when the draft is created). `POST /stages/:id/submit` rejects an incomplete request without changing its status, and the web disables "Soumettre" with the specific reason, both from the single `getSubmissionBlockers()` in `packages/shared`.
 
 **BR-06 — Yearly / semester reset via lazy evaluation.**
 
