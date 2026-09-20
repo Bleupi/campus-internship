@@ -56,10 +56,9 @@ describe("Stages draft creation (e2e)", () => {
     await app.close();
   });
 
-  // Scoped to this suite's own students: jest runs e2e files in parallel
-  // workers against one database, so a global count races with other suites
-  // that create stages.
-  function countOwnStages() {
+  // Scoped to this spec's own users: a global stage.count() also sees stages
+  // that other spec files (running in parallel workers) create meanwhile.
+  function ownStageCount(): Promise<number> {
     return prisma.stage.count({
       where: { student: { user: { email: { in: createdUserEmails } } } },
     });
@@ -205,8 +204,7 @@ describe("Stages draft creation (e2e)", () => {
   // it, so it's a way to make the INSERT itself fail after validation passed.
   it("POST /stages: 500 with a clear message and no stage when the new organism can't be inserted", async () => {
     const accessToken = await signupAndGetAccessToken();
-    const stagesBefore = await countOwnStages();
-
+    const stagesBefore = await ownStageCount();
     const response = await request(app.getHttpServer())
       .post("/stages")
       .set("Cookie", authCookie(accessToken))
@@ -224,13 +222,13 @@ describe("Stages draft creation (e2e)", () => {
     expect(response.body.message).toBe(
       "Impossible de créer l'organisme. Le brouillon n'a pas été enregistré.",
     );
-    expect(await countOwnStages()).toBe(stagesBefore);
+    expect(await ownStageCount()).toBe(stagesBefore);
   });
 
   it("POST /stages: 500 with a clear message, and the just-created organism rolled back, when the new tutor can't be inserted", async () => {
     const accessToken = await signupAndGetAccessToken();
     const organismName = `Rollback ${randomUUID()}`;
-    const stagesBefore = await countOwnStages();
+    const stagesBefore = await ownStageCount();
 
     const response = await request(app.getHttpServer())
       .post("/stages")
@@ -246,7 +244,7 @@ describe("Stages draft creation (e2e)", () => {
     expect(response.body.message).toBe(
       "Impossible de créer le tuteur. Le brouillon n'a pas été enregistré.",
     );
-    expect(await countOwnStages()).toBe(stagesBefore);
+    expect(await ownStageCount()).toBe(stagesBefore);
     expect(await prisma.hostOrganism.count({ where: { name: organismName } })).toBe(0);
   });
 });
