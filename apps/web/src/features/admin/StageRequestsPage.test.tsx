@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
@@ -6,10 +6,24 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { StageRequestsPage } from "./StageRequestsPage";
 
 const getStageRequestsMock = vi.fn();
+const getStructureTypesMock = vi.fn();
 
 vi.mock("./api", () => ({
   getStageRequests: (...args: unknown[]) => getStageRequestsMock(...args),
 }));
+
+vi.mock("../organisms/api", () => ({
+  getStructureTypes: (...args: unknown[]) => getStructureTypesMock(...args),
+}));
+
+// The five configured types, alphabetical like GET /organisms/structure-types.
+const STRUCTURE_TYPES = [
+  "Secteur Associatif",
+  "Secteur Fédéral",
+  "Secteur Libéral",
+  "Secteur Médico-social",
+  "Secteur Sanitaire",
+].map((label) => ({ id: label, label }));
 
 function request(overrides: Record<string, unknown> = {}) {
   return {
@@ -53,9 +67,11 @@ function bodyRows() {
 describe("StageRequestsPage — issue #146", () => {
   beforeEach(() => {
     getStageRequestsMock.mockReset();
+    getStructureTypesMock.mockReset();
+    getStructureTypesMock.mockResolvedValue(STRUCTURE_TYPES);
   });
 
-  it("renders the requests in the order the API returned them (already oldest submission first)", async () => {
+  it("BR-03: renders the requests in the order the API returned them (already oldest submission first)", async () => {
     getStageRequestsMock.mockResolvedValue([
       request({
         id: "a",
@@ -96,7 +112,7 @@ describe("StageRequestsPage — issue #146", () => {
     expect(row).toHaveTextContent("Claire Bernard");
   });
 
-  it("marks a mandatory stage 'Obligatoire' and a request without referent as not yet assigned", async () => {
+  it("ADR-0014: marks a mandatory stage 'Obligatoire' and a request without referent as not yet assigned", async () => {
     getStageRequestsMock.mockResolvedValue([request({ mandatory: true, referent: null })]);
     renderPage();
 
@@ -105,25 +121,44 @@ describe("StageRequestsPage — issue #146", () => {
     expect(row).toHaveTextContent("Aucun référent");
   });
 
-  it("shows the structure type as a coloured label: same type, same colour; another type, another colour", async () => {
+  it("shows the structure type as a coloured label: same type, same colour, and every configured type gets its own colour", async () => {
     getStageRequestsMock.mockResolvedValue([
       request({ id: "a", organism: { name: "Cochin", structureType: "Secteur Sanitaire" } }),
       request({ id: "b", organism: { name: "Bichat", structureType: "Secteur Sanitaire" } }),
-      request({ id: "c", organism: { name: "Handisport", structureType: "Association" } }),
+      ...STRUCTURE_TYPES.map(({ label }, index) =>
+        request({
+          id: `t${index}`,
+          organism: { name: `Organisme ${index}`, structureType: label },
+        }),
+      ),
     ]);
     renderPage();
 
     await screen.findByText("Cochin");
-    const [first, second, third] = bodyRows().map((row) => {
-      const label = within(row).getByTestId("structure-type-label");
-      return getComputedStyle(label).backgroundColor;
+    await waitFor(() => {
+      const label = within(bodyRows()[0]!).getByTestId("structure-type-label");
+      expect(getComputedStyle(label).backgroundColor).not.toBe("");
     });
-    expect(first).not.toBe("");
+    const colours = bodyRows().map(
+      (row) => getComputedStyle(within(row).getByTestId("structure-type-label")).backgroundColor,
+    );
+    const [first, second, ...perType] = colours;
     expect(second).toBe(first);
-    expect(third).not.toBe(first);
+    expect(new Set(perType).size).toBe(STRUCTURE_TYPES.length);
   });
 
-  it("tabs Toutes / Sans référent / Prêtes à valider show their counts and filter the rows", async () => {
+  it("still colours an organism whose structure type is no longer configured", async () => {
+    getStageRequestsMock.mockResolvedValue([
+      request({ organism: { name: "Cochin", structureType: "Ancien type supprimé" } }),
+    ]);
+    renderPage();
+
+    const label = await screen.findByTestId("structure-type-label");
+    await waitFor(() => expect(getComputedStyle(label).backgroundColor).not.toBe(""));
+    expect(label).toHaveTextContent("Ancien type supprimé");
+  });
+
+  it("BR-03: tabs Toutes / Sans référent / Prêtes à valider show their counts and filter the rows", async () => {
     const user = userEvent.setup();
     getStageRequestsMock.mockResolvedValue([
       request({

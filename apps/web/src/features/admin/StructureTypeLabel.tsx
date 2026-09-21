@@ -1,7 +1,6 @@
 import { Chip } from "@mui/material";
+import { useStructureTypes } from "../organisms/useStructureTypes";
 
-// Same type, same colour: the palette index comes from a hash of the label, so
-// no colour is stored per type (the types are admin-configurable free text).
 const PALETTE = [
   { bg: "#e3f2fd", fg: "#0d47a1" },
   { bg: "#e8f5e9", fg: "#1b5e20" },
@@ -13,7 +12,9 @@ const PALETTE = [
   { bg: "#ede7f6", fg: "#311b92" },
 ] as const;
 
-function paletteIndex(label: string): number {
+// Only for a type that is no longer configured: HostOrganism.structureType is
+// a plain string, so an old organism can still carry a removed label.
+function hashIndex(label: string): number {
   let hash = 0;
   for (const char of label) {
     hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
@@ -21,8 +22,20 @@ function paletteIndex(label: string): number {
   return hash % PALETTE.length;
 }
 
+// Same type, same colour. The colour is the type's position in the configured
+// list (alphabetical, as the API returns it), so up to PALETTE.length types
+// never share one. Nothing is stored per type; adding a type can shift the
+// colours of the ones after it (see ROADMAP_V2.md).
 export function StructureTypeLabel({ structureType }: { structureType: string }) {
-  const { bg, fg } = PALETTE[paletteIndex(structureType)]!;
+  const { data: structureTypes, isPending } = useStructureTypes();
+
+  // Neutral until the list is known, so the chip does not flash a fallback colour.
+  if (isPending) {
+    return <Chip data-testid="structure-type-label" label={structureType} size="small" />;
+  }
+
+  const position = structureTypes?.findIndex((type) => type.label === structureType) ?? -1;
+  const { bg, fg } = PALETTE[position >= 0 ? position % PALETTE.length : hashIndex(structureType)]!;
   return (
     <Chip
       data-testid="structure-type-label"
