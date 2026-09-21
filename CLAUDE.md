@@ -38,7 +38,7 @@ These are load-bearing. Do not "simplify" or "optimize" them away, even if a sim
 - **`ReferentAssignment` is keyed on the four-tuple `(studentId, schoolYear, semester, mandatory)`**, not just the first three. A student can have a different referent for a mandatory vs. an optional stage in the same semester. Reassigning a referent is an **in-place `UPDATE`** on the existing row (the unique tuple doesn't change) — never a second insert. A reassignment only affects live (`DRAFT`/`PENDING`) stages; anything already `VALIDATED`/`REFUSED` keeps its frozen snapshot untouched. No reassignment history in V1 (deferred to V2). (ADR-0014, BR-03, BR-06)
 - **Calendar intervals are half-open `[start, end)`.** A school year is `[YYYY-09-01T00:00, (YYYY+1)-09-01T00:00)`. A stage period must end strictly before that upper bound — no "minus one minute" hacks, the exclusion of the bound is the mechanism. (BR-01, BR-04c, BR-05a/b/c, ADR-0009)
 - **`schoolYear` has exactly one implementation.** A single Zod value-object in `packages/shared` (format `^\d{4}-\d{4}$`, second year = first + 1, normalization) governs `Stage.schoolYear`, `ReferentAssignment.schoolYear`, and `StudentProfile.profileYear`. A DB `CHECK` on format is defense in depth only — the N+1 semantic rule lives in Zod exclusively, never reimplemented in SQL or duplicated in another schema. (ADR-0012)
-- **Submission requires a `VALID` profile** (BR-02); **validation requires an assigned referent** (BR-03); **the validated/refused snapshot is immutable and versioned** (BR-08); **stage writes use optimistic locking via `version`** (BR-09).
+- **Submission requires a `VALID` profile** (BR-02); **validation and refusal require an assigned referent** (BR-03) — the snapshot's `referent` is never null; **the validated/refused snapshot is immutable and versioned** (BR-08); **stage writes use optimistic locking via `version`** (BR-09).
 
 ---
 
@@ -202,7 +202,7 @@ Consumed via the workspace protocol (`workspace:*`), never via relative paths re
 | BR-04b | Semester derivation: all-S1 → S1, all-S2 → S2, straddling → S1; client-supplied semester is ignored |
 | BR-01 / BR-05a-c | School-year and semester boundaries are half-open; a period ending exactly at next-year 09-01 00:00 is rejected, one ending 1ms before is accepted |
 | BR-02 | Submission blocked when profile isn't `VALID`; draft creation allowed at any status |
-| BR-03 | Validation blocked without a referent assignment for the stage's exact `(year, semester, mandatory)` combination; a referent assigned for the _other_ `mandatory` value doesn't satisfy it |
+| BR-03 | Validation **and refusal** blocked without a referent assignment for the stage's exact `(year, semester, mandatory)` combination; a referent assigned for the _other_ `mandatory` value doesn't satisfy it |
 | BR-06 | Missing-referent dashboard warning fires per `(student, schoolYear, semester, mandatory)` combination tied to an actual eligible stage — not for every theoretical combination |
 | BR-08 | Snapshot is written once, frozen, and unaffected by later edits to organism/tutor/referent/etc. |
 | BR-09 | A write with a stale `version` is rejected with a conflict, not silently overwritten |
