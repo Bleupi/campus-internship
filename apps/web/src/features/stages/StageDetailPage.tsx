@@ -1,10 +1,9 @@
 import { Alert, AlertTitle, Button, LinearProgress, Stack, Typography } from "@mui/material";
 import ArrowBackOutlinedIcon from "@mui/icons-material/ArrowBackOutlined";
-import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import { Link, useLocation, useParams } from "react-router-dom";
 import type { StageDetailResponse } from "shared";
 import { ApiError } from "../../lib/api-client";
-import { ROUTES, stageEditPath } from "../../routes";
+import { ROUTES } from "../../routes";
 import {
   formatDate,
   formatOrganismAddress,
@@ -13,8 +12,8 @@ import {
 } from "./format-summary";
 import { SEMESTER_LABELS, formatStageKind } from "./stage-labels";
 import { StageStatusChip } from "./StageStatusChip";
+import { DraftActionsSection } from "./DraftActionsSection";
 import { RecapField, RecapSection, SecondaryLine } from "./StageSummaryParts";
-import { SubmitStageSection } from "./SubmitStageSection";
 import { useStage } from "./useStage";
 
 // A draft has no referent yet by design: it is derived once the request is
@@ -63,17 +62,6 @@ export function StageDetailPage() {
               Demande de stage
             </Typography>
             <StageStatusChip status={stage.status} />
-            {stage.status === "DRAFT" && (
-              <Button
-                component={Link}
-                to={stageEditPath(stage.id)}
-                size="small"
-                startIcon={<EditOutlinedIcon />}
-                sx={{ ml: "auto" }}
-              >
-                Modifier
-              </Button>
-            )}
           </Stack>
 
           {stage.status === "REFUSED" && stage.refusalReason && (
@@ -122,7 +110,7 @@ export function StageDetailPage() {
             <RecapField label="Référent">{referentLabel(stage)}</RecapField>
           </RecapSection>
 
-          {stage.status === "DRAFT" && <SubmitStageSection stage={stage} />}
+          {stage.status === "DRAFT" && <DraftActionsSection stage={stage} />}
         </>
       )}
     </Stack>

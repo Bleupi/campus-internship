@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -106,6 +106,35 @@ describe("StageDetailPage (issue #114)", () => {
     renderPage();
     await screen.findByText("Hôpital Cochin");
     expect(screen.queryByRole("link", { name: /modifier/i })).toBeNull();
+  });
+
+  it("groups 'Modifier' and 'Soumettre' in one labelled actions group, after the missing-field reasons (issue #116 QA)", async () => {
+    getStageMock.mockResolvedValue(stageDetail({ service: null }));
+    renderPage();
+
+    const reason = await screen.findByText("Renseignez le service.");
+    const group = screen.getByRole("group", { name: "Actions de la demande" });
+    const edit = within(group).getByRole("link", { name: "Modifier la demande de stage" });
+    expect(edit).toHaveAttribute("href", "/stages/stage-1/edit");
+    expect(
+      within(group).getByRole("button", { name: "Soumettre la demande de stage" }),
+    ).toBeInTheDocument();
+
+    // The reason sits above the buttons it explains, and "Modifier" is no
+    // longer stranded in the page header.
+    expect(reason.compareDocumentPosition(group) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const title = screen.getByRole("heading", { name: "Demande de stage" });
+    expect(within(title.parentElement as HTMLElement).queryByRole("link")).toBeNull();
+  });
+
+  it("ties the disabled 'Soumettre' to the reasons it is blocked, for screen readers (issue #116 QA)", async () => {
+    getStageMock.mockResolvedValue(stageDetail({ service: null }));
+    renderPage();
+
+    await screen.findByText("Renseignez le service.");
+    expect(screen.getByRole("button", { name: /^soumettre/i })).toHaveAccessibleDescription(
+      /Renseignez le service\./,
+    );
   });
 
   it("explains when the referent of a DRAFT will be assigned, instead of 'non assigné'", async () => {
@@ -221,14 +250,14 @@ describe("StageDetailPage submission (issue #115)", () => {
     renderPage();
 
     expect(await screen.findByText(/demandes de l'année scolaire précédente/i)).toBeVisible();
-    expect(screen.getByRole("button", { name: "Soumettre" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^soumettre/i })).toBeDisabled();
   });
 
   it("enables 'Soumettre' on a complete DRAFT with a VALID profile", async () => {
     getStageMock.mockResolvedValue(stageDetail());
     renderPage();
 
-    const button = await screen.findByRole("button", { name: "Soumettre" });
+    const button = await screen.findByRole("button", { name: /^soumettre/i });
     await waitFor(() => expect(button).toBeEnabled());
   });
 
@@ -240,7 +269,7 @@ describe("StageDetailPage submission (issue #115)", () => {
       renderPage();
 
       expect(await screen.findByText(/profil de stage doit d'abord être validé/)).toBeVisible();
-      expect(screen.getByRole("button", { name: "Soumettre" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: /^soumettre/i })).toBeDisabled();
     },
   );
 
@@ -250,7 +279,7 @@ describe("StageDetailPage submission (issue #115)", () => {
 
     expect(await screen.findByText("Renseignez le service.")).toBeVisible();
     expect(screen.getByText("Renseignez votre motivation.")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Soumettre" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^soumettre/i })).toBeDisabled();
   });
 
   it("keeps 'Soumettre' disabled, without a false reason, while the profile is still loading", async () => {
@@ -258,7 +287,7 @@ describe("StageDetailPage submission (issue #115)", () => {
     getStageMock.mockResolvedValue(stageDetail());
     renderPage();
 
-    const button = await screen.findByRole("button", { name: "Soumettre" });
+    const button = await screen.findByRole("button", { name: /^soumettre/i });
     expect(button).toBeDisabled();
     expect(screen.queryByText(/profil de stage doit d'abord/)).not.toBeInTheDocument();
   });
@@ -271,13 +300,13 @@ describe("StageDetailPage submission (issue #115)", () => {
     submitStageMock.mockResolvedValue(undefined);
     renderPage();
 
-    const button = await screen.findByRole("button", { name: "Soumettre" });
+    const button = await screen.findByRole("button", { name: /^soumettre/i });
     await waitFor(() => expect(button).toBeEnabled());
     await userEvent.click(button);
 
     expect(submitStageMock).toHaveBeenCalledWith("stage-1");
     expect(await screen.findByText("En attente")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Soumettre" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^soumettre/i })).not.toBeInTheDocument();
   });
 
   it("shows a French explanation, not the raw response body, when the submission is refused", async () => {
@@ -287,7 +316,7 @@ describe("StageDetailPage submission (issue #115)", () => {
     );
     renderPage();
 
-    const button = await screen.findByRole("button", { name: "Soumettre" });
+    const button = await screen.findByRole("button", { name: /^soumettre/i });
     await waitFor(() => expect(button).toBeEnabled());
     await userEvent.click(button);
 
@@ -302,7 +331,7 @@ describe("StageDetailPage submission (issue #115)", () => {
       renderPage();
 
       await screen.findByText("Hôpital Cochin");
-      expect(screen.queryByRole("button", { name: "Soumettre" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /^soumettre/i })).not.toBeInTheDocument();
     },
   );
 });

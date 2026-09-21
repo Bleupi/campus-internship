@@ -8,4 +8,4 @@ Edit a stage draft with optimistic locking (issue #116, BR-09, BR-14). `PATCH /s
 
 - `packages/shared`: `updateStageDraftSchema` (`existing` / `new` / `edit` per organism and tutor), `version` and per-row `editable` on the stage responses, `STAGE_CONFLICT_CODES`.
 - `apps/api`: `StagesService.updateDraft` and `PATCH /stages/:id`.
-- `apps/web`: the wizard is split into a shared `StageWizard` with `NewStagePage` and `EditStagePage` wrappers; a pen button on "Mes demandes" (and on the detail page) for drafts; a reload prompt on a version conflict; frozen rows steer the student to create a new organism/tutor.
+- `apps/web`: the wizard is split into a shared `StageWizard` with `NewStagePage` and `EditStagePage` wrappers; a pen button on "Mes demandes" for drafts, and on the detail page a "Modifier" button in the same labelled action group as "Soumettre", below the missing-field reasons (inline on desktop, stacked on mobile); a reload prompt on a version conflict; frozen rows steer the student to create a new organism/tutor.
