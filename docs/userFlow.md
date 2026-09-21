@@ -64,15 +64,19 @@ Because a stage cannot be validated unless the student profile is `VALID`, the *
 
 ### Stage management
 
-When a stage request is submitted to me, I want to:
+The admin has a **"Demandes à traiter"** page listing every submitted (`PENDING`) request, in submission order (oldest first). When a stage request is submitted to me, I want to:
 
-- view the student's previous **mandatory** stages only, showing: structure type, host organism name, service
-- **validate** a stage, or **refuse** it with a reason
-- have the student notified; on refusal the email includes the reason
+- view everything the student provided (organism with its full address, service, project, motivation, tutor, periods) and the student's previous **mandatory** stages only, showing: structure type, host organism name, service
+- see, on a request created by duplicating a refused one, the refused request's date and refusal reason
+- **validate** a stage, or **refuse** it with a reason, one request at a time (never in bulk; no confirmation step on validation)
+- have the student notified; on refusal the email includes the reason; on validation the referent is cc'd on the student's email (BR-07)
 
-Validation conditions:
+Decision conditions (validate **or** refuse):
 
-- the student must have a referent for the stage's school year, semester **and `mandatory` flag** (a student may have a different referent for a mandatory vs. an optional stage in the same semester). If none exists, I must be able to **assign** one before validating. Validation is **impossible** without a referent (it is required by the snapshot and by university administration). See BR-03.
+- the student must have a referent for the stage's school year, semester **and `mandatory` flag** (a student may have a different referent for a mandatory vs. an optional stage in the same semester). If none exists, I must be able to **assign** one before deciding, and to **add a new referent on the fly** from the assignment picker if none exists yet. Deciding is **impossible** without a referent (it is required by the snapshot and by university administration). See BR-03.
+- I can assign one referent to several selected requests at once. Whenever an assignment also applies to other live requests of the same student (same year, semester and `mandatory` flag), I confirm first ("s'applique aussi à N autre(s) demande(s) en cours de l'étudiant X"); a bulk assignment always shows one recap dialog.
+
+Once decided, a request leaves that page and appears in the **"Historique des demandes"** page: a read-only, server-side paginated list of `VALIDATED`/`REFUSED` stages (most recently decided first, filter by status, search by the student's last/first name, accent- and case-insensitive), each opening its frozen snapshot.
 
 Concurrency: stages use optimistic locking. If another admin saved a change first, I get a "this stage was modified, please reload" message.
 

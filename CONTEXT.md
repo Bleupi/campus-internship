@@ -11,3 +11,9 @@ Domain vocabulary not already captured by `docs/dataModel.md` / `docs/businessRu
 Insurers phrase internship coverage inconsistently; from project archives, all of the following have been seen and should be treated as equivalent when reviewing: "un stage de formation", "stages conventionnés", "les stages nécessités par la scolarité", "stage en entreprise". No canonical wording is enforced on the student — content, not phrasing, is what's checked.
 
 **Couverture de la période scolaire (attestation)**: The part of the attestation's coverage text that must overlap the current school year — distinct from the `schoolYear` value object (ADR-0012, a normalized `"YYYY-YYYY"` string used internally), which is never what the document itself says. Insurers phrase this inconsistently too; seen in archives: "vie scolaire", "activités scolaires et extrascolaires", "au cours de ses études", "activités scolaires obligatoires et facultatives", "les cours dispensés au sein de l'établissement scolaire", "enseignement supérieur".
+
+**Demande à traiter**: A `Stage` in `PENDING` as the admin sees it: submitted by a student and awaiting the admin's validation or refusal. Only submitted stages are ever "à traiter" — a student's own "demandes" also include drafts, an admin's never do. _Avoid_: demande en attente, stage en attente
+
+**Historique des demandes**: The admin's read-only view of stages already `VALIDATED` or `REFUSED`, displayed from their frozen snapshot rather than from live data. _Avoid_: archive, demandes traitées (as a page name)
+
+**Motif de refus (demande de stage)**: The reason the admin gives when refusing a demande à traiter, always sent to the student in the refusal email. Distinct from the refusal reason on a `StudentProfile` (BR-12), which concerns the insurance certificate, not the stage. _Avoid_: raison du refus
