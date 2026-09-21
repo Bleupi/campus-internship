@@ -149,6 +149,30 @@ describe("App route protection — BR-06 profile-completion guard", () => {
   });
 });
 
+describe("Stage management flag off — issue #146 admin stage requests", () => {
+  beforeEach(() => {
+    getMeMock.mockReset();
+    getProfileMock.mockReset();
+  });
+
+  it("has no menu entry for an ADMIN", async () => {
+    getMeMock.mockResolvedValue({ user: { ...authenticatedUser, roles: ["ADMIN"] } });
+    renderApp("/dashboard");
+
+    expect(await screen.findByText(/tableau de bord \(à venir\)/i)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /demandes à traiter/i })).not.toBeInTheDocument();
+  });
+
+  it("has no /admin/stage-requests route for an ADMIN", async () => {
+    getMeMock.mockResolvedValue({ user: { ...authenticatedUser, roles: ["ADMIN"] } });
+    renderApp("/admin/stage-requests");
+
+    // Unmatched path: the catch-all sends it to /login instead of the page.
+    expect(await screen.findByText(/s'inscrire/i)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /demandes à traiter/i })).not.toBeInTheDocument();
+  });
+});
+
 describe("App route protection — issue #42 admin certificate queue", () => {
   beforeEach(() => {
     getMeMock.mockReset();

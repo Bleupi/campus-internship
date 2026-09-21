@@ -24,6 +24,11 @@ vi.mock("./features/students/api", () => ({
   uploadInsuranceCertificate: vi.fn(),
 }));
 
+const getStageRequestsMock = vi.fn();
+vi.mock("./features/admin/api", () => ({
+  getStageRequests: (...args: unknown[]) => getStageRequestsMock(...args),
+}));
+
 const listStagesMock = vi.fn();
 vi.mock("./features/stages/api", () => ({
   listStages: (...args: unknown[]) => listStagesMock(...args),
@@ -103,6 +108,26 @@ describe("App default page with stage management on (issue #114)", () => {
     expect(
       await screen.findByRole("heading", { name: /mes demandes de stage/i }),
     ).toBeInTheDocument();
+  });
+
+  it("renders the stage-requests page for an ADMIN at /admin/stage-requests (issue #146)", async () => {
+    getMeMock.mockResolvedValue({ user: { ...student, roles: ["ADMIN"] } });
+    getStageRequestsMock.mockResolvedValue([]);
+    renderApp("/admin/stage-requests");
+
+    expect(await screen.findByRole("heading", { name: /demandes à traiter/i })).toBeInTheDocument();
+  });
+
+  it("redirects a non-ADMIN away from /admin/stage-requests without calling the API (issue #146)", async () => {
+    getMeMock.mockResolvedValue({ user: student });
+    getProfileMock.mockResolvedValue(studentProfile("VALID"));
+    listStagesMock.mockResolvedValue([]);
+    renderApp("/admin/stage-requests");
+
+    expect(
+      await screen.findByRole("heading", { name: /mes demandes de stage/i }),
+    ).toBeInTheDocument();
+    expect(getStageRequestsMock).not.toHaveBeenCalled();
   });
 
   it("keeps the dashboard for a user who is not a student", async () => {

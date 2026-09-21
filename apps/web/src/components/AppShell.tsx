@@ -16,6 +16,7 @@ import {
 import { useTheme } from "@mui/material/styles";
 import AssignmentOutlinedIcon from "@mui/icons-material/AssignmentOutlined";
 import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
+import PendingActionsOutlinedIcon from "@mui/icons-material/PendingActionsOutlined";
 import LogoutIcon from "@mui/icons-material/LogoutOutlined";
 import MenuIcon from "@mui/icons-material/MenuOutlined";
 import PersonOutlineOutlinedIcon from "@mui/icons-material/PersonOutlineOutlined";
@@ -64,6 +65,15 @@ const adminNavItem: NavItemConfig = {
   to: ROUTES.CERTIFICATE_QUEUE,
   label: "Certificats à valider",
   icon: <FactCheckOutlinedIcon />,
+};
+
+// Issue #146: the admin's list of submitted stage requests. Behind the stage
+// management flag like the rest of that feature, and admin-only (the endpoint
+// behind it 403s anyone else).
+const stageRequestsNavItem: NavItemConfig = {
+  to: ROUTES.STAGE_REQUESTS,
+  label: "Demandes à traiter",
+  icon: <PendingActionsOutlinedIcon />,
 };
 
 // useMatch is the same matching react-router uses internally for NavLink's
@@ -153,6 +163,7 @@ export function AppShell() {
     isStageManagementEnabled && isStudent ? stagesNavItem : dashboardNavItem,
     profileNavItem,
     ...(isAdmin ? [adminNavItem] : []),
+    ...(isAdmin && isStageManagementEnabled ? [stageRequestsNavItem] : []),
   ];
 
   const handleLogout = () => {
