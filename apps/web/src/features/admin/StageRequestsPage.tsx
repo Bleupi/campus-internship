@@ -27,9 +27,13 @@ type TabKey = "all" | "withoutReferent" | "ready";
 
 const hasReferent = (request: AdminStageRequestListItem) => request.referent !== null;
 
-const TABS: { key: TabKey; label: string; matches: (r: AdminStageRequestListItem) => boolean }[] = [
+const TABS: {
+  key: TabKey;
+  label: string;
+  matches: (request: AdminStageRequestListItem) => boolean;
+}[] = [
   { key: "all", label: "Toutes", matches: () => true },
-  { key: "withoutReferent", label: "Sans référent", matches: (r) => !hasReferent(r) },
+  { key: "withoutReferent", label: "Sans référent", matches: (request) => !hasReferent(request) },
   // A referent is the only thing the admin may still be missing to decide
   // (BR-03): the student already had to complete everything else to submit.
   { key: "ready", label: "Prêtes à valider", matches: hasReferent },

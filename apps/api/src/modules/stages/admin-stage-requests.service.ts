@@ -1,9 +1,7 @@
 import { Injectable } from "@nestjs/common";
-import type { AdminStageRequestListResponse, Promotion, StageStatus } from "shared";
+import type { AdminStageRequestListResponse, Promotion } from "shared";
 import { PrismaService } from "../../prisma/prisma.service";
 import { toReferentResponse } from "./referent-response";
-
-const PENDING = "PENDING" satisfies StageStatus;
 
 // Same tuple the assignment table is keyed on (ADR-0014).
 function tupleKey(tuple: {
@@ -30,7 +28,7 @@ export class AdminStageRequestsService {
     const { stages, assignments } = await this.prisma.$transaction(
       async (tx) => {
         const stages = await tx.stage.findMany({
-          where: { status: PENDING },
+          where: { status: "PENDING" },
           orderBy: [{ submittedAt: "asc" }, { id: "asc" }],
           include: {
             organism: { select: { name: true, structureType: true } },
