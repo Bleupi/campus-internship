@@ -74,6 +74,7 @@ export interface StageDraftResponse {
 
 export type CreateStageDraftResponse = StageDraftResponse;
 export type UpdateStageDraftResponse = StageDetailResponse;
+export type DuplicateStageResponse = StageDraftResponse;
 
 export interface StageReferentResponse {
   id: string;
