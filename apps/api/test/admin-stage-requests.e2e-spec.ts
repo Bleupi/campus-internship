@@ -155,7 +155,7 @@ describe("Admin stage requests list (e2e) — issue #146", () => {
     return response.body as AdminStageRequestListResponse;
   }
 
-  it("lists only PENDING stages, oldest submission first; drafts, validated and refused never appear", async () => {
+  it("BR-03: lists only PENDING stages, oldest submission first; drafts, validated and refused never appear", async () => {
     const student = await signupStudent();
     const newer = await seedStage(student.profileId, { submittedAt: new Date("2099-01-03") });
     const older = await seedStage(student.profileId, { submittedAt: new Date("2099-01-01") });
@@ -171,7 +171,7 @@ describe("Admin stage requests list (e2e) — issue #146", () => {
     expect(ownIds).toEqual([older.id, middle.id, newer.id]);
   });
 
-  it("each row carries the student, organism, service, first period (and count), semester, kind and submission date", async () => {
+  it("BR-04b: each row carries the student, organism, service, first period (and count), the derived semester, kind and submission date", async () => {
     const student = await signupStudent("Martin");
     const stage = await seedStage(student.profileId, {
       semester: "S2",
@@ -252,6 +252,55 @@ describe("Admin stage requests list (e2e) — issue #146", () => {
       firstName: "Réf",
       lastName: "Referent",
     });
+  });
+
+  it("BR-03: another student's assignment for the same (year, semester, mandatory) tuple is never shown", async () => {
+    const withReferent = await signupStudent("AvecReferent");
+    const withoutReferent = await signupStudent("SansReferent");
+    const referent = await seedReferent("DeLautre");
+    await prisma.referentAssignment.create({
+      data: {
+        studentId: withReferent.profileId,
+        schoolYear: "2099-2100",
+        semester: "S1",
+        mandatory: true,
+        referentId: referent.id,
+      },
+    });
+    const covered = await seedStage(withReferent.profileId);
+    const uncovered = await seedStage(withoutReferent.profileId);
+
+    const list = await fetchList();
+
+    expect(list.find((item) => item.id === covered.id)?.referent?.id).toBe(referent.id);
+    expect(list.find((item) => item.id === uncovered.id)?.referent).toBeNull();
+  });
+
+  it("ADR-0014: reassigning a referent in place changes the referent shown on live stages", async () => {
+    const student = await signupStudent();
+    const before = await seedReferent("Avant");
+    const after = await seedReferent("Apres");
+    const assignment = await prisma.referentAssignment.create({
+      data: {
+        studentId: student.profileId,
+        schoolYear: "2099-2100",
+        semester: "S1",
+        mandatory: true,
+        referentId: before.id,
+      },
+    });
+    const stage = await seedStage(student.profileId);
+    expect((await fetchList()).find((item) => item.id === stage.id)?.referent?.id).toBe(before.id);
+
+    await prisma.referentAssignment.update({
+      where: { id: assignment.id },
+      data: { referentId: after.id },
+    });
+
+    expect((await fetchList()).find((item) => item.id === stage.id)?.referent?.id).toBe(after.id);
+    expect(await prisma.referentAssignment.count({ where: { studentId: student.profileId } })).toBe(
+      1,
+    );
   });
 
   it("RBAC: a non-admin is rejected (403) and an anonymous caller is unauthorized (401)", async () => {
