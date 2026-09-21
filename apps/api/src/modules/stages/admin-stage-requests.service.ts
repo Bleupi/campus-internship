@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import type { AdminStageRequestListResponse, Promotion, StageStatus } from "shared";
 import { PrismaService } from "../../prisma/prisma.service";
+import { toReferentResponse } from "./referent-response";
 
 const PENDING = "PENDING" satisfies StageStatus;
 
@@ -59,6 +60,13 @@ export class AdminStageRequestsService {
     );
 
     return stages.map((stage) => {
+      const { submittedAt, organism } = stage;
+      // A PENDING stage was submitted (submittedAt is set) and its organism was
+      // resolved at creation, but the schema allows neither to be null. Fail
+      // with a message that names the stage rather than a bare TypeError.
+      if (!submittedAt || !organism) {
+        throw new Error(`PENDING stage ${stage.id} has no submittedAt or no organism`);
+      }
       const referent = referentByTuple.get(tupleKey(stage));
       const [firstPeriod] = stage.periods;
       return {
@@ -68,19 +76,14 @@ export class AdminStageRequestsService {
         semester: stage.semester,
         mandatory: stage.mandatory,
         service: stage.service,
-        // A PENDING stage was submitted, so the date is always set.
-        submittedAt: stage.submittedAt!.toISOString(),
+        submittedAt: submittedAt.toISOString(),
         student: {
           id: stage.student.id,
           firstName: stage.student.user.firstName,
           lastName: stage.student.user.lastName,
           promotion: stage.student.promotion as Promotion | null,
         },
-        // Always set: createDraft resolves (finds or creates) the organism.
-        organism: {
-          name: stage.organism!.name,
-          structureType: stage.organism!.structureType,
-        },
+        organism: { name: organism.name, structureType: organism.structureType },
         firstPeriod: firstPeriod
           ? {
               id: firstPeriod.id,
@@ -89,13 +92,7 @@ export class AdminStageRequestsService {
             }
           : null,
         periodCount: stage.periods.length,
-        referent: referent
-          ? {
-              id: referent.id,
-              firstName: referent.user.firstName,
-              lastName: referent.user.lastName,
-            }
-          : null,
+        referent: referent ? toReferentResponse(referent) : null,
       };
     });
   }
