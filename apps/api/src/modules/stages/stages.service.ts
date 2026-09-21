@@ -399,7 +399,7 @@ export class StagesService {
     );
   }
 
-  // The freeze is derived, never stored (ADR-0031): a row is frozen as soon as
+  // The freeze is derived, never stored (ADR-0032): a row is frozen as soon as
   // any stage other than this student's own DRAFTs references it. Deriving it
   // on read means both triggers (a second student's DRAFT, a referencing stage
   // leaving DRAFT) hold without any transition code to keep in sync.

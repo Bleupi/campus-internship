@@ -1,4 +1,4 @@
-# ADR-0031 — The freeze of a host organism / tutor is derived, not stored
+# ADR-0032 — The freeze of a host organism / tutor is derived, not stored
 
 - Status: Accepted
 - Date: 2026-09-20
