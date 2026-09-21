@@ -1,9 +1,24 @@
 import type { z } from "zod";
 import type { Semester, StageStatus } from "../enums";
 import type { createStageDraftSchema } from "../schemas/create-stage-draft.schema";
+import type { updateStageDraftSchema } from "../schemas/update-stage-draft.schema";
 
 export type CreateStageDraftRequest = z.infer<typeof createStageDraftSchema>;
+export type UpdateStageDraftRequest = z.infer<typeof updateStageDraftSchema>;
 
+// Issue #116. Both answer 409, so the body carries which one it is: a stale
+// version asks the student to reload the draft (BR-09), a frozen row asks them
+// to create a new organism/tutor instead of correcting the shared one.
+export const STAGE_CONFLICT_CODES = {
+  VERSION_CONFLICT: "STAGE_VERSION_CONFLICT",
+  ROW_FROZEN: "STAGE_ROW_FROZEN",
+  NOT_DRAFT: "STAGE_NOT_DRAFT",
+} as const;
+export type StageConflictCode = (typeof STAGE_CONFLICT_CODES)[keyof typeof STAGE_CONFLICT_CODES];
+
+// `editable`: the row is still unfrozen for this student, so the wizard may
+// offer to correct it in place rather than steer them to create a new one
+// (issue #116). Computed on read, never stored.
 export interface StageDraftOrganismResponse {
   id: string;
   name: string;
@@ -11,6 +26,7 @@ export interface StageDraftOrganismResponse {
   city: string;
   postalCode: string;
   street: string;
+  editable: boolean;
 }
 
 export interface StageDraftTutorResponse {
@@ -21,6 +37,7 @@ export interface StageDraftTutorResponse {
   jobTitle: string;
   phone: string | null;
   acceptsPhoneContact: boolean;
+  editable: boolean;
 }
 
 export interface StageDraftPeriodResponse {
@@ -35,6 +52,8 @@ export interface StageDraftPeriodResponse {
 export interface StageDraftResponse {
   id: string;
   status: StageStatus;
+  // BR-09: echoed back by the client on PATCH.
+  version: number;
   schoolYear: string;
   semester: Semester;
   mandatory: boolean;
@@ -47,6 +66,7 @@ export interface StageDraftResponse {
 }
 
 export type CreateStageDraftResponse = StageDraftResponse;
+export type UpdateStageDraftResponse = StageDetailResponse;
 
 export interface StageReferentResponse {
   id: string;

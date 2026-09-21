@@ -12,17 +12,33 @@ import {
   deriveSemester,
   getCurrentSchoolYear,
   getSubmissionBlockers,
+  STAGE_CONFLICT_CODES,
   type CreateStageDraftRequest,
   type ListStagesQuery,
+  type StageConflictCode,
   type StageDetailResponse,
   type StageDraftPeriodResponse,
   type StageDraftResponse,
   type StageListItemResponse,
+  type UpdateStageDraftRequest,
 } from "shared";
 import { PrismaService } from "../../prisma/prisma.service";
 import { MailerService } from "../mailer/mailer.service";
 
 type Tx = Prisma.TransactionClient;
+
+// Whether the student may still correct the organism / tutor their draft points
+// to, in place (issue #116).
+interface EditableFlags {
+  organism: boolean;
+  tutor: boolean;
+}
+
+// 409 with a machine-readable `code`, so the web can tell a stale version
+// (reload the draft) from a frozen row (create a new one).
+function stageConflict(code: StageConflictCode, message: string): ConflictException {
+  return new ConflictException({ statusCode: 409, error: "Conflict", message, code });
+}
 
 // A stage with the single start time it is ranked by in the list.
 interface RankedStage {
@@ -88,7 +104,72 @@ export class StagesService {
       });
     });
 
-    return this.toResponse(stage);
+    return this.toResponse(stage, await this.loadEditable(this.prisma, stage));
+  }
+
+  // Issue #116: the wizard's PATCH. It replaces the draft's whole wizard content
+  // in one transaction, so a rejected write (stale version, frozen row, a tutor
+  // that isn't the organism's) leaves no half-edited organism/tutor/period behind.
+  async updateDraft(
+    userId: string,
+    stageId: string,
+    dto: UpdateStageDraftRequest,
+  ): Promise<StageDetailResponse> {
+    // BR-04b: re-derived from the submitted periods, like on creation. The
+    // schema has no `semester` field, so a client-supplied one never gets here.
+    const schoolYear = getCurrentSchoolYear(dto.periods[0]!.startDate);
+    const semester = deriveSemester(dto.periods);
+
+    await this.prisma.$transaction(async (tx) => {
+      // Ownership is part of the lookup: another student's stage is a 404.
+      const stage = await tx.stage.findFirst({
+        where: { id: stageId, student: { userId } },
+      });
+      if (!stage) {
+        throw new NotFoundException("Demande de stage introuvable");
+      }
+      if (stage.status !== "DRAFT") {
+        throw stageConflict(STAGE_CONFLICT_CODES.NOT_DRAFT, "Seul un brouillon peut être modifié");
+      }
+      if (stage.version !== dto.version) {
+        throw this.versionConflict();
+      }
+
+      const organismId = await this.resolveOrganismForUpdate(tx, stage, dto.organism);
+      const tutorId = await this.resolveTutorForUpdate(tx, stage, dto.tutor, organismId);
+
+      // BR-09: the actual guard. Matching on the version we were given makes a
+      // write that lost a race update zero rows; throwing then rolls back the
+      // organism/tutor edits above along with it.
+      const { count } = await tx.stage.updateMany({
+        where: { id: stage.id, status: "DRAFT", version: dto.version },
+        data: {
+          organismId,
+          tutorId,
+          schoolYear,
+          semester,
+          mandatory: dto.mandatory,
+          service: dto.service ?? null,
+          projectType: dto.projectType ?? null,
+          motivation: dto.motivation ?? null,
+          version: { increment: 1 },
+        },
+      });
+      if (count === 0) {
+        throw this.versionConflict();
+      }
+
+      await tx.stagePeriod.deleteMany({ where: { stageId: stage.id } });
+      await tx.stagePeriod.createMany({
+        data: dto.periods.map((period) => ({
+          stageId: stage.id,
+          startDate: period.startDate,
+          endDate: period.endDate,
+        })),
+      });
+    });
+
+    return this.getById(userId, stageId);
   }
 
   // Issue #114. Scoped by the caller's own student profile, so a student can
@@ -147,7 +228,7 @@ export class StagesService {
     });
 
     return {
-      ...this.toResponse(stage),
+      ...this.toResponse(stage, await this.loadEditable(this.prisma, stage)),
       submittedAt: stage.submittedAt?.toISOString() ?? null,
       refusalReason: stage.refusalReason,
       referent: assignment && {
@@ -311,6 +392,96 @@ export class StagesService {
     };
   }
 
+  private versionConflict(): ConflictException {
+    return stageConflict(
+      STAGE_CONFLICT_CODES.VERSION_CONFLICT,
+      "Cette demande a été modifiée entre-temps. Rechargez la page pour la modifier.",
+    );
+  }
+
+  // The freeze is derived, never stored (ADR-0032): a row is frozen as soon as
+  // any stage other than this student's own DRAFTs references it. Deriving it
+  // on read means both triggers (a second student's DRAFT, a referencing stage
+  // leaving DRAFT) hold without any transition code to keep in sync.
+  private async isFrozen(
+    client: Tx,
+    reference: { organismId: string } | { tutorId: string },
+    studentId: string,
+  ): Promise<boolean> {
+    const others = await client.stage.count({
+      where: { ...reference, NOT: { status: "DRAFT", studentId } },
+    });
+    return others > 0;
+  }
+
+  private async loadEditable(
+    client: Tx,
+    stage: { status: string; studentId: string; organismId: string | null; tutorId: string | null },
+  ): Promise<EditableFlags> {
+    if (stage.status !== "DRAFT") {
+      return { organism: false, tutor: false };
+    }
+    const [organismFrozen, tutorFrozen] = await Promise.all([
+      stage.organismId === null ||
+        this.isFrozen(client, { organismId: stage.organismId }, stage.studentId),
+      stage.tutorId === null || this.isFrozen(client, { tutorId: stage.tutorId }, stage.studentId),
+    ]);
+    return { organism: !organismFrozen, tutor: !tutorFrozen };
+  }
+
+  // `edit` corrects the row the draft already points to and nothing else: it is
+  // what makes "referenced only by this student's own DRAFTs" non-vacuous (an
+  // unreferenced row would otherwise pass the freeze check for anyone).
+  private async resolveOrganismForUpdate(
+    tx: Tx,
+    stage: { organismId: string | null; studentId: string },
+    organism: UpdateStageDraftRequest["organism"],
+  ): Promise<string> {
+    if (organism.mode !== "edit") {
+      return this.resolveOrganism(tx, organism);
+    }
+    if (organism.id !== stage.organismId) {
+      throw new BadRequestException("Seul l'organisme de cette demande peut être modifié");
+    }
+    if (await this.isFrozen(tx, { organismId: organism.id }, stage.studentId)) {
+      throw stageConflict(
+        STAGE_CONFLICT_CODES.ROW_FROZEN,
+        "Cet organisme est utilisé par d'autres demandes: créez-en un nouveau plutôt que de le modifier.",
+      );
+    }
+    const updated = await tx.hostOrganism.update({
+      where: { id: organism.id },
+      data: organism.data,
+    });
+    return updated.id;
+  }
+
+  private async resolveTutorForUpdate(
+    tx: Tx,
+    stage: { tutorId: string | null; studentId: string },
+    tutor: UpdateStageDraftRequest["tutor"],
+    organismId: string,
+  ): Promise<string> {
+    if (tutor.mode !== "edit") {
+      return this.resolveTutor(tx, tutor, organismId);
+    }
+    if (tutor.id !== stage.tutorId) {
+      throw new BadRequestException("Seul le tuteur de cette demande peut être modifié");
+    }
+    const owned = await tx.tutor.findFirst({ where: { id: tutor.id, organismId } });
+    if (!owned) {
+      throw new BadRequestException("Le tuteur sélectionné n'appartient pas à cet organisme");
+    }
+    if (await this.isFrozen(tx, { tutorId: tutor.id }, stage.studentId)) {
+      throw stageConflict(
+        STAGE_CONFLICT_CODES.ROW_FROZEN,
+        "Ce tuteur est utilisé par d'autres demandes: créez-en un nouveau plutôt que de le modifier.",
+      );
+    }
+    const updated = await tx.tutor.update({ where: { id: tutor.id }, data: tutor.data });
+    return updated.id;
+  }
+
   private toPeriodResponse(period: {
     id: string;
     startDate: Date;
@@ -378,10 +549,12 @@ export class StagesService {
 
   private toResponse(
     stage: Prisma.StageGetPayload<{ include: { periods: true; organism: true; tutor: true } }>,
+    editable: EditableFlags,
   ): StageDraftResponse {
     return {
       id: stage.id,
       status: stage.status,
+      version: stage.version,
       schoolYear: stage.schoolYear,
       semester: stage.semester,
       mandatory: stage.mandatory,
@@ -397,6 +570,7 @@ export class StagesService {
         city: stage.organism!.city,
         postalCode: stage.organism!.postalCode,
         street: stage.organism!.street,
+        editable: editable.organism,
       },
       tutor: {
         id: stage.tutor!.id,
@@ -406,6 +580,7 @@ export class StagesService {
         jobTitle: stage.tutor!.jobTitle,
         phone: stage.tutor!.phone,
         acceptsPhoneContact: stage.tutor!.acceptsPhoneContact,
+        editable: editable.tutor,
       },
       periods: stage.periods.map((period) => this.toPeriodResponse(period)),
     };

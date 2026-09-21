@@ -1,9 +1,11 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
 import {
   createStageDraftSchema,
   listStagesQuerySchema,
+  updateStageDraftSchema,
   type CreateStageDraftRequest,
   type ListStagesQuery,
+  type UpdateStageDraftRequest,
 } from "shared";
 import type { Request } from "express";
 import { Roles } from "../../common/decorators/roles.decorator";
@@ -40,6 +42,15 @@ export class StagesController {
   @Post(":id/submit")
   submit(@Param("id") id: string, @Req() req: Request) {
     return this.stagesService.submit(currentUserId(req), id);
+  }
+
+  @Patch(":id")
+  updateDraft(
+    @Param("id") id: string,
+    @Body(new ZodValidationPipe(updateStageDraftSchema)) dto: UpdateStageDraftRequest,
+    @Req() req: Request,
+  ) {
+    return this.stagesService.updateDraft(currentUserId(req), id, dto);
   }
 
   @Get(":id")

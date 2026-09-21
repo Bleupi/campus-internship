@@ -12,8 +12,8 @@ import {
 } from "./format-summary";
 import { SEMESTER_LABELS, formatStageKind } from "./stage-labels";
 import { StageStatusChip } from "./StageStatusChip";
+import { DraftActionsSection } from "./DraftActionsSection";
 import { RecapField, RecapSection, SecondaryLine } from "./StageSummaryParts";
-import { SubmitStageSection } from "./SubmitStageSection";
 import { useStage } from "./useStage";
 
 // A draft has no referent yet by design: it is derived once the request is
@@ -110,7 +110,7 @@ export function StageDetailPage() {
             <RecapField label="Référent">{referentLabel(stage)}</RecapField>
           </RecapSection>
 
-          {stage.status === "DRAFT" && <SubmitStageSection stage={stage} />}
+          {stage.status === "DRAFT" && <DraftActionsSection stage={stage} />}
         </>
       )}
     </Stack>

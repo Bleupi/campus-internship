@@ -103,6 +103,22 @@ describe("StagesListPage (issue #114)", () => {
       expect(within(rows[1]!).queryByText(/voir le détail/i)).not.toBeInTheDocument();
     });
 
+    it("gives a DRAFT row a pen button to its edit page, and no other row", async () => {
+      listStagesMock.mockResolvedValue([
+        stageItem({ id: "draft-1", status: "DRAFT" }),
+        stageItem({ id: "pending-1", status: "PENDING" }),
+        stageItem({ id: "validated-1", status: "VALIDATED" }),
+      ]);
+      renderPage();
+
+      const rows = await dataRows();
+      const pen = within(rows[0]!).getByRole("link", { name: "Modifier la demande" });
+      expect(pen).toHaveAttribute("href", "/stages/draft-1/edit");
+      expect(within(rows[0]!).queryByText(/^modifier/i)).not.toBeInTheDocument();
+      expect(within(rows[1]!).queryByRole("link", { name: "Modifier la demande" })).toBeNull();
+      expect(within(rows[2]!).queryByRole("link", { name: "Modifier la demande" })).toBeNull();
+    });
+
     it("notes the extra periods next to the first one", async () => {
       listStagesMock.mockResolvedValue([
         stageItem({
@@ -173,6 +189,34 @@ describe("StagesListPage (issue #114)", () => {
       const link = await screen.findByRole("link", { name: "Voir le détail" });
       expect(link).toHaveAttribute("href", "/stages/stage-2");
       expect(within(link).getByText("Voir le détail")).toBeVisible();
+    });
+  });
+
+  describe("mobile edit button", () => {
+    beforeEach(() => setMatchMedia(true));
+
+    it("reveals a labelled 'Modifier' button on an expanded DRAFT, next to 'Voir le détail'", async () => {
+      const user = userEvent.setup();
+      listStagesMock.mockResolvedValue([stageItem({ id: "draft-1", status: "DRAFT" })]);
+      renderPage();
+
+      await user.click(await screen.findByRole("button", { name: /hôpital cochin/i }));
+
+      const edit = await screen.findByRole("link", { name: "Modifier" });
+      expect(edit).toHaveAttribute("href", "/stages/draft-1/edit");
+      expect(within(edit).getByText("Modifier")).toBeVisible();
+      expect(screen.getByRole("link", { name: "Voir le détail" })).toBeVisible();
+    });
+
+    it("offers no edit button on a request that is not a DRAFT", async () => {
+      const user = userEvent.setup();
+      listStagesMock.mockResolvedValue([stageItem({ id: "pending-1", status: "PENDING" })]);
+      renderPage();
+
+      await user.click(await screen.findByRole("button", { name: /hôpital cochin/i }));
+
+      await screen.findByRole("link", { name: "Voir le détail" });
+      expect(screen.queryByRole("link", { name: "Modifier" })).toBeNull();
     });
   });
 

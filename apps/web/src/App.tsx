@@ -9,6 +9,7 @@ import { ResetPasswordPage } from "./features/auth/ResetPasswordPage";
 import { SignupPage } from "./features/auth/SignupPage";
 import { useCurrentUser } from "./features/auth/useCurrentUser";
 import { DashboardPage } from "./features/dashboard/DashboardPage";
+import { EditStagePage } from "./features/stages/EditStagePage";
 import { NewStagePage } from "./features/stages/NewStagePage";
 import { StageDetailPage } from "./features/stages/StageDetailPage";
 import { StagesListPage } from "./features/stages/StagesListPage";
@@ -96,6 +97,7 @@ export function App() {
                 <Route path={ROUTES.STAGES} element={<StagesListPage />} />
                 <Route path={ROUTES.STAGE_NEW} element={<NewStagePage />} />
                 <Route path={ROUTES.STAGE_DETAIL} element={<StageDetailPage />} />
+                <Route path={ROUTES.STAGE_EDIT} element={<EditStagePage />} />
               </>
             )}
             <Route element={<RequireAdmin />}>

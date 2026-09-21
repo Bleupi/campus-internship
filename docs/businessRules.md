@@ -51,7 +51,11 @@
 
 ## Concurrency
 
-**BR-09 — Optimistic locking.** Stage writes use an optimistic `version` counter. A write succeeds only if the version is unchanged since read; otherwise the admin is asked to reload.
+**BR-09 — Optimistic locking.** Stage writes use an optimistic `version` counter. A write succeeds only if the version is unchanged since read; otherwise the user (admin or student) is asked to reload. The student's `PATCH /stages/:id` (BR-14) requires the `version` it read and answers 409 with the `STAGE_VERSION_CONFLICT` code on a stale one.
+
+## Drafts
+
+**BR-14 — Editing a draft, and the freeze of a host organism / tutor.** A student can edit only their own `DRAFT` stage (`PATCH /stages/:id`, anything else is a 404 or a 409). The write replaces the wizard's whole content, requires the current `version` (BR-09), and re-derives `semester` and `schoolYear` from the submitted periods (BR-04b). While editing, the student can also correct the `HostOrganism` / `Tutor` the draft points to **in place**, but only while that row is _unfrozen_: referenced only by `DRAFT` stages of that same student. A row is _frozen_ as soon as a second student's `DRAFT` references it, or any stage referencing it leaves `DRAFT` (submit, validate, refuse). A frozen row cannot be edited (409, `STAGE_ROW_FROZEN`): the student creates a new one instead. Adding a brand-new `Tutor` to an already-frozen organism is always allowed. The freeze is derived from the referencing stages, never stored (ADR-0032).
 
 ## Authentication & account recovery
 

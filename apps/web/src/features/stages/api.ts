@@ -4,6 +4,8 @@ import type {
   ListStagesQuery,
   StageDetailResponse,
   StageListItemResponse,
+  UpdateStageDraftRequest,
+  UpdateStageDraftResponse,
 } from "shared";
 import { apiClient } from "../../lib/api-client";
 
@@ -26,4 +28,8 @@ export function getStage(id: string) {
 // only satisfies apiClient.post's required body argument.
 export function submitStage(id: string) {
   return apiClient.post<StageDetailResponse>(`/stages/${encodeURIComponent(id)}/submit`, {});
+}
+
+export function updateStageDraft(id: string, payload: UpdateStageDraftRequest) {
+  return apiClient.patch<UpdateStageDraftResponse>(`/stages/${encodeURIComponent(id)}`, payload);
 }

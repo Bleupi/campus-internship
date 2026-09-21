@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Alert, Stack, Typography } from "@mui/material";
 import { formatOrganismAddress, formatTutorContact } from "./format-summary";
 import type { RawPeriod } from "./PeriodsStep";
@@ -32,6 +33,8 @@ interface Props {
   motivation: string;
   mandatory: boolean;
   errorMessage: string | null;
+  // e.g. a reload button next to a stale-version message.
+  errorAction?: ReactNode;
 }
 
 export function RecapStep({
@@ -43,6 +46,7 @@ export function RecapStep({
   motivation,
   mandatory,
   errorMessage,
+  errorAction,
 }: Props) {
   return (
     <Stack spacing={2}>
@@ -82,7 +86,11 @@ export function RecapStep({
         <RecapField label="Motivation">{motivation.trim() || "Non renseignée"}</RecapField>
       </RecapSection>
 
-      {errorMessage && <Alert severity="error">{errorMessage}</Alert>}
+      {errorMessage && (
+        <Alert severity="error" action={errorAction}>
+          {errorMessage}
+        </Alert>
+      )}
     </Stack>
   );
 }
