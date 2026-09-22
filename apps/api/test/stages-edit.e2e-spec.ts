@@ -91,6 +91,31 @@ describe("Edit a draft (e2e, issue #116)", () => {
     };
   }
 
+  // Bypasses the real submit endpoint to force a status transition directly.
+  // BR-02: a real PENDING stage always has service/projectType/motivation
+  // non-blank and its student's promotion set (precondition for the VALID
+  // profile submission requires) — keeping this fixture consistent with
+  // that invariant matters beyond this file: admin-stage-requests.service.ts
+  // scans every PENDING stage system-wide, so a stray incomplete one here
+  // trips its BR-02 invariant check in a concurrently running e2e file (they
+  // share one physical test database).
+  async function forceStatus(stageId: string, status: "PENDING" | "VALIDATED" | "REFUSED") {
+    const stage = await prisma.stage.update({
+      where: { id: stageId },
+      data: {
+        status,
+        submittedAt: new Date(),
+        service: "Service de test",
+        projectType: "Type de handicap de test",
+        motivation: "Motivation de test",
+      },
+    });
+    await prisma.studentProfile.update({
+      where: { id: stage.studentId },
+      data: { promotion: "L2" },
+    });
+  }
+
   function patch(cookie: string, stageId: string, body: Record<string, unknown>) {
     return request(app.getHttpServer())
       .patch(`/stages/${stageId}`)
@@ -184,10 +209,7 @@ describe("Edit a draft (e2e, issue #116)", () => {
     async (status) => {
       const cookie = await signup();
       const draft = await createDraft(cookie);
-      await prisma.stage.update({
-        where: { id: draft.id },
-        data: { status, submittedAt: new Date() },
-      });
+      await forceStatus(draft.id, status);
 
       const response = await patch(cookie, draft.id, editBody(draft)).expect(409);
 
@@ -252,10 +274,7 @@ describe("Edit a draft (e2e, issue #116)", () => {
           organism: { mode: "existing", id: draft.organism.id },
           tutor: { mode: "existing", id: draft.tutor.id },
         });
-        await prisma.stage.update({
-          where: { id: sibling.id },
-          data: { status, submittedAt: new Date() },
-        });
+        await forceStatus(sibling.id, status);
 
         await patch(
           cookie,

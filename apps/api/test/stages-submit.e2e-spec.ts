@@ -110,7 +110,14 @@ describe("Stage submission (e2e, issue #115)", () => {
   async function setProfileStatus(email: string, profileStatus: "VALID" | "INCOMPLETE") {
     await prisma.studentProfile.update({
       where: { userId: (await prisma.user.findUniqueOrThrow({ where: { email } })).id },
-      data: { profileStatus },
+      // A real VALID profile always has promotion set — it's a precondition
+      // for ever reaching PENDING_VALIDATION (students.service.ts), and this
+      // bypass skips straight past that state machine. Keeping the fixture
+      // consistent matters beyond this file: admin-stage-requests.service.ts
+      // scans every PENDING stage system-wide, so a stray one here with no
+      // promotion trips its BR-02 invariant check in a concurrently-running
+      // e2e file.
+      data: { profileStatus, ...(profileStatus === "VALID" ? { promotion: "L2" } : {}) },
     });
   }
 
