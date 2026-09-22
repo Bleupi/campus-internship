@@ -10,92 +10,63 @@ import { seedAdminAndLogin } from "./helpers/admin";
 import { purgeE2eData } from "./helpers/cleanup";
 import { cookieHeader, cookieMap, requireCookie } from "./helpers/cookies";
 
-// Issue #146: GET /admin/stage-requests, the admin "Demandes à traiter" list.
-describe("Admin stage requests list (e2e) — issue #146", () => {
-  let app: INestApplication;
-  let prisma: PrismaService;
-  const createdUserEmails: string[] = [];
-  const createdReferentEmails: string[] = [];
-  const createdOrganismIds: string[] = [];
-  let adminCookie: string;
+type StageOverrides = {
+  status?: "DRAFT" | "PENDING" | "VALIDATED" | "REFUSED";
+  submittedAt?: Date | null;
+  semester?: "S1" | "S2";
+  mandatory?: boolean;
+  periods?: { startDate: Date; endDate: Date }[];
+  service?: string | null;
+  projectType?: string | null;
+  motivation?: string | null;
+  organism?: Partial<{ street: string; postalCode: string; city: string }>;
+  tutor?: Partial<{ phone: string | null; acceptsPhoneContact: boolean }>;
+};
 
-  beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
-    app = moduleRef.createNestApplication();
-    app.use(cookieParser());
-    await app.init();
-    prisma = moduleRef.get(PrismaService);
-
-    adminCookie = await seedAdminAndLogin(app, prisma, createdUserEmails);
-  });
-
-  afterAll(async () => {
-    await purgeE2eData(prisma, { userEmails: createdUserEmails, organismIds: createdOrganismIds });
-    // Student users (and their assignments) are gone, so the referent users
-    // can be removed without a restricting FK.
-    await prisma.user.deleteMany({ where: { email: { in: createdReferentEmails } } });
-    await app.close();
-  });
-
-  async function signupStudent(lastName = "Dupont"): Promise<{ token: string; profileId: string }> {
-    const email = `e2e.admin-stage-requests.student.${randomUUID()}@etu.u-paris.fr`;
+// Shared by both describe blocks below (each runs its own app/DB-tracking
+// instance, so this is a factory rather than file-scope state) — kept as one
+// implementation so a BR-02/BR-03 fixture-shape change only needs one edit.
+function createStageRequestHelpers(
+  app: INestApplication,
+  prisma: PrismaService,
+  emailPrefix: string,
+  createdUserEmails: string[],
+  createdReferentEmails: string[],
+  createdOrganismIds: string[],
+) {
+  async function signupStudent(
+    lastName = "Dupont",
+  ): Promise<{ token: string; profileId: string; email: string }> {
+    const email = `e2e.${emailPrefix}.student.${randomUUID()}@etu.u-paris.fr`;
     createdUserEmails.push(email);
     const response = await request(app.getHttpServer())
       .post("/auth/signup")
-      .send({
-        email,
-        password: "a-password-that-is-long-enough",
-        firstName: "Étu",
-        lastName,
-      })
+      .send({ email, password: "a-password-that-is-long-enough", firstName: "Étu", lastName })
       .expect(201);
     const profile = await prisma.studentProfile.update({
       where: { userId: (await prisma.user.findUniqueOrThrow({ where: { email } })).id },
       data: { promotion: "L2" },
     });
-    return { token: requireCookie(cookieMap(response), "access_token"), profileId: profile.id };
+    return {
+      token: requireCookie(cookieMap(response), "access_token"),
+      profileId: profile.id,
+      email,
+    };
   }
 
   async function seedReferent(lastName: string) {
-    const email = `e2e.admin-stage-requests.referent.${randomUUID()}@univ.fr`;
+    const email = `e2e.${emailPrefix}.referent.${randomUUID()}@univ.fr`;
     createdReferentEmails.push(email);
     return prisma.referentProfile.create({
       data: {
         user: {
-          create: {
-            email,
-            passwordHash: "x",
-            firstName: "Réf",
-            lastName,
-            roles: ["REFERENT"],
-          },
+          create: { email, passwordHash: "x", firstName: "Réf", lastName, roles: ["REFERENT"] },
         },
       },
     });
   }
 
-  async function seedStage(
-    studentId: string,
-    overrides: {
-      status?: "DRAFT" | "PENDING" | "VALIDATED" | "REFUSED";
-      submittedAt?: Date | null;
-      semester?: "S1" | "S2";
-      mandatory?: boolean;
-      periods?: { startDate: Date; endDate: Date }[];
-      service?: string | null;
-      projectType?: string | null;
-      motivation?: string | null;
-      organism?: Partial<{
-        street: string;
-        postalCode: string;
-        city: string;
-      }>;
-      tutor?: Partial<{
-        phone: string | null;
-        acceptsPhoneContact: boolean;
-      }>;
-    } = {},
-  ) {
+  async function seedStage(studentId: string, overrides: StageOverrides = {}) {
     const organism = await prisma.hostOrganism.create({
       data: {
         name: `Organisme ${randomUUID()}`,
@@ -139,7 +110,7 @@ describe("Admin stage requests list (e2e) — issue #146", () => {
           overrides.submittedAt === undefined
             ? status === "DRAFT"
               ? null
-              : new Date()
+              : new Date("2099-01-05T09:00:00.000Z")
             : overrides.submittedAt,
         periods: {
           create: overrides.periods ?? [
@@ -150,6 +121,47 @@ describe("Admin stage requests list (e2e) — issue #146", () => {
       include: { organism: true, tutor: true },
     });
   }
+
+  return { signupStudent, seedReferent, seedStage };
+}
+
+// Issue #146: GET /admin/stage-requests, the admin "Demandes à traiter" list.
+describe("Admin stage requests list (e2e) — issue #146", () => {
+  let app: INestApplication;
+  let prisma: PrismaService;
+  const createdUserEmails: string[] = [];
+  const createdReferentEmails: string[] = [];
+  const createdOrganismIds: string[] = [];
+  let adminCookie: string;
+  let signupStudent: ReturnType<typeof createStageRequestHelpers>["signupStudent"];
+  let seedReferent: ReturnType<typeof createStageRequestHelpers>["seedReferent"];
+  let seedStage: ReturnType<typeof createStageRequestHelpers>["seedStage"];
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    app = moduleRef.createNestApplication();
+    app.use(cookieParser());
+    await app.init();
+    prisma = moduleRef.get(PrismaService);
+
+    adminCookie = await seedAdminAndLogin(app, prisma, createdUserEmails);
+    ({ signupStudent, seedReferent, seedStage } = createStageRequestHelpers(
+      app,
+      prisma,
+      "admin-stage-requests",
+      createdUserEmails,
+      createdReferentEmails,
+      createdOrganismIds,
+    ));
+  });
+
+  afterAll(async () => {
+    await purgeE2eData(prisma, { userEmails: createdUserEmails, organismIds: createdOrganismIds });
+    // Student users (and their assignments) are gone, so the referent users
+    // can be removed without a restricting FK.
+    await prisma.user.deleteMany({ where: { email: { in: createdReferentEmails } } });
+    await app.close();
+  });
 
   async function fetchList(): Promise<AdminStageRequestListResponse> {
     const response = await request(app.getHttpServer())
@@ -327,6 +339,9 @@ describe("Admin stage request detail (e2e) — issue #147", () => {
   const createdReferentEmails: string[] = [];
   const createdOrganismIds: string[] = [];
   let adminCookie: string;
+  let signupStudent: ReturnType<typeof createStageRequestHelpers>["signupStudent"];
+  let seedReferent: ReturnType<typeof createStageRequestHelpers>["seedReferent"];
+  let seedStage: ReturnType<typeof createStageRequestHelpers>["seedStage"];
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -336,6 +351,14 @@ describe("Admin stage request detail (e2e) — issue #147", () => {
     prisma = moduleRef.get(PrismaService);
 
     adminCookie = await seedAdminAndLogin(app, prisma, createdUserEmails);
+    ({ signupStudent, seedReferent, seedStage } = createStageRequestHelpers(
+      app,
+      prisma,
+      "admin-stage-request-detail",
+      createdUserEmails,
+      createdReferentEmails,
+      createdOrganismIds,
+    ));
   });
 
   afterAll(async () => {
@@ -343,111 +366,6 @@ describe("Admin stage request detail (e2e) — issue #147", () => {
     await prisma.user.deleteMany({ where: { email: { in: createdReferentEmails } } });
     await app.close();
   });
-
-  async function signupStudent(
-    lastName = "Dupont",
-  ): Promise<{ token: string; profileId: string; email: string }> {
-    const email = `e2e.admin-stage-request-detail.student.${randomUUID()}@etu.u-paris.fr`;
-    createdUserEmails.push(email);
-    const response = await request(app.getHttpServer())
-      .post("/auth/signup")
-      .send({
-        email,
-        password: "a-password-that-is-long-enough",
-        firstName: "Étu",
-        lastName,
-      })
-      .expect(201);
-    const profile = await prisma.studentProfile.update({
-      where: { userId: (await prisma.user.findUniqueOrThrow({ where: { email } })).id },
-      data: { promotion: "L2" },
-    });
-    return {
-      token: requireCookie(cookieMap(response), "access_token"),
-      profileId: profile.id,
-      email,
-    };
-  }
-
-  async function seedReferent(lastName: string) {
-    const email = `e2e.admin-stage-request-detail.referent.${randomUUID()}@univ.fr`;
-    createdReferentEmails.push(email);
-    return prisma.referentProfile.create({
-      data: {
-        user: {
-          create: {
-            email,
-            passwordHash: "x",
-            firstName: "Réf",
-            lastName,
-            roles: ["REFERENT"],
-          },
-        },
-      },
-    });
-  }
-
-  async function seedStage(
-    studentId: string,
-    overrides: {
-      status?: "DRAFT" | "PENDING" | "VALIDATED" | "REFUSED";
-      service?: string | null;
-      projectType?: string | null;
-      motivation?: string | null;
-      periods?: { startDate: Date; endDate: Date }[];
-      organism?: Partial<{ street: string; postalCode: string; city: string }>;
-      tutor?: Partial<{ phone: string | null; acceptsPhoneContact: boolean }>;
-    } = {},
-  ) {
-    const organism = await prisma.hostOrganism.create({
-      data: {
-        name: `Organisme ${randomUUID()}`,
-        structureType: "Secteur Sanitaire",
-        city: overrides.organism?.city ?? "Paris",
-        postalCode: overrides.organism?.postalCode ?? "75014",
-        street: overrides.organism?.street ?? "1 rue Test",
-        tutors: {
-          create: {
-            firstName: "Marie",
-            lastName: "Curie",
-            email: "m.curie@example.org",
-            jobTitle: "Médecin",
-            phone: overrides.tutor?.phone,
-            acceptsPhoneContact: overrides.tutor?.acceptsPhoneContact ?? false,
-          },
-        },
-      },
-      include: { tutors: true },
-    });
-    createdOrganismIds.push(organism.id);
-    const status = overrides.status ?? "PENDING";
-    return prisma.stage.create({
-      data: {
-        studentId,
-        organismId: organism.id,
-        tutorId: organism.tutors[0]!.id,
-        status,
-        schoolYear: "2099-2100",
-        semester: "S1",
-        mandatory: true,
-        service: overrides.service === undefined ? "Service de test" : overrides.service,
-        // BR-02: submission requires these non-blank, so a real PENDING stage
-        // never has them null — only explicit overrides may still force null
-        // (e.g. for a DRAFT fixture).
-        projectType:
-          overrides.projectType === undefined ? "Type de handicap de test" : overrides.projectType,
-        motivation:
-          overrides.motivation === undefined ? "Motivation de test" : overrides.motivation,
-        submittedAt: status === "DRAFT" ? null : new Date("2099-01-05T09:00:00.000Z"),
-        periods: {
-          create: overrides.periods ?? [
-            { startDate: new Date("2099-10-01"), endDate: new Date("2099-10-31") },
-          ],
-        },
-      },
-      include: { organism: true, tutor: true },
-    });
-  }
 
   it("BR-03: returns everything the student provided for a PENDING request (organism, tutor, service, project, motivation, periods, referent)", async () => {
     const student = await signupStudent("Bernard");

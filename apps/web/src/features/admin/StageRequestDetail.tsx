@@ -47,9 +47,11 @@ export function StageRequestDetail({ stageId }: { stageId: string }) {
   }
 
   // Nothing to show a phone-contact preference about without a phone number
-  // on file: hide both lines rather than a hollow "Non renseigné" next to
-  // "ne souhaite pas être contacté par téléphone".
-  const showPhoneContact = detail.tutor.phone !== null || detail.tutor.acceptsPhoneContact;
+  // on file: hide both lines rather than a hollow "Non renseigné" next to a
+  // phone-contact statement. `acceptsPhoneContact` is settable independently
+  // of `phone` on the student side (OrganismTutorForms.tsx), so this must not
+  // OR it in — a null phone hides the section regardless.
+  const showPhoneContact = detail.tutor.phone !== null;
 
   return (
     <Stack direction={{ xs: "column", md: "row" }} spacing={3} sx={{ py: 2 }}>

@@ -11,6 +11,7 @@ import {
 import type { StageListItemResponse } from "shared";
 import { StageDetailLink } from "./StageDetailLink";
 import { StageEditLink } from "./StageEditLink";
+import { mandatoryLabel } from "./format-summary";
 import { SEMESTER_LABELS, formatFirstPeriod, organismLabel } from "./stage-labels";
 import { StageStatusChip } from "./StageStatusChip";
 
@@ -45,7 +46,7 @@ export function StagesTable({ stages }: { stages: StageListItemResponse[] }) {
                   {stage.schoolYear}
                 </Typography>
               </TableCell>
-              <TableCell>{stage.mandatory ? "Obligatoire" : "Facultatif"}</TableCell>
+              <TableCell>{mandatoryLabel(stage.mandatory)}</TableCell>
               <TableCell align="right">
                 {stage.status === "DRAFT" && <StageEditLink stageId={stage.id} />}
                 <StageDetailLink stageId={stage.id} />
