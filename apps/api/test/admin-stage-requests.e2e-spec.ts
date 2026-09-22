@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
-import * as bcrypt from "bcrypt";
 import cookieParser from "cookie-parser";
 import request from "supertest";
 import type { AdminStageRequestListResponse } from "shared";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
+import { seedAdminAndLogin } from "./helpers/admin";
 import { purgeE2eData } from "./helpers/cleanup";
 import { cookieHeader, cookieMap, requireCookie } from "./helpers/cookies";
 
@@ -26,23 +26,7 @@ describe("Admin stage requests list (e2e) — issue #146", () => {
     await app.init();
     prisma = moduleRef.get(PrismaService);
 
-    const adminEmail = `e2e.admin-stage-requests.admin.${randomUUID()}@etu.u-paris.fr`;
-    const adminPassword = "an-admin-password-long-enough";
-    createdUserEmails.push(adminEmail);
-    await prisma.user.create({
-      data: {
-        email: adminEmail,
-        passwordHash: await bcrypt.hash(adminPassword, 10),
-        firstName: "Admin",
-        lastName: "Test",
-        roles: ["ADMIN"],
-      },
-    });
-    const login = await request(app.getHttpServer())
-      .post("/auth/login")
-      .send({ email: adminEmail, password: adminPassword })
-      .expect(200);
-    adminCookie = cookieHeader(cookieMap(login));
+    adminCookie = await seedAdminAndLogin(app, prisma, createdUserEmails);
   });
 
   afterAll(async () => {

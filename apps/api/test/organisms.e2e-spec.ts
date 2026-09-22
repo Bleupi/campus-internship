@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
-import * as bcrypt from "bcrypt";
 import cookieParser from "cookie-parser";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
+import { seedAdminAndLogin } from "./helpers/admin";
 import { cookieHeader, cookieMap, requireCookie } from "./helpers/cookies";
 import { purgeE2eData } from "./helpers/cleanup";
 
@@ -48,26 +48,6 @@ describe("Organisms search/detail (e2e)", () => {
       })
       .expect(201);
     return requireCookie(cookieMap(response), "access_token");
-  }
-
-  async function loginAsAdmin(): Promise<string> {
-    const email = `e2e.organisms.admin.${randomUUID()}@etu.u-paris.fr`;
-    const password = "an-admin-password-long-enough";
-    createdUserEmails.push(email);
-    await prisma.user.create({
-      data: {
-        email,
-        passwordHash: await bcrypt.hash(password, 10),
-        firstName: "Admin",
-        lastName: "Test",
-        roles: ["ADMIN"],
-      },
-    });
-    const login = await request(app.getHttpServer())
-      .post("/auth/login")
-      .send({ email, password })
-      .expect(200);
-    return requireCookie(cookieMap(login), "access_token");
   }
 
   function authCookie(accessToken: string): string {
@@ -156,11 +136,11 @@ describe("Organisms search/detail (e2e)", () => {
   // PR163 QA: the admin stage-requests list (issue #146) colours each row's
   // structure type by calling this same endpoint — it must not be 403 for ADMIN.
   it("GET /organisms/structure-types: an admin can also list them", async () => {
-    const adminAccessToken = await loginAsAdmin();
+    const adminCookie = await seedAdminAndLogin(app, prisma, createdUserEmails);
 
     const response = await request(app.getHttpServer())
       .get("/organisms/structure-types")
-      .set("Cookie", authCookie(adminAccessToken))
+      .set("Cookie", adminCookie)
       .expect(200);
 
     expect(Array.isArray(response.body)).toBe(true);
