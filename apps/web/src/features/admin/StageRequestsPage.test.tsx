@@ -327,8 +327,9 @@ describe("StageRequestsPage — issue #146", () => {
       expect(screen.getByText("Handicap moteur")).toBeInTheDocument();
       expect(screen.getByText("Une motivation détaillée.")).toBeInTheDocument();
       expect(screen.getByText(/Marie Curie \(Médecin\)/)).toBeInTheDocument();
-      expect(screen.getByText(/m\.curie@example\.org.*0102030405/)).toBeInTheDocument();
-      expect(screen.getByText(/accepte d'être contacté par téléphone/)).toBeInTheDocument();
+      expect(screen.getByText("m.curie@example.org")).toBeInTheDocument();
+      expect(screen.getByText("0102030405")).toBeInTheDocument();
+      expect(screen.getByText("Accepte d'être contacté par téléphone")).toBeInTheDocument();
       expect(screen.getByText("01/10/2026 → 05/10/2026")).toBeInTheDocument();
       expect(screen.getByText("5 jours")).toBeInTheDocument();
 
@@ -336,7 +337,11 @@ describe("StageRequestsPage — issue #146", () => {
       await waitFor(() => expect(screen.queryByText("Hôpital Cochin")).toBeNull());
     });
 
-    it("flags missing values as 'Non renseigné' and an incomplete organism address", async () => {
+    // BR-02 requires service/project type/motivation non-blank to submit, and
+    // the organism address is always complete (only ever written through the
+    // wizard's Zod-validated create/edit paths) — the only value a student
+    // may legitimately omit here is the tutor's phone.
+    it("flags a missing tutor phone as 'Non renseigné'", async () => {
       const user = userEvent.setup();
       getStageRequestsMock.mockResolvedValue([
         request({
@@ -346,16 +351,6 @@ describe("StageRequestsPage — issue #146", () => {
       ]);
       getStageRequestDetailMock.mockResolvedValue(
         detail({
-          service: null,
-          projectType: null,
-          motivation: null,
-          organism: {
-            name: "Hôpital Cochin",
-            structureType: "Secteur Sanitaire",
-            street: "",
-            postalCode: "75014",
-            city: "Paris",
-          },
           tutor: {
             firstName: "Marie",
             lastName: "Curie",
@@ -372,9 +367,8 @@ describe("StageRequestsPage — issue #146", () => {
       await user.click(row);
 
       await screen.findByText("Hôpital Cochin");
-      expect(screen.getAllByText("Non renseigné")).toHaveLength(3);
-      expect(screen.getByText("Adresse incomplète")).toBeInTheDocument();
-      expect(screen.getByText(/ne souhaite pas être contacté par téléphone/)).toBeInTheDocument();
+      expect(screen.getByText("Non renseigné")).toBeInTheDocument();
+      expect(screen.getByText("Ne souhaite pas être contacté par téléphone")).toBeInTheDocument();
     });
 
     it("shows an error message when the detail cannot be loaded", async () => {

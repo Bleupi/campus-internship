@@ -1,15 +1,10 @@
 import type { ReactNode } from "react";
-import { Alert, Box, LinearProgress, Stack, Typography } from "@mui/material";
-import type { AdminStageRequestDetailResponse } from "shared";
+import { Alert, LinearProgress, Stack, Typography } from "@mui/material";
 import { formatPeriodRange, formatTotalDuration } from "../stages/format-summary";
 import { RecapField, SecondaryLine } from "../stages/StageSummaryParts";
 import { useStageRequestDetail } from "./useStageRequestDetail";
 
 const NOT_PROVIDED = "Non renseigné";
-
-function organismAddressIsIncomplete(organism: AdminStageRequestDetailResponse["organism"]) {
-  return !organism.street.trim() || !organism.postalCode.trim() || !organism.city.trim();
-}
 
 function DetailColumn({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -38,40 +33,29 @@ export function StageRequestDetail({ stageId }: { stageId: string }) {
     return <Alert severity="error">Impossible de charger le détail de cette demande.</Alert>;
   }
 
-  const addressIncomplete = organismAddressIsIncomplete(detail.organism);
-
   return (
     <Stack direction={{ xs: "column", md: "row" }} spacing={3} sx={{ py: 2 }}>
       <DetailColumn title="Organisme">
         <RecapField label="Organisme">{detail.organism.name}</RecapField>
         <RecapField label="Adresse">
           {`${detail.organism.street}, ${detail.organism.postalCode} ${detail.organism.city}`}
-          {addressIncomplete && (
-            <SecondaryLine>
-              <Box component="span" sx={{ color: "warning.main", fontWeight: 600 }}>
-                Adresse incomplète
-              </Box>
-            </SecondaryLine>
-          )}
         </RecapField>
-        <RecapField label="Service">{detail.service?.trim() || NOT_PROVIDED}</RecapField>
+        <RecapField label="Service">{detail.service}</RecapField>
       </DetailColumn>
 
       <DetailColumn title="Tuteur & projet">
         <RecapField label="Tuteur">
           {`${detail.tutor.firstName} ${detail.tutor.lastName} (${detail.tutor.jobTitle})`}
+          <SecondaryLine>{detail.tutor.email}</SecondaryLine>
+          <SecondaryLine>{detail.tutor.phone ?? NOT_PROVIDED}</SecondaryLine>
           <SecondaryLine>
-            {detail.tutor.email}
-            {detail.tutor.phone ? ` · ${detail.tutor.phone}` : ` · ${NOT_PROVIDED}`}
             {detail.tutor.acceptsPhoneContact
-              ? " · accepte d'être contacté par téléphone"
-              : " · ne souhaite pas être contacté par téléphone"}
+              ? "Accepte d'être contacté par téléphone"
+              : "Ne souhaite pas être contacté par téléphone"}
           </SecondaryLine>
         </RecapField>
-        <RecapField label="Type de handicap concerné">
-          {detail.projectType?.trim() || NOT_PROVIDED}
-        </RecapField>
-        <RecapField label="Motivation">{detail.motivation?.trim() || NOT_PROVIDED}</RecapField>
+        <RecapField label="Type de handicap concerné">{detail.projectType}</RecapField>
+        <RecapField label="Motivation">{detail.motivation}</RecapField>
       </DetailColumn>
 
       <DetailColumn title="Périodes">

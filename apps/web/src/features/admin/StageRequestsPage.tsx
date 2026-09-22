@@ -195,7 +195,7 @@ export function StageRequestsPage() {
                               <StructureTypeLabel structureType={request.organism.structureType} />
                             </Stack>
                           </TableCell>
-                          <TableCell>{request.service ?? "—"}</TableCell>
+                          <TableCell>{request.service}</TableCell>
                           <TableCell sx={{ whiteSpace: "nowrap" }}>
                             {formatFirstPeriod(request)}
                           </TableCell>

@@ -58,15 +58,17 @@ export class AdminStageRequestsService {
     );
 
     return stages.map((stage) => {
-      const { submittedAt, organism, student } = stage;
+      const { submittedAt, organism, student, service } = stage;
       // A PENDING stage was submitted (submittedAt is set), its organism was
-      // resolved at creation, and its student's profile was VALID at
-      // submission time (BR-02) — which requires promotion to be set
-      // (students.service.ts) and it is never cleared afterward. The schema
-      // allows all three to be null, so fail with a message that names the
+      // resolved at creation, and its request was complete (BR-02: service
+      // non-blank) from a VALID profile (which requires promotion to be set,
+      // students.service.ts, and it is never cleared afterward). The schema
+      // allows all four to be null, so fail with a message that names the
       // stage rather than a bare TypeError.
-      if (!submittedAt || !organism || !student.promotion) {
-        throw new Error(`PENDING stage ${stage.id} has no submittedAt, organism, or promotion`);
+      if (!submittedAt || !organism || !student.promotion || !service) {
+        throw new Error(
+          `PENDING stage ${stage.id} has no submittedAt, organism, promotion, or service`,
+        );
       }
       const referent = referentByTuple.get(tupleKey(stage));
       const [firstPeriod] = stage.periods;
@@ -76,7 +78,7 @@ export class AdminStageRequestsService {
         schoolYear: stage.schoolYear,
         semester: stage.semester,
         mandatory: stage.mandatory,
-        service: stage.service,
+        service,
         submittedAt: submittedAt.toISOString(),
         student: {
           id: student.id,
@@ -124,15 +126,24 @@ export class AdminStageRequestsService {
       throw new NotFoundException("Demande de stage introuvable");
     }
     // A PENDING stage was submitted (submittedAt is set), its organism and
-    // tutor were resolved at creation, and its student's profile was VALID at
-    // submission time (BR-02) — which requires promotion to be set
-    // (students.service.ts) and it is never cleared afterward. The schema
-    // allows all four to be null, so fail with a message that names the
-    // stage rather than a bare TypeError.
-    const { submittedAt, organism, tutor, student } = stage;
-    if (!submittedAt || !organism || !tutor || !student.promotion) {
+    // tutor were resolved at creation, its request was complete (BR-02:
+    // service/projectType/motivation all non-blank), and its student's
+    // profile was VALID at submission time — which requires promotion to be
+    // set (students.service.ts) and it is never cleared afterward. The
+    // schema allows all of these to be null, so fail with a message that
+    // names the stage rather than a bare TypeError.
+    const { submittedAt, organism, tutor, student, service, projectType, motivation } = stage;
+    if (
+      !submittedAt ||
+      !organism ||
+      !tutor ||
+      !student.promotion ||
+      !service ||
+      !projectType ||
+      !motivation
+    ) {
       throw new Error(
-        `PENDING stage ${stage.id} has no submittedAt, organism, tutor, or promotion`,
+        `PENDING stage ${stage.id} has no submittedAt, organism, tutor, promotion, service, projectType, or motivation`,
       );
     }
 
@@ -154,9 +165,9 @@ export class AdminStageRequestsService {
       schoolYear: stage.schoolYear,
       semester: stage.semester,
       mandatory: stage.mandatory,
-      service: stage.service,
-      projectType: stage.projectType,
-      motivation: stage.motivation,
+      service,
+      projectType,
+      motivation,
       submittedAt: submittedAt.toISOString(),
       student: {
         id: student.id,

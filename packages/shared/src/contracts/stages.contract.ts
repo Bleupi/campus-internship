@@ -106,7 +106,9 @@ export interface AdminStageRequestListItem {
   schoolYear: string;
   semester: Semester;
   mandatory: boolean;
-  service: string | null;
+  // Never null here: BR-02 requires service to be non-blank to submit. Not
+  // StageDraftResponse's `service` (nullable there — a DRAFT can be partial).
+  service: string;
   submittedAt: string;
   // Never null here: BR-02 requires a VALID profile to submit, and a profile
   // can only reach VALID once promotion is set (students.service.ts) — it is
@@ -157,9 +159,12 @@ export interface AdminStageRequestDetailResponse {
   schoolYear: string;
   semester: Semester;
   mandatory: boolean;
-  service: string | null;
-  projectType: string | null;
-  motivation: string | null;
+  // Never null: BR-02 requires all three to be non-blank to submit. Not
+  // StageDraftResponse's fields of the same name (nullable there — a DRAFT
+  // can be partial).
+  service: string;
+  projectType: string;
+  motivation: string;
   submittedAt: string;
   // Never null here — same BR-02 invariant as AdminStageRequestListItem above.
   student: {
