@@ -342,7 +342,7 @@ describe("StageRequestsPage — issue #146", () => {
       expect(screen.getByText("0102030405")).toBeInTheDocument();
       expect(screen.getByText("Accepte d'être contacté par téléphone")).toBeInTheDocument();
       expect(screen.getByText("01/10/2026 → 05/10/2026")).toBeInTheDocument();
-      expect(screen.getByText("5 jours")).toBeInTheDocument();
+      expect(screen.getByText("Périodes (5 jours au total)")).toBeInTheDocument();
 
       await user.click(row);
       await waitFor(() => expect(screen.queryByText("Hôpital Cochin")).toBeNull());
