@@ -115,7 +115,7 @@ describe("Stages list + detail (e2e)", () => {
   it("GET /stages: filters by status and semester, and 400s on an unknown value", async () => {
     const me = await signup();
     const draft = await seedStage(me.email);
-    await seedStage(me.email, { status: "PENDING", semester: "S2" });
+    await seedStage(me.email, { status: "PENDING", semester: "S2", submittedAt: new Date() });
 
     const byStatus = await request(app.getHttpServer())
       .get("/stages?status=DRAFT")
@@ -185,7 +185,7 @@ describe("Stages list + detail (e2e)", () => {
 
   it("GET /stages/:id: derives the referent from the exact (year, semester, mandatory) tuple (BR-03)", async () => {
     const me = await signup();
-    const stage = await seedStage(me.email, { status: "PENDING" });
+    const stage = await seedStage(me.email, { status: "PENDING", submittedAt: new Date() });
     const referentEmail = `e2e.referent.${randomUUID()}@univ.fr`;
     createdReferentEmails.push(referentEmail);
     const referentUser = await prisma.user.create({

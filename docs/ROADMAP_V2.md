@@ -70,3 +70,7 @@ The referent of a live stage is derived from `ReferentAssignment`, which is not 
 ## Pagination of the admin "Demandes à traiter" list
 
 V1 loads every `PENDING` stage in one response, ordered by submission date (oldest first), with search and status tabs done client-side. Add server-side pagination if the pending volume outgrows that. (The "Historique des demandes" page is paginated from V1: it grows without bound.)
+
+## Structure-type colour system on the admin lists
+
+`StructureTypeLabel` (the coloured chip on the "Demandes à traiter" list, issue #146) colours a type by its position in the alphabetical `OrganismStructureType` list, over an 8-colour palette: distinct colours up to 8 types, nothing stored per type. Two limits are accepted in V1 because only five types are configured: adding a type shifts the colours of the ones after it, and from the 9th type on colours repeat. Trigger for the refactor: check whether the `OrganismStructureType` list has grown past the palette size (8) or admins start adding types themselves; if so, give each type a stored colour (or a larger palette) so colours stay stable and distinct.

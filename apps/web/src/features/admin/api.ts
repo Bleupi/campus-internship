@@ -1,4 +1,8 @@
-import type { AdminProfileTransitionResponse, CertificateQueueResponse } from "shared";
+import type {
+  AdminProfileTransitionResponse,
+  AdminStageRequestListResponse,
+  CertificateQueueResponse,
+} from "shared";
 import { apiClient } from "../../lib/api-client";
 
 export function getCertificateQueue() {
@@ -23,4 +27,9 @@ export function rejectProfile(studentId: string, reason: string) {
     `/admin/students/${studentId}/profile/reject`,
     { reason },
   );
+}
+
+// Issue #146: every PENDING stage request, oldest submission first.
+export function getStageRequests() {
+  return apiClient.get<AdminStageRequestListResponse>("/admin/stage-requests");
 }

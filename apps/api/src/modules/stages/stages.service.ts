@@ -24,6 +24,7 @@ import {
 } from "shared";
 import { PrismaService } from "../../prisma/prisma.service";
 import { MailerService } from "../mailer/mailer.service";
+import { toReferentResponse } from "./referent-response";
 
 type Tx = Prisma.TransactionClient;
 
@@ -231,11 +232,7 @@ export class StagesService {
       ...this.toResponse(stage, await this.loadEditable(this.prisma, stage)),
       submittedAt: stage.submittedAt?.toISOString() ?? null,
       refusalReason: stage.refusalReason,
-      referent: assignment && {
-        id: assignment.referent.id,
-        firstName: assignment.referent.user.firstName,
-        lastName: assignment.referent.user.lastName,
-      },
+      referent: assignment && toReferentResponse(assignment.referent),
     };
   }
 

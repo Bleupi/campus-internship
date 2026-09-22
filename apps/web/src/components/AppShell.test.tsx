@@ -167,6 +167,23 @@ describe("AppShell", () => {
     expect(await screen.findByRole("link", { name: /certificats à valider/i })).toBeInTheDocument();
   });
 
+  it("shows the 'Demandes à traiter' link for an ADMIN user when stage management is on (issue #146)", async () => {
+    getMeMock.mockResolvedValue({ user: { ...studentUser, roles: ["ADMIN"] } });
+    renderShell("/dashboard");
+
+    expect(await screen.findByRole("link", { name: /demandes à traiter/i })).toHaveAttribute(
+      "href",
+      "/admin/stage-requests",
+    );
+  });
+
+  it("does not show the 'Demandes à traiter' link for a non-ADMIN user (issue #146)", async () => {
+    renderShell("/dashboard");
+
+    await waitFor(() => expect(getMeMock).toHaveBeenCalled());
+    expect(screen.queryByRole("link", { name: /demandes à traiter/i })).not.toBeInTheDocument();
+  });
+
   describe("on mobile viewports", () => {
     beforeEach(() => {
       setMatchMedia(true);

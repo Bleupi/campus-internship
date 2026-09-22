@@ -184,7 +184,10 @@ describe("Edit a draft (e2e, issue #116)", () => {
     async (status) => {
       const cookie = await signup();
       const draft = await createDraft(cookie);
-      await prisma.stage.update({ where: { id: draft.id }, data: { status } });
+      await prisma.stage.update({
+        where: { id: draft.id },
+        data: { status, submittedAt: new Date() },
+      });
 
       const response = await patch(cookie, draft.id, editBody(draft)).expect(409);
 
@@ -249,7 +252,10 @@ describe("Edit a draft (e2e, issue #116)", () => {
           organism: { mode: "existing", id: draft.organism.id },
           tutor: { mode: "existing", id: draft.tutor.id },
         });
-        await prisma.stage.update({ where: { id: sibling.id }, data: { status } });
+        await prisma.stage.update({
+          where: { id: sibling.id },
+          data: { status, submittedAt: new Date() },
+        });
 
         await patch(
           cookie,

@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { Semester, StageStatus } from "../enums";
+import type { Promotion, Semester, StageStatus } from "../enums";
 import type { createStageDraftSchema } from "../schemas/create-stage-draft.schema";
 import type { updateStageDraftSchema } from "../schemas/update-stage-draft.schema";
 
@@ -95,3 +95,33 @@ export interface StageListItemResponse {
   submittedAt: string | null;
   periods: StageDraftPeriodResponse[];
 }
+
+// Issue #146 (admin "Demandes à traiter"): one row per PENDING stage, oldest
+// submission first. The referent is derived on the fly for the stage's exact
+// (student, schoolYear, semester, mandatory) tuple (ADR-0003, ADR-0014, BR-03),
+// null while none is assigned.
+export interface AdminStageRequestListItem {
+  id: string;
+  version: number;
+  schoolYear: string;
+  semester: Semester;
+  mandatory: boolean;
+  service: string | null;
+  submittedAt: string;
+  student: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    promotion: Promotion | null;
+  };
+  organism: {
+    name: string;
+    structureType: string;
+  };
+  // Earliest period; the row shows it with the count of the others.
+  firstPeriod: StageDraftPeriodResponse | null;
+  periodCount: number;
+  referent: StageReferentResponse | null;
+}
+
+export type AdminStageRequestListResponse = AdminStageRequestListItem[];

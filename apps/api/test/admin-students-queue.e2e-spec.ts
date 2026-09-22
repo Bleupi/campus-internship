@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
-import * as bcrypt from "bcrypt";
 import cookieParser from "cookie-parser";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { MailerService } from "../src/modules/mailer/mailer.service";
 import { PrismaService } from "../src/prisma/prisma.service";
+import { seedAdminAndLogin } from "./helpers/admin";
 import { cookieHeader, cookieMap } from "./helpers/cookies";
 
 function uniqueEmail(prefix: string): string {
@@ -34,23 +34,7 @@ describe("Admin certificate-validation queue (e2e) — issue #42", () => {
     await app.init();
     prisma = moduleRef.get(PrismaService);
 
-    const adminEmail = uniqueEmail("admin");
-    const adminPassword = "an-admin-password-long-enough";
-    createdUserEmails.push(adminEmail);
-    await prisma.user.create({
-      data: {
-        email: adminEmail,
-        passwordHash: await bcrypt.hash(adminPassword, 10),
-        firstName: "Admin",
-        lastName: "Test",
-        roles: ["ADMIN"],
-      },
-    });
-    const adminLogin = await request(app.getHttpServer())
-      .post("/auth/login")
-      .send({ email: adminEmail, password: adminPassword })
-      .expect(200);
-    adminCookie = cookieHeader(cookieMap(adminLogin));
+    adminCookie = await seedAdminAndLogin(app, prisma, createdUserEmails);
   });
 
   afterAll(async () => {
