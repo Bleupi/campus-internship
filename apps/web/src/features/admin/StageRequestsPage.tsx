@@ -54,6 +54,11 @@ function matchesSearch(request: AdminStageRequestListItem, query: string): boole
   );
 }
 
+function tabLabel(tab: (typeof TABS)[number], requests: AdminStageRequestListItem[]): string {
+  const matchCount = requests.filter(tab.matches).length;
+  return `${tab.label} (${matchCount})`;
+}
+
 function formatFirstPeriod(request: AdminStageRequestListItem): string {
   if (!request.firstPeriod) return "Aucune période";
   const range = formatPeriodRange(request.firstPeriod);
@@ -114,11 +119,7 @@ export function StageRequestsPage() {
           >
             <Tabs value={activeTab} onChange={(_, value: TabKey) => setActiveTab(value)}>
               {TABS.map((tab) => (
-                <Tab
-                  key={tab.key}
-                  value={tab.key}
-                  label={`${tab.label} (${requests.filter(tab.matches).length})`}
-                />
+                <Tab key={tab.key} value={tab.key} label={tabLabel(tab, requests)} />
               ))}
             </Tabs>
             <TextField
