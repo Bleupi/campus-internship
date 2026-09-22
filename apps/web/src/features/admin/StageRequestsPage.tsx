@@ -188,7 +188,7 @@ export function StageRequestsPage() {
                           <TableCell sx={{ fontWeight: 700 }}>
                             {request.student.firstName} {request.student.lastName}
                           </TableCell>
-                          <TableCell>{request.student.promotion ?? "—"}</TableCell>
+                          <TableCell>{request.student.promotion}</TableCell>
                           <TableCell>
                             <Stack spacing={0.5} sx={{ alignItems: "flex-start" }}>
                               <Typography variant="body2">{request.organism.name}</Typography>

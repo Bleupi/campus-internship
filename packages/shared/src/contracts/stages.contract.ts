@@ -108,11 +108,15 @@ export interface AdminStageRequestListItem {
   mandatory: boolean;
   service: string | null;
   submittedAt: string;
+  // Never null here: BR-02 requires a VALID profile to submit, and a profile
+  // can only reach VALID once promotion is set (students.service.ts) — it is
+  // never cleared afterward. Not the general StudentProfile shape (which
+  // stays `Promotion | null` pre-completion).
   student: {
     id: string;
     firstName: string;
     lastName: string;
-    promotion: Promotion | null;
+    promotion: Promotion;
   };
   organism: {
     name: string;
@@ -157,11 +161,12 @@ export interface AdminStageRequestDetailResponse {
   projectType: string | null;
   motivation: string | null;
   submittedAt: string;
+  // Never null here — same BR-02 invariant as AdminStageRequestListItem above.
   student: {
     id: string;
     firstName: string;
     lastName: string;
-    promotion: Promotion | null;
+    promotion: Promotion;
   };
   organism: AdminStageRequestOrganismDetail;
   tutor: AdminStageRequestTutorDetail;

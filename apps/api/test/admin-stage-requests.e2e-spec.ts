@@ -128,8 +128,13 @@ describe("Admin stage requests list (e2e) — issue #146", () => {
         semester: overrides.semester ?? "S1",
         mandatory: overrides.mandatory ?? true,
         service: overrides.service === undefined ? "Service de test" : overrides.service,
-        projectType: overrides.projectType ?? null,
-        motivation: overrides.motivation ?? null,
+        // BR-02: submission requires these non-blank, so a real PENDING stage
+        // never has them null — only explicit overrides may still force null
+        // (e.g. for a DRAFT fixture).
+        projectType:
+          overrides.projectType === undefined ? "Type de handicap de test" : overrides.projectType,
+        motivation:
+          overrides.motivation === undefined ? "Motivation de test" : overrides.motivation,
         submittedAt:
           overrides.submittedAt === undefined
             ? status === "DRAFT"
@@ -420,8 +425,13 @@ describe("Admin stage request detail (e2e) — issue #147", () => {
         semester: "S1",
         mandatory: true,
         service: overrides.service === undefined ? "Service de test" : overrides.service,
-        projectType: overrides.projectType ?? null,
-        motivation: overrides.motivation ?? null,
+        // BR-02: submission requires these non-blank, so a real PENDING stage
+        // never has them null — only explicit overrides may still force null
+        // (e.g. for a DRAFT fixture).
+        projectType:
+          overrides.projectType === undefined ? "Type de handicap de test" : overrides.projectType,
+        motivation:
+          overrides.motivation === undefined ? "Motivation de test" : overrides.motivation,
         submittedAt: status === "DRAFT" ? null : new Date("2099-01-05T09:00:00.000Z"),
         periods: {
           create: overrides.periods ?? [
@@ -505,13 +515,13 @@ describe("Admin stage request detail (e2e) — issue #147", () => {
     });
   });
 
-  it("returns null for values the student never filled in (project type, motivation, tutor phone, referent)", async () => {
+  // BR-02 requires project type and motivation to be non-blank to submit, so
+  // a real PENDING stage never has them null — only tutor phone (optional on
+  // Tutor) and the referent (assigned separately, may not exist yet) can
+  // legitimately be missing here.
+  it("returns null only for values a student may legitimately omit (tutor phone, referent)", async () => {
     const student = await signupStudent("Sansreferent");
-    const stage = await seedStage(student.profileId, {
-      projectType: null,
-      motivation: null,
-      tutor: { phone: null },
-    });
+    const stage = await seedStage(student.profileId, { tutor: { phone: null } });
 
     const response = await request(app.getHttpServer())
       .get(`/admin/stage-requests/${stage.id}`)
@@ -519,10 +529,10 @@ describe("Admin stage request detail (e2e) — issue #147", () => {
       .expect(200);
 
     const body = response.body as AdminStageRequestDetailResponse;
-    expect(body.projectType).toBeNull();
-    expect(body.motivation).toBeNull();
     expect(body.tutor.phone).toBeNull();
     expect(body.referent).toBeNull();
+    expect(body.projectType).toBe("Type de handicap de test");
+    expect(body.motivation).toBe("Motivation de test");
   });
 
   it("BR-03: a referent assigned for the other `mandatory` value is never shown as this stage's referent", async () => {

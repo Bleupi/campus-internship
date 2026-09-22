@@ -1,9 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import type {
-  AdminStageRequestDetailResponse,
-  AdminStageRequestListResponse,
-  Promotion,
-} from "shared";
+import type { AdminStageRequestDetailResponse, AdminStageRequestListResponse } from "shared";
 import { PrismaService } from "../../prisma/prisma.service";
 import { toReferentResponse } from "./referent-response";
 
@@ -62,12 +58,15 @@ export class AdminStageRequestsService {
     );
 
     return stages.map((stage) => {
-      const { submittedAt, organism } = stage;
-      // A PENDING stage was submitted (submittedAt is set) and its organism was
-      // resolved at creation, but the schema allows neither to be null. Fail
-      // with a message that names the stage rather than a bare TypeError.
-      if (!submittedAt || !organism) {
-        throw new Error(`PENDING stage ${stage.id} has no submittedAt or no organism`);
+      const { submittedAt, organism, student } = stage;
+      // A PENDING stage was submitted (submittedAt is set), its organism was
+      // resolved at creation, and its student's profile was VALID at
+      // submission time (BR-02) — which requires promotion to be set
+      // (students.service.ts) and it is never cleared afterward. The schema
+      // allows all three to be null, so fail with a message that names the
+      // stage rather than a bare TypeError.
+      if (!submittedAt || !organism || !student.promotion) {
+        throw new Error(`PENDING stage ${stage.id} has no submittedAt, organism, or promotion`);
       }
       const referent = referentByTuple.get(tupleKey(stage));
       const [firstPeriod] = stage.periods;
@@ -80,10 +79,10 @@ export class AdminStageRequestsService {
         service: stage.service,
         submittedAt: submittedAt.toISOString(),
         student: {
-          id: stage.student.id,
-          firstName: stage.student.user.firstName,
-          lastName: stage.student.user.lastName,
-          promotion: stage.student.promotion as Promotion | null,
+          id: student.id,
+          firstName: student.user.firstName,
+          lastName: student.user.lastName,
+          promotion: student.promotion,
         },
         organism: { name: organism.name, structureType: organism.structureType },
         firstPeriod: firstPeriod
@@ -124,13 +123,17 @@ export class AdminStageRequestsService {
     if (!stage || stage.status !== "PENDING") {
       throw new NotFoundException("Demande de stage introuvable");
     }
-    // A PENDING stage was submitted (submittedAt is set) and its organism and
-    // tutor were resolved at creation, but the schema allows all three to be
-    // null. Fail with a message that names the stage rather than a bare
-    // TypeError.
-    const { submittedAt, organism, tutor } = stage;
-    if (!submittedAt || !organism || !tutor) {
-      throw new Error(`PENDING stage ${stage.id} has no submittedAt, organism or tutor`);
+    // A PENDING stage was submitted (submittedAt is set), its organism and
+    // tutor were resolved at creation, and its student's profile was VALID at
+    // submission time (BR-02) — which requires promotion to be set
+    // (students.service.ts) and it is never cleared afterward. The schema
+    // allows all four to be null, so fail with a message that names the
+    // stage rather than a bare TypeError.
+    const { submittedAt, organism, tutor, student } = stage;
+    if (!submittedAt || !organism || !tutor || !student.promotion) {
+      throw new Error(
+        `PENDING stage ${stage.id} has no submittedAt, organism, tutor, or promotion`,
+      );
     }
 
     const assignment = await this.prisma.referentAssignment.findUnique({
@@ -156,10 +159,10 @@ export class AdminStageRequestsService {
       motivation: stage.motivation,
       submittedAt: submittedAt.toISOString(),
       student: {
-        id: stage.student.id,
-        firstName: stage.student.user.firstName,
-        lastName: stage.student.user.lastName,
-        promotion: stage.student.promotion as Promotion | null,
+        id: student.id,
+        firstName: student.user.firstName,
+        lastName: student.user.lastName,
+        promotion: student.promotion,
       },
       organism: {
         name: organism.name,
