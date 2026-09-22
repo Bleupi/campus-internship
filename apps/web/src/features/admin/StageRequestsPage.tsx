@@ -24,8 +24,11 @@ import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
 import TaskAltOutlinedIcon from "@mui/icons-material/TaskAltOutlined";
 import type { AdminStageRequestListItem } from "shared";
 import { formatPeriodRange, mandatoryLabel } from "../stages/format-summary";
+import { ReferentSelect } from "./ReferentSelect";
 import { StageRequestDetail } from "./StageRequestDetail";
 import { StructureTypeLabel } from "./StructureTypeLabel";
+import { useAssignReferent } from "./useAssignReferent";
+import { useReferents } from "./useReferents";
 import { useStageRequests } from "./useStageRequests";
 
 const DETAIL_COLUMN_COUNT = 6;
@@ -94,6 +97,8 @@ function EmptyState({ filtered }: { filtered: boolean }) {
 // client-side — no pagination in V1. Desktop only.
 export function StageRequestsPage() {
   const { data: requests, isLoading, isError } = useStageRequests();
+  const { data: referents, isLoading: isReferentsLoading } = useReferents();
+  const assignReferent = useAssignReferent();
   const [activeTab, setActiveTab] = useState<TabKey>("all");
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -203,14 +208,21 @@ export function StageRequestsPage() {
                               label={`${mandatoryLabel(request.mandatory)} · ${request.semester}`}
                             />
                           </TableCell>
-                          <TableCell>
-                            {request.referent ? (
-                              `${request.referent.firstName} ${request.referent.lastName}`
-                            ) : (
-                              <Typography variant="body2" sx={{ color: "warning.main" }}>
-                                Aucun référent
-                              </Typography>
-                            )}
+                          <TableCell onClick={(event) => event.stopPropagation()}>
+                            <ReferentSelect
+                              referents={referents ?? []}
+                              value={request.referent}
+                              loading={isReferentsLoading}
+                              onChange={(referent) =>
+                                assignReferent.mutate({
+                                  studentId: request.student.id,
+                                  schoolYear: request.schoolYear,
+                                  semester: request.semester,
+                                  mandatory: request.mandatory,
+                                  referentId: referent.id,
+                                })
+                              }
+                            />
                           </TableCell>
                           <TableCell sx={{ width: 40 }}>
                             <IconButton

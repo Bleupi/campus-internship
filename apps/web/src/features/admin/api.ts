@@ -2,7 +2,10 @@ import type {
   AdminProfileTransitionResponse,
   AdminStageRequestDetailResponse,
   AdminStageRequestListResponse,
+  AssignReferentRequest,
+  AssignReferentResponse,
   CertificateQueueResponse,
+  ReferentListResponse,
 } from "shared";
 import { apiClient } from "../../lib/api-client";
 
@@ -39,4 +42,16 @@ export function getStageRequests() {
 // the row-expand detail.
 export function getStageRequestDetail(id: string) {
   return apiClient.get<AdminStageRequestDetailResponse>(`/admin/stage-requests/${id}`);
+}
+
+// Issue #148: all non-archived referents, sorted by last name — the inline
+// picker's option list.
+export function getReferents() {
+  return apiClient.get<ReferentListResponse>("/referents");
+}
+
+// Issue #148: upserts on the (studentId, schoolYear, semester, mandatory)
+// four-tuple as an in-place update (ADR-0014).
+export function assignReferent(payload: AssignReferentRequest) {
+  return apiClient.patch<AssignReferentResponse>("/referents/assignments", payload);
 }

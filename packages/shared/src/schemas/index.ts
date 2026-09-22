@@ -15,3 +15,4 @@ export * from "./update-stage-draft.schema";
 export * from "./search-organisms.schema";
 export * from "./list-stages-query.schema";
 export * from "./stage-submission.schema";
+export * from "./assign-referent.schema";
