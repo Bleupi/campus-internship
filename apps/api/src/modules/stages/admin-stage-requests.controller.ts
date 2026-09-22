@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from "@nestjs/common";
+import { Controller, Get, Param, UseGuards } from "@nestjs/common";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { AdminStageRequestsService } from "./admin-stage-requests.service";
@@ -15,5 +15,11 @@ export class AdminStageRequestsController {
   @Get()
   list() {
     return this.adminStageRequestsService.list();
+  }
+
+  // Issue #147: the row-expand detail, everything the student provided.
+  @Get(":id")
+  getById(@Param("id") id: string) {
+    return this.adminStageRequestsService.getById(id);
   }
 }

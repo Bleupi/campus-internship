@@ -1,5 +1,9 @@
-import { Injectable } from "@nestjs/common";
-import type { AdminStageRequestListResponse, Promotion } from "shared";
+import { Injectable, NotFoundException } from "@nestjs/common";
+import type {
+  AdminStageRequestDetailResponse,
+  AdminStageRequestListResponse,
+  Promotion,
+} from "shared";
 import { PrismaService } from "../../prisma/prisma.service";
 import { toReferentResponse } from "./referent-response";
 
@@ -93,5 +97,91 @@ export class AdminStageRequestsService {
         referent: referent ? toReferentResponse(referent) : null,
       };
     });
+  }
+
+  // Issue #147: the row-expand detail — everything the student provided for
+  // one request. Scoped to PENDING like list() above (BR-03): a DRAFT was
+  // never submitted, and a VALIDATED/REFUSED stage's display source is its
+  // frozen snapshot (ADR-0003, BR-08), not these live relations, so both are
+  // a 404 here rather than showing live data that may already have drifted
+  // from what was decided.
+  async getById(id: string): Promise<AdminStageRequestDetailResponse> {
+    const stage = await this.prisma.stage.findUnique({
+      where: { id },
+      include: {
+        organism: true,
+        tutor: true,
+        periods: { orderBy: { startDate: "asc" } },
+        student: {
+          select: {
+            id: true,
+            promotion: true,
+            user: { select: { firstName: true, lastName: true } },
+          },
+        },
+      },
+    });
+    if (!stage || stage.status !== "PENDING") {
+      throw new NotFoundException("Demande de stage introuvable");
+    }
+    // A PENDING stage was submitted (submittedAt is set) and its organism and
+    // tutor were resolved at creation, but the schema allows all three to be
+    // null. Fail with a message that names the stage rather than a bare
+    // TypeError.
+    const { submittedAt, organism, tutor } = stage;
+    if (!submittedAt || !organism || !tutor) {
+      throw new Error(`PENDING stage ${stage.id} has no submittedAt, organism or tutor`);
+    }
+
+    const assignment = await this.prisma.referentAssignment.findUnique({
+      where: {
+        studentId_schoolYear_semester_mandatory: {
+          studentId: stage.studentId,
+          schoolYear: stage.schoolYear,
+          semester: stage.semester,
+          mandatory: stage.mandatory,
+        },
+      },
+      include: { referent: { include: { user: { select: { firstName: true, lastName: true } } } } },
+    });
+
+    return {
+      id: stage.id,
+      version: stage.version,
+      schoolYear: stage.schoolYear,
+      semester: stage.semester,
+      mandatory: stage.mandatory,
+      service: stage.service,
+      projectType: stage.projectType,
+      motivation: stage.motivation,
+      submittedAt: submittedAt.toISOString(),
+      student: {
+        id: stage.student.id,
+        firstName: stage.student.user.firstName,
+        lastName: stage.student.user.lastName,
+        promotion: stage.student.promotion as Promotion | null,
+      },
+      organism: {
+        name: organism.name,
+        structureType: organism.structureType,
+        street: organism.street,
+        postalCode: organism.postalCode,
+        city: organism.city,
+      },
+      tutor: {
+        firstName: tutor.firstName,
+        lastName: tutor.lastName,
+        email: tutor.email,
+        jobTitle: tutor.jobTitle,
+        phone: tutor.phone,
+        acceptsPhoneContact: tutor.acceptsPhoneContact,
+      },
+      periods: stage.periods.map((period) => ({
+        id: period.id,
+        startDate: period.startDate.toISOString(),
+        endDate: period.endDate.toISOString(),
+      })),
+      referent: assignment ? toReferentResponse(assignment.referent) : null,
+    };
   }
 }

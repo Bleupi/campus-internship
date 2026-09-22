@@ -125,3 +125,46 @@ export interface AdminStageRequestListItem {
 }
 
 export type AdminStageRequestListResponse = AdminStageRequestListItem[];
+
+// Issue #147: everything the student provided for a single PENDING request,
+// for the "Demandes à traiter" row-expand detail. No `editable` flags here
+// (that concept is specific to the student's own DRAFT-correction flow) and
+// no `id`s on organism/tutor: the admin only ever reads this, never edits it.
+export interface AdminStageRequestOrganismDetail {
+  name: string;
+  structureType: string;
+  street: string;
+  postalCode: string;
+  city: string;
+}
+
+export interface AdminStageRequestTutorDetail {
+  firstName: string;
+  lastName: string;
+  email: string;
+  jobTitle: string;
+  phone: string | null;
+  acceptsPhoneContact: boolean;
+}
+
+export interface AdminStageRequestDetailResponse {
+  id: string;
+  version: number;
+  schoolYear: string;
+  semester: Semester;
+  mandatory: boolean;
+  service: string | null;
+  projectType: string | null;
+  motivation: string | null;
+  submittedAt: string;
+  student: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    promotion: Promotion | null;
+  };
+  organism: AdminStageRequestOrganismDetail;
+  tutor: AdminStageRequestTutorDetail;
+  periods: StageDraftPeriodResponse[];
+  referent: StageReferentResponse | null;
+}
