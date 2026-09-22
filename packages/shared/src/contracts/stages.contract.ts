@@ -167,10 +167,12 @@ export interface AdminStageRequestDetailResponse {
   motivation: string;
   submittedAt: string;
   // Never null here — same BR-02 invariant as AdminStageRequestListItem above.
+  // `email` is the login (university) address, not the mutable personalEmail.
   student: {
     id: string;
     firstName: string;
     lastName: string;
+    email: string;
     promotion: Promotion;
   };
   organism: AdminStageRequestOrganismDetail;

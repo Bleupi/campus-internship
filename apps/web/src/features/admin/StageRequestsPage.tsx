@@ -2,6 +2,7 @@ import { Fragment, useState } from "react";
 import {
   Alert,
   Box,
+  Chip,
   IconButton,
   InputAdornment,
   Paper,
@@ -22,12 +23,12 @@ import ExpandMoreOutlinedIcon from "@mui/icons-material/ExpandMoreOutlined";
 import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
 import TaskAltOutlinedIcon from "@mui/icons-material/TaskAltOutlined";
 import type { AdminStageRequestListItem } from "shared";
-import { formatPeriodRange } from "../stages/format-summary";
+import { formatPeriodRange, mandatoryLabel } from "../stages/format-summary";
 import { StageRequestDetail } from "./StageRequestDetail";
 import { StructureTypeLabel } from "./StructureTypeLabel";
 import { useStageRequests } from "./useStageRequests";
 
-const DETAIL_COLUMN_COUNT = 9;
+const DETAIL_COLUMN_COUNT = 6;
 
 type TabKey = "all" | "withoutReferent" | "ready";
 
@@ -155,15 +156,12 @@ export function StageRequestsPage() {
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell />
                     <TableCell>Étudiant</TableCell>
-                    <TableCell>Promotion</TableCell>
                     <TableCell>Organisme</TableCell>
-                    <TableCell>Service</TableCell>
                     <TableCell>Période</TableCell>
-                    <TableCell>Semestre</TableCell>
-                    <TableCell>Type</TableCell>
+                    <TableCell>Demande</TableCell>
                     <TableCell>Référent</TableCell>
+                    <TableCell />
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -176,31 +174,35 @@ export function StageRequestsPage() {
                           onClick={() => setExpandedId(expanded ? null : request.id)}
                           sx={{ cursor: "pointer" }}
                         >
-                          <TableCell sx={{ width: 40 }}>
-                            <IconButton
-                              size="small"
-                              aria-label={expanded ? "Réduire" : "Développer"}
-                              aria-expanded={expanded}
-                            >
-                              {expanded ? <ExpandLessOutlinedIcon /> : <ExpandMoreOutlinedIcon />}
-                            </IconButton>
+                          <TableCell>
+                            <Stack spacing={0.25} sx={{ alignItems: "flex-start" }}>
+                              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                {request.student.firstName} {request.student.lastName}
+                              </Typography>
+                              <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                                {request.student.promotion}
+                              </Typography>
+                            </Stack>
                           </TableCell>
-                          <TableCell sx={{ fontWeight: 700 }}>
-                            {request.student.firstName} {request.student.lastName}
-                          </TableCell>
-                          <TableCell>{request.student.promotion}</TableCell>
                           <TableCell>
                             <Stack spacing={0.5} sx={{ alignItems: "flex-start" }}>
                               <Typography variant="body2">{request.organism.name}</Typography>
+                              <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                                {request.service}
+                              </Typography>
                               <StructureTypeLabel structureType={request.organism.structureType} />
                             </Stack>
                           </TableCell>
-                          <TableCell>{request.service}</TableCell>
                           <TableCell sx={{ whiteSpace: "nowrap" }}>
                             {formatFirstPeriod(request)}
                           </TableCell>
-                          <TableCell>{request.semester}</TableCell>
-                          <TableCell>{request.mandatory ? "Obligatoire" : "Facultatif"}</TableCell>
+                          <TableCell>
+                            <Chip
+                              size="small"
+                              color={request.mandatory ? "primary" : "default"}
+                              label={`${mandatoryLabel(request.mandatory)} · ${request.semester}`}
+                            />
+                          </TableCell>
                           <TableCell>
                             {request.referent ? (
                               `${request.referent.firstName} ${request.referent.lastName}`
@@ -209,6 +211,15 @@ export function StageRequestsPage() {
                                 Aucun référent
                               </Typography>
                             )}
+                          </TableCell>
+                          <TableCell sx={{ width: 40 }}>
+                            <IconButton
+                              size="small"
+                              aria-label={expanded ? "Réduire" : "Développer"}
+                              aria-expanded={expanded}
+                            >
+                              {expanded ? <ExpandLessOutlinedIcon /> : <ExpandMoreOutlinedIcon />}
+                            </IconButton>
                           </TableCell>
                         </TableRow>
                         {expanded && (

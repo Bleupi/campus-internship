@@ -117,7 +117,7 @@ export class AdminStageRequestsService {
           select: {
             id: true,
             promotion: true,
-            user: { select: { firstName: true, lastName: true } },
+            user: { select: { firstName: true, lastName: true, email: true } },
           },
         },
       },
@@ -173,6 +173,7 @@ export class AdminStageRequestsService {
         id: student.id,
         firstName: student.user.firstName,
         lastName: student.user.lastName,
+        email: student.user.email,
         promotion: student.promotion,
       },
       organism: {

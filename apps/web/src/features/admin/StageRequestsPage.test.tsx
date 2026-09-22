@@ -62,7 +62,13 @@ function detail(overrides: Record<string, unknown> = {}) {
     projectType: "Handicap moteur",
     motivation: "Une motivation détaillée.",
     submittedAt: "2026-09-01T10:00:00.000Z",
-    student: { id: "student-1", firstName: "Alice", lastName: "Martin", promotion: "L3" },
+    student: {
+      id: "student-1",
+      firstName: "Alice",
+      lastName: "Martin",
+      email: "alice.martin@etu.u-paris.fr",
+      promotion: "L3",
+    },
     organism: {
       name: "Hôpital Cochin",
       structureType: "Secteur Sanitaire",
@@ -322,6 +328,11 @@ describe("StageRequestsPage — issue #146", () => {
 
       expect(getStageRequestDetailMock).toHaveBeenCalledWith("stage-1");
       expect(await screen.findByText("Hôpital Cochin")).toBeInTheDocument();
+      // "Alice Martin" now appears twice: the row itself, and the detail's
+      // own "Étudiant" section.
+      expect(screen.getAllByText("Alice Martin")).toHaveLength(2);
+      expect(screen.getByText("alice.martin@etu.u-paris.fr")).toBeInTheDocument();
+      expect(screen.getByText("Obligatoire · S1 · soumise le 01/09/2026")).toBeInTheDocument();
       expect(screen.getByText("27 rue du Faubourg Saint-Jacques, 75014 Paris")).toBeInTheDocument();
       expect(screen.getByText("Service de cardiologie")).toBeInTheDocument();
       expect(screen.getByText("Handicap moteur")).toBeInTheDocument();
@@ -340,8 +351,11 @@ describe("StageRequestsPage — issue #146", () => {
     // BR-02 requires service/project type/motivation non-blank to submit, and
     // the organism address is always complete (only ever written through the
     // wizard's Zod-validated create/edit paths) — the only value a student
-    // may legitimately omit here is the tutor's phone.
-    it("flags a missing tutor phone as 'Non renseigné'", async () => {
+    // may legitimately omit here is the tutor's phone, and with no phone
+    // contact is impossible anyway, so both lines are hidden rather than
+    // showing a hollow "Non renseigné" next to "ne souhaite pas être
+    // contacté par téléphone".
+    it("hides the phone and phone-contact lines when the tutor has no phone on file", async () => {
       const user = userEvent.setup();
       getStageRequestsMock.mockResolvedValue([
         request({
@@ -367,8 +381,10 @@ describe("StageRequestsPage — issue #146", () => {
       await user.click(row);
 
       await screen.findByText("Hôpital Cochin");
-      expect(screen.getByText("Non renseigné")).toBeInTheDocument();
-      expect(screen.getByText("Ne souhaite pas être contacté par téléphone")).toBeInTheDocument();
+      expect(screen.queryByText("Non renseigné")).not.toBeInTheDocument();
+      expect(
+        screen.queryByText("Ne souhaite pas être contacté par téléphone"),
+      ).not.toBeInTheDocument();
     });
 
     it("shows an error message when the detail cannot be loaded", async () => {

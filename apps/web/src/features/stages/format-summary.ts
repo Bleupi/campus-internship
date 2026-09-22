@@ -1,3 +1,7 @@
+export function mandatoryLabel(mandatory: boolean): string {
+  return mandatory ? "Obligatoire" : "Facultatif";
+}
+
 interface OrganismAddress {
   structureType: string;
   street: string;

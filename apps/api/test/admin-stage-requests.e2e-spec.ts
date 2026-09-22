@@ -344,7 +344,9 @@ describe("Admin stage request detail (e2e) — issue #147", () => {
     await app.close();
   });
 
-  async function signupStudent(lastName = "Dupont"): Promise<{ token: string; profileId: string }> {
+  async function signupStudent(
+    lastName = "Dupont",
+  ): Promise<{ token: string; profileId: string; email: string }> {
     const email = `e2e.admin-stage-request-detail.student.${randomUUID()}@etu.u-paris.fr`;
     createdUserEmails.push(email);
     const response = await request(app.getHttpServer())
@@ -360,7 +362,11 @@ describe("Admin stage request detail (e2e) — issue #147", () => {
       where: { userId: (await prisma.user.findUniqueOrThrow({ where: { email } })).id },
       data: { promotion: "L2" },
     });
-    return { token: requireCookie(cookieMap(response), "access_token"), profileId: profile.id };
+    return {
+      token: requireCookie(cookieMap(response), "access_token"),
+      profileId: profile.id,
+      email,
+    };
   }
 
   async function seedReferent(lastName: string) {
@@ -483,7 +489,13 @@ describe("Admin stage request detail (e2e) — issue #147", () => {
       projectType: "Handicap moteur",
       motivation: "Motivation détaillée du projet.",
       submittedAt: "2099-01-05T09:00:00.000Z",
-      student: { id: student.profileId, firstName: "Étu", lastName: "Bernard", promotion: "L2" },
+      student: {
+        id: student.profileId,
+        firstName: "Étu",
+        lastName: "Bernard",
+        email: student.email,
+        promotion: "L2",
+      },
       organism: {
         name: stage.organism!.name,
         structureType: "Secteur Sanitaire",

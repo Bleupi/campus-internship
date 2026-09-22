@@ -1,5 +1,7 @@
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { Box, Card, CardContent, Stack, Typography } from "@mui/material";
+
+type TypographyVariant = ComponentProps<typeof Typography>["variant"];
 
 // Shared by the wizard's recap step and the stage detail page (issue #114), so
 // a request reads the same before and after it is saved.
@@ -25,12 +27,20 @@ export function RecapSection({ title, children }: { title: string; children: Rea
   );
 }
 
-export function RecapField({ label, children }: { label: string; children: ReactNode }) {
+export function RecapField({
+  label,
+  children,
+  labelVariant = "caption",
+}: {
+  label: string;
+  children: ReactNode;
+  labelVariant?: TypographyVariant;
+}) {
   return (
     <Box>
       <Typography
         component="dt"
-        variant="caption"
+        variant={labelVariant}
         sx={{ display: "block", color: "text.secondary", fontWeight: 600 }}
       >
         {label}
