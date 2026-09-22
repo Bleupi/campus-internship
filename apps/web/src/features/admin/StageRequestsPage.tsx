@@ -22,8 +22,9 @@ import ExpandLessOutlinedIcon from "@mui/icons-material/ExpandLessOutlined";
 import ExpandMoreOutlinedIcon from "@mui/icons-material/ExpandMoreOutlined";
 import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
 import TaskAltOutlinedIcon from "@mui/icons-material/TaskAltOutlined";
-import type { AdminStageRequestListItem } from "shared";
+import type { AdminStageRequestListItem, ReferentListItem } from "shared";
 import { formatPeriodRange, mandatoryLabel } from "../stages/format-summary";
+import { AddReferentDialog } from "./AddReferentDialog";
 import { ReferentSelect } from "./ReferentSelect";
 import { StageRequestDetail } from "./StageRequestDetail";
 import { StructureTypeLabel } from "./StructureTypeLabel";
@@ -102,6 +103,23 @@ export function StageRequestsPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("all");
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Issue #150: the request the "add a referent" form was opened from.
+  const [addingReferentFor, setAddingReferentFor] = useState<AdminStageRequestListItem | null>(
+    null,
+  );
+
+  // Issue #148: single assignment on the request's exact tuple (ADR-0014).
+  // Issue #150: a referent created from the picker goes through here too, so
+  // #149's impact confirmation must gate this function, not the picker's
+  // onChange, for both paths to get it.
+  const assignTo = (request: AdminStageRequestListItem, referent: ReferentListItem) =>
+    assignReferent.mutate({
+      studentId: request.student.id,
+      schoolYear: request.schoolYear,
+      semester: request.semester,
+      mandatory: request.mandatory,
+      referentId: referent.id,
+    });
 
   if (isLoading) {
     return <Typography sx={{ color: "text.secondary" }}>Chargement…</Typography>;
@@ -213,15 +231,8 @@ export function StageRequestsPage() {
                               referents={referents ?? []}
                               value={request.referent}
                               loading={isReferentsLoading}
-                              onChange={(referent) =>
-                                assignReferent.mutate({
-                                  studentId: request.student.id,
-                                  schoolYear: request.schoolYear,
-                                  semester: request.semester,
-                                  mandatory: request.mandatory,
-                                  referentId: referent.id,
-                                })
-                              }
+                              onChange={(referent) => assignTo(request, referent)}
+                              onAddRequested={() => setAddingReferentFor(request)}
                             />
                           </TableCell>
                           <TableCell sx={{ width: 40 }}>
@@ -251,6 +262,14 @@ export function StageRequestsPage() {
             </TableContainer>
           )}
         </>
+      )}
+
+      {addingReferentFor && (
+        <AddReferentDialog
+          assignmentHint={`Il sera assigné à la demande de ${addingReferentFor.student.firstName} ${addingReferentFor.student.lastName}.`}
+          onClose={() => setAddingReferentFor(null)}
+          onCreated={(referent) => assignTo(addingReferentFor, referent)}
+        />
       )}
     </Box>
   );

@@ -5,6 +5,8 @@ import type {
   AssignReferentRequest,
   AssignReferentResponse,
   CertificateQueueResponse,
+  CreateReferentRequest,
+  CreateReferentResponse,
   ReferentListResponse,
 } from "shared";
 import { apiClient } from "../../lib/api-client";
@@ -54,4 +56,10 @@ export function getReferents() {
 // four-tuple as an in-place update (ADR-0014).
 export function assignReferent(payload: AssignReferentRequest) {
   return apiClient.patch<AssignReferentResponse>("/referents/assignments", payload);
+}
+
+// Issue #150 (ADR-0031): creates the referent, or adds the role and profile to
+// the user already holding that email.
+export function createReferent(payload: CreateReferentRequest) {
+  return apiClient.post<CreateReferentResponse>("/admin/referents", payload);
 }

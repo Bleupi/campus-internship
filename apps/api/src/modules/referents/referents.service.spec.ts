@@ -7,12 +7,14 @@ describe("ReferentsService", () => {
   let prisma: {
     referentProfile: { findMany: jest.Mock };
     referentAssignment: { upsert: jest.Mock };
+    user: { findFirst: jest.Mock; create: jest.Mock; update: jest.Mock };
   };
 
   beforeEach(async () => {
     prisma = {
       referentProfile: { findMany: jest.fn() },
       referentAssignment: { upsert: jest.fn() },
+      user: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
     };
 
     const module = await Test.createTestingModule({
@@ -105,6 +107,85 @@ describe("ReferentsService", () => {
       const result = await service.assign(DTO);
 
       expect(result).toEqual({ id: "ref-2", firstName: "Réf", lastName: "Deux" });
+    });
+  });
+
+  describe("create — ADR-0031: a referent added on the fly from the picker", () => {
+    const DTO = { firstName: "Claire", lastName: "Martin", email: "claire.martin@example.org" };
+
+    it("ADR-0031: a new email creates a REFERENT user with a profile and a non-usable password", async () => {
+      prisma.user.findFirst.mockResolvedValue(null);
+      prisma.user.create.mockResolvedValue({
+        firstName: "Claire",
+        lastName: "Martin",
+        referentProfile: { id: "ref-new" },
+      });
+
+      const result = await service.create(DTO);
+
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      const { data } = prisma.user.create.mock.calls[0][0];
+      expect(data).toMatchObject({
+        email: "claire.martin@example.org",
+        firstName: "Claire",
+        lastName: "Martin",
+        roles: ["REFERENT"],
+        referentProfile: { create: {} },
+      });
+      // A real bcrypt hash (so /auth/login fails cleanly instead of throwing
+      // on a malformed hash) of a secret nobody ever sees.
+      expect(data.passwordHash).toMatch(/^\$2[aby]\$/);
+      expect(result).toEqual({ id: "ref-new", firstName: "Claire", lastName: "Martin" });
+    });
+
+    it("looks the email up case-insensitively, so a differently-cased address still finds the existing user", async () => {
+      prisma.user.findFirst.mockResolvedValue(null);
+      prisma.user.create.mockResolvedValue({
+        firstName: "Claire",
+        lastName: "Martin",
+        referentProfile: { id: "ref-new" },
+      });
+
+      await service.create({ ...DTO, email: "Claire.Martin@Example.org" });
+
+      expect(prisma.user.findFirst).toHaveBeenCalledWith({
+        where: { email: { equals: "Claire.Martin@Example.org", mode: "insensitive" } },
+        select: { id: true, roles: true },
+      });
+    });
+
+    it("ADR-0031: an existing user's email adds the REFERENT role and a profile — name and password untouched, no new account", async () => {
+      prisma.user.findFirst.mockResolvedValue({ id: "user-admin", roles: ["ADMIN"] });
+      prisma.user.update.mockResolvedValue({
+        firstName: "Alice",
+        lastName: "Admin",
+        referentProfile: { id: "ref-admin" },
+      });
+
+      const result = await service.create(DTO);
+
+      expect(prisma.user.create).not.toHaveBeenCalled();
+      const { where, data } = prisma.user.update.mock.calls[0][0];
+      expect(where).toEqual({ id: "user-admin" });
+      expect(data).toEqual({
+        roles: { push: "REFERENT" },
+        referentProfile: { upsert: { create: {}, update: { archived: false } } },
+      });
+      expect(result).toEqual({ id: "ref-admin", firstName: "Alice", lastName: "Admin" });
+    });
+
+    it("does not duplicate the REFERENT role when the existing user already holds it", async () => {
+      prisma.user.findFirst.mockResolvedValue({ id: "user-ref", roles: ["REFERENT"] });
+      prisma.user.update.mockResolvedValue({
+        firstName: "Réf",
+        lastName: "Existant",
+        referentProfile: { id: "ref-existing" },
+      });
+
+      await service.create(DTO);
+
+      const { data } = prisma.user.update.mock.calls[0][0];
+      expect(data.roles).toBeUndefined();
     });
   });
 });
