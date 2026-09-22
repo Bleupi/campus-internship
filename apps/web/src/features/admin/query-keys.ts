@@ -6,3 +6,5 @@ export const certificateQueryKey = (studentId: string) =>
 export const STAGE_REQUESTS_QUERY_KEY = ["admin", "stage-requests"] as const;
 
 export const stageRequestDetailQueryKey = (id: string) => ["admin", "stage-requests", id] as const;
+
+export const REFERENTS_QUERY_KEY = ["referents"] as const;

@@ -25,8 +25,10 @@ vi.mock("./features/students/api", () => ({
 }));
 
 const getStageRequestsMock = vi.fn();
+const getReferentsMock = vi.fn();
 vi.mock("./features/admin/api", () => ({
   getStageRequests: (...args: unknown[]) => getStageRequestsMock(...args),
+  getReferents: (...args: unknown[]) => getReferentsMock(...args),
 }));
 
 const listStagesMock = vi.fn();
@@ -69,6 +71,7 @@ function renderApp(initialPath: string) {
 describe("App default page with stage management on (issue #114)", () => {
   beforeEach(() => {
     listStagesMock.mockResolvedValue([]);
+    getReferentsMock.mockResolvedValue([]);
   });
 
   afterEach(() => {

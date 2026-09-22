@@ -33,7 +33,6 @@ import { HealthModule } from "./modules/health/health.module";
     PrismaModule,
     AuthModule,
     StudentsModule,
-    ReferentsModule,
     // Issue #113/ADR-0029: off means these modules are never part of the
     // module graph at all — a true 404 on their routes, not a guard-blocked
     // 401/403. Reading process.env directly (not ConfigService) here is
@@ -43,7 +42,12 @@ import { HealthModule } from "./modules/health/health.module";
     // the validated/transformed value by the time this next array element
     // evaluates (array literals evaluate left-to-right). This only holds
     // because this line comes after ConfigModule.forRoot() above.
-    ...(process.env.FEATURE_STAGE_MANAGEMENT === "true" ? [StagesModule, OrganismsModule] : []),
+    // Issue #148: ReferentsModule joins this set — it was previously
+    // registered unconditionally while empty; now that it exposes routes,
+    // it follows the same flag as the rest of stage management.
+    ...(process.env.FEATURE_STAGE_MANAGEMENT === "true"
+      ? [StagesModule, OrganismsModule, ReferentsModule]
+      : []),
     AdminModule,
     FilesModule,
     HealthModule,

@@ -8,10 +8,14 @@ import { StageRequestsPage } from "./StageRequestsPage";
 const getStageRequestsMock = vi.fn();
 const getStageRequestDetailMock = vi.fn();
 const getStructureTypesMock = vi.fn();
+const getReferentsMock = vi.fn();
+const assignReferentMock = vi.fn();
 
 vi.mock("./api", () => ({
   getStageRequests: (...args: unknown[]) => getStageRequestsMock(...args),
   getStageRequestDetail: (...args: unknown[]) => getStageRequestDetailMock(...args),
+  getReferents: (...args: unknown[]) => getReferentsMock(...args),
+  assignReferent: (...args: unknown[]) => assignReferentMock(...args),
 }));
 
 vi.mock("../organisms/api", () => ({
@@ -116,7 +120,10 @@ describe("StageRequestsPage — issue #146", () => {
     getStageRequestsMock.mockReset();
     getStageRequestDetailMock.mockReset();
     getStructureTypesMock.mockReset();
+    getReferentsMock.mockReset();
+    assignReferentMock.mockReset();
     getStructureTypesMock.mockResolvedValue(STRUCTURE_TYPES);
+    getReferentsMock.mockResolvedValue([referent]);
   });
 
   it("BR-03: renders the requests in the order the API returned them (already oldest submission first)", async () => {
@@ -157,16 +164,16 @@ describe("StageRequestsPage — issue #146", () => {
     expect(row).toHaveTextContent("01/10/2026 → 31/10/2026 (+2)");
     expect(row).toHaveTextContent("S2");
     expect(row).toHaveTextContent("Facultatif");
-    expect(row).toHaveTextContent("Claire Bernard");
+    expect(within(row).getByDisplayValue("Claire Bernard")).toBeInTheDocument();
   });
 
-  it("ADR-0014: marks a mandatory stage 'Obligatoire' and a request without referent as not yet assigned", async () => {
+  it("ADR-0014: marks a mandatory stage 'Obligatoire' and a request without referent shows an empty picker", async () => {
     getStageRequestsMock.mockResolvedValue([request({ mandatory: true, referent: null })]);
     renderPage();
 
     const row = (await screen.findByText("Alice Martin")).closest("tr")!;
     expect(row).toHaveTextContent("Obligatoire");
-    expect(row).toHaveTextContent("Aucun référent");
+    expect(within(row).getByRole("combobox")).toHaveValue("");
   });
 
   it("shows the structure type as a coloured label: same type, same colour, and every configured type gets its own colour", async () => {
@@ -308,6 +315,44 @@ describe("StageRequestsPage — issue #146", () => {
     renderPage();
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/impossible de charger/i);
+  });
+
+  describe("inline referent picker — issue #148", () => {
+    it("ADR-0014: picking a referent assigns it on the exact tuple, and the row shows it once the list refetches", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock
+        .mockResolvedValueOnce([request({ referent: null })])
+        .mockResolvedValueOnce([request({ referent })]);
+      getReferentsMock.mockResolvedValue([referent]);
+      assignReferentMock.mockResolvedValue(referent);
+      renderPage();
+
+      const row = (await screen.findByText("Alice Martin")).closest("tr")!;
+      await user.click(within(row).getByRole("combobox"));
+      await user.click(await screen.findByRole("option", { name: "Claire Bernard" }));
+
+      expect(assignReferentMock).toHaveBeenCalledWith({
+        studentId: "student-1",
+        schoolYear: "2026-2027",
+        semester: "S1",
+        mandatory: true,
+        referentId: "ref-1",
+      });
+      await waitFor(() =>
+        expect(within(row).getByDisplayValue("Claire Bernard")).toBeInTheDocument(),
+      );
+    });
+
+    it("clicking the picker does not expand or collapse the row's detail", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([request({ referent: null })]);
+      renderPage();
+
+      const row = (await screen.findByText("Alice Martin")).closest("tr")!;
+      await user.click(within(row).getByRole("combobox"));
+
+      expect(getStageRequestDetailMock).not.toHaveBeenCalled();
+    });
   });
 
   describe("row-expand detail — issue #147", () => {
