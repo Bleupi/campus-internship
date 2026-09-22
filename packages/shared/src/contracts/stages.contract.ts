@@ -106,13 +106,19 @@ export interface AdminStageRequestListItem {
   schoolYear: string;
   semester: Semester;
   mandatory: boolean;
-  service: string | null;
+  // Never null here: BR-02 requires service to be non-blank to submit. Not
+  // StageDraftResponse's `service` (nullable there — a DRAFT can be partial).
+  service: string;
   submittedAt: string;
+  // Never null here: BR-02 requires a VALID profile to submit, and a profile
+  // can only reach VALID once promotion is set (students.service.ts) — it is
+  // never cleared afterward. Not the general StudentProfile shape (which
+  // stays `Promotion | null` pre-completion).
   student: {
     id: string;
     firstName: string;
     lastName: string;
-    promotion: Promotion | null;
+    promotion: Promotion;
   };
   organism: {
     name: string;
@@ -125,3 +131,52 @@ export interface AdminStageRequestListItem {
 }
 
 export type AdminStageRequestListResponse = AdminStageRequestListItem[];
+
+// Issue #147: everything the student provided for a single PENDING request,
+// for the "Demandes à traiter" row-expand detail. No `editable` flags here
+// (that concept is specific to the student's own DRAFT-correction flow) and
+// no `id`s on organism/tutor: the admin only ever reads this, never edits it.
+export interface AdminStageRequestOrganismDetail {
+  name: string;
+  structureType: string;
+  street: string;
+  postalCode: string;
+  city: string;
+}
+
+export interface AdminStageRequestTutorDetail {
+  firstName: string;
+  lastName: string;
+  email: string;
+  jobTitle: string;
+  phone: string | null;
+  acceptsPhoneContact: boolean;
+}
+
+export interface AdminStageRequestDetailResponse {
+  id: string;
+  version: number;
+  schoolYear: string;
+  semester: Semester;
+  mandatory: boolean;
+  // Never null: BR-02 requires all three to be non-blank to submit. Not
+  // StageDraftResponse's fields of the same name (nullable there — a DRAFT
+  // can be partial).
+  service: string;
+  projectType: string;
+  motivation: string;
+  submittedAt: string;
+  // Never null here — same BR-02 invariant as AdminStageRequestListItem above.
+  // `email` is the login (university) address, not the mutable personalEmail.
+  student: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    promotion: Promotion;
+  };
+  organism: AdminStageRequestOrganismDetail;
+  tutor: AdminStageRequestTutorDetail;
+  periods: StageDraftPeriodResponse[];
+  referent: StageReferentResponse | null;
+}

@@ -1,3 +1,7 @@
+export function mandatoryLabel(mandatory: boolean): string {
+  return mandatory ? "Obligatoire" : "Facultatif";
+}
+
 interface OrganismAddress {
   structureType: string;
   street: string;
@@ -33,4 +37,18 @@ export function formatDate(iso: string) {
 
 export function formatPeriodRange(period: { startDate: string; endDate: string }) {
   return `${formatDate(period.startDate)} → ${formatDate(period.endDate)}`;
+}
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+// BR-04c allows `endDate === startDate` (a one-day period), so both bounds are
+// inclusive: a period's length is the day count from start to end, plus one.
+export function formatTotalDuration(periods: { startDate: string; endDate: string }[]) {
+  const totalDays = periods.reduce((sum, period) => {
+    const days = Math.round(
+      (Date.parse(period.endDate) - Date.parse(period.startDate)) / MS_PER_DAY,
+    );
+    return sum + days + 1;
+  }, 0);
+  return totalDays <= 1 ? `${totalDays} jour` : `${totalDays} jours`;
 }

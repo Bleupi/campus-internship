@@ -6,10 +6,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { StageRequestsPage } from "./StageRequestsPage";
 
 const getStageRequestsMock = vi.fn();
+const getStageRequestDetailMock = vi.fn();
 const getStructureTypesMock = vi.fn();
 
 vi.mock("./api", () => ({
   getStageRequests: (...args: unknown[]) => getStageRequestsMock(...args),
+  getStageRequestDetail: (...args: unknown[]) => getStageRequestDetailMock(...args),
 }));
 
 vi.mock("../organisms/api", () => ({
@@ -49,6 +51,51 @@ function request(overrides: Record<string, unknown> = {}) {
 
 const referent = { id: "ref-1", firstName: "Claire", lastName: "Bernard" };
 
+function detail(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "stage-1",
+    version: 0,
+    schoolYear: "2026-2027",
+    semester: "S1",
+    mandatory: true,
+    service: "Service de cardiologie",
+    projectType: "Handicap moteur",
+    motivation: "Une motivation détaillée.",
+    submittedAt: "2026-09-01T10:00:00.000Z",
+    student: {
+      id: "student-1",
+      firstName: "Alice",
+      lastName: "Martin",
+      email: "alice.martin@etu.u-paris.fr",
+      promotion: "L3",
+    },
+    organism: {
+      name: "Hôpital Cochin",
+      structureType: "Secteur Sanitaire",
+      street: "27 rue du Faubourg Saint-Jacques",
+      postalCode: "75014",
+      city: "Paris",
+    },
+    tutor: {
+      firstName: "Marie",
+      lastName: "Curie",
+      email: "m.curie@example.org",
+      jobTitle: "Médecin",
+      phone: "0102030405",
+      acceptsPhoneContact: true,
+    },
+    periods: [
+      {
+        id: "period-1",
+        startDate: "2026-10-01T00:00:00.000Z",
+        endDate: "2026-10-05T00:00:00.000Z",
+      },
+    ],
+    referent: null,
+    ...overrides,
+  };
+}
+
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -67,6 +114,7 @@ function bodyRows() {
 describe("StageRequestsPage — issue #146", () => {
   beforeEach(() => {
     getStageRequestsMock.mockReset();
+    getStageRequestDetailMock.mockReset();
     getStructureTypesMock.mockReset();
     getStructureTypesMock.mockResolvedValue(STRUCTURE_TYPES);
   });
@@ -260,5 +308,102 @@ describe("StageRequestsPage — issue #146", () => {
     renderPage();
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/impossible de charger/i);
+  });
+
+  describe("row-expand detail — issue #147", () => {
+    it("clicking a row expands a three-column detail with everything the student provided, and clicking again collapses it", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([
+        request({
+          id: "stage-1",
+          organism: { name: "Association Sportive", structureType: "Secteur Sanitaire" },
+          service: "Service triage",
+        }),
+      ]);
+      getStageRequestDetailMock.mockResolvedValue(detail());
+      renderPage();
+
+      const row = (await screen.findByText("Alice Martin")).closest("tr")!;
+      await user.click(row);
+
+      expect(getStageRequestDetailMock).toHaveBeenCalledWith("stage-1");
+      expect(await screen.findByText("Hôpital Cochin")).toBeInTheDocument();
+      // "Alice Martin" now appears twice: the row itself, and the detail's
+      // own "Étudiant" section.
+      expect(screen.getAllByText("Alice Martin")).toHaveLength(2);
+      expect(screen.getByText("alice.martin@etu.u-paris.fr")).toBeInTheDocument();
+      expect(screen.getByText("Obligatoire · S1 · soumise le 01/09/2026")).toBeInTheDocument();
+      expect(screen.getByText("27 rue du Faubourg Saint-Jacques, 75014 Paris")).toBeInTheDocument();
+      expect(screen.getByText("Service de cardiologie")).toBeInTheDocument();
+      expect(screen.getByText("Handicap moteur")).toBeInTheDocument();
+      expect(screen.getByText("Une motivation détaillée.")).toBeInTheDocument();
+      expect(screen.getByText(/Marie Curie \(Médecin\)/)).toBeInTheDocument();
+      expect(screen.getByText("m.curie@example.org")).toBeInTheDocument();
+      expect(screen.getByText("0102030405")).toBeInTheDocument();
+      expect(screen.getByText("Accepte d'être contacté par téléphone")).toBeInTheDocument();
+      expect(screen.getByText("01/10/2026 → 05/10/2026")).toBeInTheDocument();
+      expect(screen.getByText("Périodes (5 jours au total)")).toBeInTheDocument();
+
+      await user.click(row);
+      await waitFor(() => expect(screen.queryByText("Hôpital Cochin")).toBeNull());
+    });
+
+    // BR-02 requires service/project type/motivation non-blank to submit, and
+    // the organism address is always complete (only ever written through the
+    // wizard's Zod-validated create/edit paths) — the only value a student
+    // may legitimately omit here is the tutor's phone, and with no phone
+    // contact is impossible anyway, so both lines are hidden rather than
+    // showing a hollow "Non renseigné" next to "ne souhaite pas être
+    // contacté par téléphone".
+    it("hides the phone and phone-contact lines when the tutor has no phone on file", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([
+        request({
+          id: "stage-1",
+          organism: { name: "Association Sportive", structureType: "Secteur Sanitaire" },
+        }),
+      ]);
+      getStageRequestDetailMock.mockResolvedValue(
+        detail({
+          tutor: {
+            firstName: "Marie",
+            lastName: "Curie",
+            email: "m.curie@example.org",
+            jobTitle: "Médecin",
+            phone: null,
+            acceptsPhoneContact: false,
+          },
+        }),
+      );
+      renderPage();
+
+      const row = (await screen.findByText("Alice Martin")).closest("tr")!;
+      await user.click(row);
+
+      await screen.findByText("Hôpital Cochin");
+      expect(screen.queryByText("Non renseigné")).not.toBeInTheDocument();
+      expect(
+        screen.queryByText("Ne souhaite pas être contacté par téléphone"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("shows an error message when the detail cannot be loaded", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([
+        request({
+          id: "stage-1",
+          organism: { name: "Association Sportive", structureType: "Secteur Sanitaire" },
+        }),
+      ]);
+      getStageRequestDetailMock.mockRejectedValue(new Error("boom"));
+      renderPage();
+
+      const row = (await screen.findByText("Alice Martin")).closest("tr")!;
+      await user.click(row);
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        /impossible de charger le détail/i,
+      );
+    });
   });
 });

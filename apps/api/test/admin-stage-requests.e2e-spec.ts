@@ -3,7 +3,7 @@ import type { INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import cookieParser from "cookie-parser";
 import request from "supertest";
-import type { AdminStageRequestListResponse } from "shared";
+import type { AdminStageRequestDetailResponse, AdminStageRequestListResponse } from "shared";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { seedAdminAndLogin } from "./helpers/admin";
@@ -82,22 +82,35 @@ describe("Admin stage requests list (e2e) — issue #146", () => {
       semester?: "S1" | "S2";
       mandatory?: boolean;
       periods?: { startDate: Date; endDate: Date }[];
+      service?: string | null;
+      projectType?: string | null;
+      motivation?: string | null;
+      organism?: Partial<{
+        street: string;
+        postalCode: string;
+        city: string;
+      }>;
+      tutor?: Partial<{
+        phone: string | null;
+        acceptsPhoneContact: boolean;
+      }>;
     } = {},
   ) {
     const organism = await prisma.hostOrganism.create({
       data: {
         name: `Organisme ${randomUUID()}`,
         structureType: "Secteur Sanitaire",
-        city: "Paris",
-        postalCode: "75014",
-        street: "1 rue Test",
+        city: overrides.organism?.city ?? "Paris",
+        postalCode: overrides.organism?.postalCode ?? "75014",
+        street: overrides.organism?.street ?? "1 rue Test",
         tutors: {
           create: {
             firstName: "Marie",
             lastName: "Curie",
             email: "m.curie@example.org",
             jobTitle: "Médecin",
-            acceptsPhoneContact: false,
+            phone: overrides.tutor?.phone,
+            acceptsPhoneContact: overrides.tutor?.acceptsPhoneContact ?? false,
           },
         },
       },
@@ -114,7 +127,14 @@ describe("Admin stage requests list (e2e) — issue #146", () => {
         schoolYear: "2099-2100",
         semester: overrides.semester ?? "S1",
         mandatory: overrides.mandatory ?? true,
-        service: "Service de test",
+        service: overrides.service === undefined ? "Service de test" : overrides.service,
+        // BR-02: submission requires these non-blank, so a real PENDING stage
+        // never has them null — only explicit overrides may still force null
+        // (e.g. for a DRAFT fixture).
+        projectType:
+          overrides.projectType === undefined ? "Type de handicap de test" : overrides.projectType,
+        motivation:
+          overrides.motivation === undefined ? "Motivation de test" : overrides.motivation,
         submittedAt:
           overrides.submittedAt === undefined
             ? status === "DRAFT"
@@ -127,7 +147,7 @@ describe("Admin stage requests list (e2e) — issue #146", () => {
           ],
         },
       },
-      include: { organism: true },
+      include: { organism: true, tutor: true },
     });
   }
 
@@ -295,5 +315,292 @@ describe("Admin stage requests list (e2e) — issue #146", () => {
       .set("Cookie", cookieHeader({ access_token: student.token }))
       .expect(403);
     await request(app.getHttpServer()).get("/admin/stage-requests").expect(401);
+  });
+});
+
+// Issue #147: GET /admin/stage-requests/:id, the "Demandes à traiter" row-expand
+// detail — everything the student provided for one PENDING request.
+describe("Admin stage request detail (e2e) — issue #147", () => {
+  let app: INestApplication;
+  let prisma: PrismaService;
+  const createdUserEmails: string[] = [];
+  const createdReferentEmails: string[] = [];
+  const createdOrganismIds: string[] = [];
+  let adminCookie: string;
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    app = moduleRef.createNestApplication();
+    app.use(cookieParser());
+    await app.init();
+    prisma = moduleRef.get(PrismaService);
+
+    adminCookie = await seedAdminAndLogin(app, prisma, createdUserEmails);
+  });
+
+  afterAll(async () => {
+    await purgeE2eData(prisma, { userEmails: createdUserEmails, organismIds: createdOrganismIds });
+    await prisma.user.deleteMany({ where: { email: { in: createdReferentEmails } } });
+    await app.close();
+  });
+
+  async function signupStudent(
+    lastName = "Dupont",
+  ): Promise<{ token: string; profileId: string; email: string }> {
+    const email = `e2e.admin-stage-request-detail.student.${randomUUID()}@etu.u-paris.fr`;
+    createdUserEmails.push(email);
+    const response = await request(app.getHttpServer())
+      .post("/auth/signup")
+      .send({
+        email,
+        password: "a-password-that-is-long-enough",
+        firstName: "Étu",
+        lastName,
+      })
+      .expect(201);
+    const profile = await prisma.studentProfile.update({
+      where: { userId: (await prisma.user.findUniqueOrThrow({ where: { email } })).id },
+      data: { promotion: "L2" },
+    });
+    return {
+      token: requireCookie(cookieMap(response), "access_token"),
+      profileId: profile.id,
+      email,
+    };
+  }
+
+  async function seedReferent(lastName: string) {
+    const email = `e2e.admin-stage-request-detail.referent.${randomUUID()}@univ.fr`;
+    createdReferentEmails.push(email);
+    return prisma.referentProfile.create({
+      data: {
+        user: {
+          create: {
+            email,
+            passwordHash: "x",
+            firstName: "Réf",
+            lastName,
+            roles: ["REFERENT"],
+          },
+        },
+      },
+    });
+  }
+
+  async function seedStage(
+    studentId: string,
+    overrides: {
+      status?: "DRAFT" | "PENDING" | "VALIDATED" | "REFUSED";
+      service?: string | null;
+      projectType?: string | null;
+      motivation?: string | null;
+      periods?: { startDate: Date; endDate: Date }[];
+      organism?: Partial<{ street: string; postalCode: string; city: string }>;
+      tutor?: Partial<{ phone: string | null; acceptsPhoneContact: boolean }>;
+    } = {},
+  ) {
+    const organism = await prisma.hostOrganism.create({
+      data: {
+        name: `Organisme ${randomUUID()}`,
+        structureType: "Secteur Sanitaire",
+        city: overrides.organism?.city ?? "Paris",
+        postalCode: overrides.organism?.postalCode ?? "75014",
+        street: overrides.organism?.street ?? "1 rue Test",
+        tutors: {
+          create: {
+            firstName: "Marie",
+            lastName: "Curie",
+            email: "m.curie@example.org",
+            jobTitle: "Médecin",
+            phone: overrides.tutor?.phone,
+            acceptsPhoneContact: overrides.tutor?.acceptsPhoneContact ?? false,
+          },
+        },
+      },
+      include: { tutors: true },
+    });
+    createdOrganismIds.push(organism.id);
+    const status = overrides.status ?? "PENDING";
+    return prisma.stage.create({
+      data: {
+        studentId,
+        organismId: organism.id,
+        tutorId: organism.tutors[0]!.id,
+        status,
+        schoolYear: "2099-2100",
+        semester: "S1",
+        mandatory: true,
+        service: overrides.service === undefined ? "Service de test" : overrides.service,
+        // BR-02: submission requires these non-blank, so a real PENDING stage
+        // never has them null — only explicit overrides may still force null
+        // (e.g. for a DRAFT fixture).
+        projectType:
+          overrides.projectType === undefined ? "Type de handicap de test" : overrides.projectType,
+        motivation:
+          overrides.motivation === undefined ? "Motivation de test" : overrides.motivation,
+        submittedAt: status === "DRAFT" ? null : new Date("2099-01-05T09:00:00.000Z"),
+        periods: {
+          create: overrides.periods ?? [
+            { startDate: new Date("2099-10-01"), endDate: new Date("2099-10-31") },
+          ],
+        },
+      },
+      include: { organism: true, tutor: true },
+    });
+  }
+
+  it("BR-03: returns everything the student provided for a PENDING request (organism, tutor, service, project, motivation, periods, referent)", async () => {
+    const student = await signupStudent("Bernard");
+    const referent = await seedReferent("Assigné");
+    await prisma.referentAssignment.create({
+      data: {
+        studentId: student.profileId,
+        schoolYear: "2099-2100",
+        semester: "S1",
+        mandatory: true,
+        referentId: referent.id,
+      },
+    });
+    const stage = await seedStage(student.profileId, {
+      service: "Cardiologie",
+      projectType: "Handicap moteur",
+      motivation: "Motivation détaillée du projet.",
+      organism: { street: "12 rue de la Santé", postalCode: "75013", city: "Paris" },
+      tutor: { phone: "0102030405", acceptsPhoneContact: true },
+      periods: [
+        { startDate: new Date("2099-10-01"), endDate: new Date("2099-10-05") },
+        { startDate: new Date("2099-11-01"), endDate: new Date("2099-11-01") },
+      ],
+    });
+
+    const response = await request(app.getHttpServer())
+      .get(`/admin/stage-requests/${stage.id}`)
+      .set("Cookie", adminCookie)
+      .expect(200);
+
+    const body = response.body as AdminStageRequestDetailResponse;
+    expect(body).toEqual({
+      id: stage.id,
+      version: 0,
+      schoolYear: "2099-2100",
+      semester: "S1",
+      mandatory: true,
+      service: "Cardiologie",
+      projectType: "Handicap moteur",
+      motivation: "Motivation détaillée du projet.",
+      submittedAt: "2099-01-05T09:00:00.000Z",
+      student: {
+        id: student.profileId,
+        firstName: "Étu",
+        lastName: "Bernard",
+        email: student.email,
+        promotion: "L2",
+      },
+      organism: {
+        name: stage.organism!.name,
+        structureType: "Secteur Sanitaire",
+        street: "12 rue de la Santé",
+        postalCode: "75013",
+        city: "Paris",
+      },
+      tutor: {
+        firstName: "Marie",
+        lastName: "Curie",
+        email: "m.curie@example.org",
+        jobTitle: "Médecin",
+        phone: "0102030405",
+        acceptsPhoneContact: true,
+      },
+      periods: [
+        {
+          id: expect.any(String),
+          startDate: "2099-10-01T00:00:00.000Z",
+          endDate: "2099-10-05T00:00:00.000Z",
+        },
+        {
+          id: expect.any(String),
+          startDate: "2099-11-01T00:00:00.000Z",
+          endDate: "2099-11-01T00:00:00.000Z",
+        },
+      ],
+      referent: { id: referent.id, firstName: "Réf", lastName: "Assigné" },
+    });
+  });
+
+  // BR-02 requires project type and motivation to be non-blank to submit, so
+  // a real PENDING stage never has them null — only tutor phone (optional on
+  // Tutor) and the referent (assigned separately, may not exist yet) can
+  // legitimately be missing here.
+  it("returns null only for values a student may legitimately omit (tutor phone, referent)", async () => {
+    const student = await signupStudent("Sansreferent");
+    const stage = await seedStage(student.profileId, { tutor: { phone: null } });
+
+    const response = await request(app.getHttpServer())
+      .get(`/admin/stage-requests/${stage.id}`)
+      .set("Cookie", adminCookie)
+      .expect(200);
+
+    const body = response.body as AdminStageRequestDetailResponse;
+    expect(body.tutor.phone).toBeNull();
+    expect(body.referent).toBeNull();
+    expect(body.projectType).toBe("Type de handicap de test");
+    expect(body.motivation).toBe("Motivation de test");
+  });
+
+  it("BR-03: a referent assigned for the other `mandatory` value is never shown as this stage's referent", async () => {
+    const student = await signupStudent();
+    const otherMandatoryReferent = await seedReferent("AutreObligatoire");
+    await prisma.referentAssignment.create({
+      data: {
+        studentId: student.profileId,
+        schoolYear: "2099-2100",
+        semester: "S1",
+        mandatory: false,
+        referentId: otherMandatoryReferent.id,
+      },
+    });
+    const stage = await seedStage(student.profileId);
+
+    const response = await request(app.getHttpServer())
+      .get(`/admin/stage-requests/${stage.id}`)
+      .set("Cookie", adminCookie)
+      .expect(200);
+
+    expect((response.body as AdminStageRequestDetailResponse).referent).toBeNull();
+  });
+
+  it("404s for a non-existent id, and for a DRAFT, VALIDATED or REFUSED stage (only PENDING is a valid target here)", async () => {
+    const student = await signupStudent();
+    const draft = await seedStage(student.profileId, { status: "DRAFT" });
+    const validated = await seedStage(student.profileId, { status: "VALIDATED" });
+    const refused = await seedStage(student.profileId, { status: "REFUSED" });
+
+    await request(app.getHttpServer())
+      .get(`/admin/stage-requests/${randomUUID()}`)
+      .set("Cookie", adminCookie)
+      .expect(404);
+    await request(app.getHttpServer())
+      .get(`/admin/stage-requests/${draft.id}`)
+      .set("Cookie", adminCookie)
+      .expect(404);
+    await request(app.getHttpServer())
+      .get(`/admin/stage-requests/${validated.id}`)
+      .set("Cookie", adminCookie)
+      .expect(404);
+    await request(app.getHttpServer())
+      .get(`/admin/stage-requests/${refused.id}`)
+      .set("Cookie", adminCookie)
+      .expect(404);
+  });
+
+  it("RBAC: a non-admin is rejected (403) and an anonymous caller is unauthorized (401)", async () => {
+    const student = await signupStudent();
+    const stage = await seedStage(student.profileId);
+
+    await request(app.getHttpServer())
+      .get(`/admin/stage-requests/${stage.id}`)
+      .set("Cookie", cookieHeader({ access_token: student.token }))
+      .expect(403);
+    await request(app.getHttpServer()).get(`/admin/stage-requests/${stage.id}`).expect(401);
   });
 });

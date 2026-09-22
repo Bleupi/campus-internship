@@ -1,5 +1,6 @@
 import type {
   AdminProfileTransitionResponse,
+  AdminStageRequestDetailResponse,
   AdminStageRequestListResponse,
   CertificateQueueResponse,
 } from "shared";
@@ -32,4 +33,10 @@ export function rejectProfile(studentId: string, reason: string) {
 // Issue #146: every PENDING stage request, oldest submission first.
 export function getStageRequests() {
   return apiClient.get<AdminStageRequestListResponse>("/admin/stage-requests");
+}
+
+// Issue #147: everything the student provided for one PENDING request, for
+// the row-expand detail.
+export function getStageRequestDetail(id: string) {
+  return apiClient.get<AdminStageRequestDetailResponse>(`/admin/stage-requests/${id}`);
 }

@@ -60,6 +60,14 @@ describe("Stages list + detail (e2e)", () => {
     const profile = await prisma.studentProfile.findFirstOrThrow({
       where: { user: { email: studentEmail } },
     });
+    // A real PENDING stage's student always has promotion set (BR-02: it's a
+    // precondition for the VALID profile submission requires) — keeps this
+    // fixture consistent with that invariant so a row created here can never
+    // trip admin-stage-requests.service.ts's checks in a concurrently
+    // running e2e file (they share one physical test database).
+    if (profile.promotion === null) {
+      await prisma.studentProfile.update({ where: { id: profile.id }, data: { promotion: "L2" } });
+    }
     const organism = await prisma.hostOrganism.create({
       data: {
         name: `Organisme ${randomUUID()}`,
@@ -88,6 +96,13 @@ describe("Stages list + detail (e2e)", () => {
         schoolYear: "2099-2100",
         semester: "S1",
         mandatory: true,
+        // Same BR-02 reasoning as the promotion fix above: a real PENDING
+        // stage always has these non-blank, so a status: "PENDING" override
+        // here without its own service/projectType/motivation would create
+        // the same kind of impossible row.
+        service: "Service de test",
+        projectType: "Type de handicap de test",
+        motivation: "Motivation de test",
         periods: { create: { startDate: new Date(start), endDate: new Date("2099-10-15") } },
         ...overrides,
       },

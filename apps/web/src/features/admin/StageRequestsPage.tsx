@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import {
   Alert,
   Box,
+  Chip,
+  IconButton,
   InputAdornment,
   Paper,
   Stack,
@@ -16,12 +18,17 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import ExpandLessOutlinedIcon from "@mui/icons-material/ExpandLessOutlined";
+import ExpandMoreOutlinedIcon from "@mui/icons-material/ExpandMoreOutlined";
 import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
 import TaskAltOutlinedIcon from "@mui/icons-material/TaskAltOutlined";
 import type { AdminStageRequestListItem } from "shared";
-import { formatPeriodRange } from "../stages/format-summary";
+import { formatPeriodRange, mandatoryLabel } from "../stages/format-summary";
+import { StageRequestDetail } from "./StageRequestDetail";
 import { StructureTypeLabel } from "./StructureTypeLabel";
 import { useStageRequests } from "./useStageRequests";
+
+const DETAIL_COLUMN_COUNT = 6;
 
 type TabKey = "all" | "withoutReferent" | "ready";
 
@@ -89,6 +96,7 @@ export function StageRequestsPage() {
   const { data: requests, isLoading, isError } = useStageRequests();
   const [activeTab, setActiveTab] = useState<TabKey>("all");
   const [search, setSearch] = useState("");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   if (isLoading) {
     return <Typography sx={{ color: "text.secondary" }}>Chargement…</Typography>;
@@ -149,45 +157,83 @@ export function StageRequestsPage() {
                 <TableHead>
                   <TableRow>
                     <TableCell>Étudiant</TableCell>
-                    <TableCell>Promotion</TableCell>
                     <TableCell>Organisme</TableCell>
-                    <TableCell>Service</TableCell>
                     <TableCell>Période</TableCell>
-                    <TableCell>Semestre</TableCell>
-                    <TableCell>Type</TableCell>
+                    <TableCell>Demande</TableCell>
                     <TableCell>Référent</TableCell>
+                    <TableCell />
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {visible.map((request) => (
-                    <TableRow key={request.id} hover>
-                      <TableCell sx={{ fontWeight: 700 }}>
-                        {request.student.firstName} {request.student.lastName}
-                      </TableCell>
-                      <TableCell>{request.student.promotion ?? "—"}</TableCell>
-                      <TableCell>
-                        <Stack spacing={0.5} sx={{ alignItems: "flex-start" }}>
-                          <Typography variant="body2">{request.organism.name}</Typography>
-                          <StructureTypeLabel structureType={request.organism.structureType} />
-                        </Stack>
-                      </TableCell>
-                      <TableCell>{request.service ?? "—"}</TableCell>
-                      <TableCell sx={{ whiteSpace: "nowrap" }}>
-                        {formatFirstPeriod(request)}
-                      </TableCell>
-                      <TableCell>{request.semester}</TableCell>
-                      <TableCell>{request.mandatory ? "Obligatoire" : "Facultatif"}</TableCell>
-                      <TableCell>
-                        {request.referent ? (
-                          `${request.referent.firstName} ${request.referent.lastName}`
-                        ) : (
-                          <Typography variant="body2" sx={{ color: "warning.main" }}>
-                            Aucun référent
-                          </Typography>
+                  {visible.map((request) => {
+                    const expanded = expandedId === request.id;
+                    return (
+                      <Fragment key={request.id}>
+                        <TableRow
+                          hover
+                          onClick={() => setExpandedId(expanded ? null : request.id)}
+                          sx={{ cursor: "pointer" }}
+                        >
+                          <TableCell>
+                            <Stack spacing={0.25} sx={{ alignItems: "flex-start" }}>
+                              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                {request.student.firstName} {request.student.lastName}
+                              </Typography>
+                              <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                                {request.student.promotion}
+                              </Typography>
+                            </Stack>
+                          </TableCell>
+                          <TableCell>
+                            <Stack spacing={0.5} sx={{ alignItems: "flex-start" }}>
+                              <Typography variant="body2">{request.organism.name}</Typography>
+                              <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                                {request.service}
+                              </Typography>
+                              <StructureTypeLabel structureType={request.organism.structureType} />
+                            </Stack>
+                          </TableCell>
+                          <TableCell sx={{ whiteSpace: "nowrap" }}>
+                            {formatFirstPeriod(request)}
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              size="small"
+                              color={request.mandatory ? "primary" : "default"}
+                              label={`${mandatoryLabel(request.mandatory)} · ${request.semester}`}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            {request.referent ? (
+                              `${request.referent.firstName} ${request.referent.lastName}`
+                            ) : (
+                              <Typography variant="body2" sx={{ color: "warning.main" }}>
+                                Aucun référent
+                              </Typography>
+                            )}
+                          </TableCell>
+                          <TableCell sx={{ width: 40 }}>
+                            <IconButton
+                              size="small"
+                              aria-label={expanded ? "Réduire" : "Développer"}
+                              aria-expanded={expanded}
+                            >
+                              {expanded ? <ExpandLessOutlinedIcon /> : <ExpandMoreOutlinedIcon />}
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                        {expanded && (
+                          <TableRow>
+                            <TableCell sx={{ p: 0 }} colSpan={DETAIL_COLUMN_COUNT}>
+                              <Box sx={{ px: 2 }}>
+                                <StageRequestDetail stageId={request.id} />
+                              </Box>
+                            </TableCell>
+                          </TableRow>
                         )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                      </Fragment>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>

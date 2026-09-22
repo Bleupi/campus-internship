@@ -1,5 +1,5 @@
-import { Injectable } from "@nestjs/common";
-import type { AdminStageRequestListResponse, Promotion } from "shared";
+import { Injectable, NotFoundException } from "@nestjs/common";
+import type { AdminStageRequestDetailResponse, AdminStageRequestListResponse } from "shared";
 import { PrismaService } from "../../prisma/prisma.service";
 import { toReferentResponse } from "./referent-response";
 
@@ -58,12 +58,17 @@ export class AdminStageRequestsService {
     );
 
     return stages.map((stage) => {
-      const { submittedAt, organism } = stage;
-      // A PENDING stage was submitted (submittedAt is set) and its organism was
-      // resolved at creation, but the schema allows neither to be null. Fail
-      // with a message that names the stage rather than a bare TypeError.
-      if (!submittedAt || !organism) {
-        throw new Error(`PENDING stage ${stage.id} has no submittedAt or no organism`);
+      const { submittedAt, organism, student, service } = stage;
+      // A PENDING stage was submitted (submittedAt is set), its organism was
+      // resolved at creation, and its request was complete (BR-02: service
+      // non-blank) from a VALID profile (which requires promotion to be set,
+      // students.service.ts, and it is never cleared afterward). The schema
+      // allows all four to be null, so fail with a message that names the
+      // stage rather than a bare TypeError.
+      if (!submittedAt || !organism || !student.promotion || !service) {
+        throw new Error(
+          `PENDING stage ${stage.id} has no submittedAt, organism, promotion, or service`,
+        );
       }
       const referent = referentByTuple.get(tupleKey(stage));
       const [firstPeriod] = stage.periods;
@@ -73,13 +78,13 @@ export class AdminStageRequestsService {
         schoolYear: stage.schoolYear,
         semester: stage.semester,
         mandatory: stage.mandatory,
-        service: stage.service,
+        service,
         submittedAt: submittedAt.toISOString(),
         student: {
-          id: stage.student.id,
-          firstName: stage.student.user.firstName,
-          lastName: stage.student.user.lastName,
-          promotion: stage.student.promotion as Promotion | null,
+          id: student.id,
+          firstName: student.user.firstName,
+          lastName: student.user.lastName,
+          promotion: student.promotion,
         },
         organism: { name: organism.name, structureType: organism.structureType },
         firstPeriod: firstPeriod
@@ -93,5 +98,105 @@ export class AdminStageRequestsService {
         referent: referent ? toReferentResponse(referent) : null,
       };
     });
+  }
+
+  // Issue #147: the row-expand detail — everything the student provided for
+  // one request. Scoped to PENDING like list() above (BR-03): a DRAFT was
+  // never submitted, and a VALIDATED/REFUSED stage's display source is its
+  // frozen snapshot (ADR-0003, BR-08), not these live relations, so both are
+  // a 404 here rather than showing live data that may already have drifted
+  // from what was decided.
+  async getById(id: string): Promise<AdminStageRequestDetailResponse> {
+    const stage = await this.prisma.stage.findUnique({
+      where: { id },
+      include: {
+        organism: true,
+        tutor: true,
+        periods: { orderBy: { startDate: "asc" } },
+        student: {
+          select: {
+            id: true,
+            promotion: true,
+            user: { select: { firstName: true, lastName: true, email: true } },
+          },
+        },
+      },
+    });
+    if (!stage || stage.status !== "PENDING") {
+      throw new NotFoundException("Demande de stage introuvable");
+    }
+    // A PENDING stage was submitted (submittedAt is set), its organism and
+    // tutor were resolved at creation, its request was complete (BR-02:
+    // service/projectType/motivation all non-blank), and its student's
+    // profile was VALID at submission time — which requires promotion to be
+    // set (students.service.ts) and it is never cleared afterward. The
+    // schema allows all of these to be null, so fail with a message that
+    // names the stage rather than a bare TypeError.
+    const { submittedAt, organism, tutor, student, service, projectType, motivation } = stage;
+    if (
+      !submittedAt ||
+      !organism ||
+      !tutor ||
+      !student.promotion ||
+      !service ||
+      !projectType ||
+      !motivation
+    ) {
+      throw new Error(
+        `PENDING stage ${stage.id} has no submittedAt, organism, tutor, promotion, service, projectType, or motivation`,
+      );
+    }
+
+    const assignment = await this.prisma.referentAssignment.findUnique({
+      where: {
+        studentId_schoolYear_semester_mandatory: {
+          studentId: stage.studentId,
+          schoolYear: stage.schoolYear,
+          semester: stage.semester,
+          mandatory: stage.mandatory,
+        },
+      },
+      include: { referent: { include: { user: { select: { firstName: true, lastName: true } } } } },
+    });
+
+    return {
+      id: stage.id,
+      version: stage.version,
+      schoolYear: stage.schoolYear,
+      semester: stage.semester,
+      mandatory: stage.mandatory,
+      service,
+      projectType,
+      motivation,
+      submittedAt: submittedAt.toISOString(),
+      student: {
+        id: student.id,
+        firstName: student.user.firstName,
+        lastName: student.user.lastName,
+        email: student.user.email,
+        promotion: student.promotion,
+      },
+      organism: {
+        name: organism.name,
+        structureType: organism.structureType,
+        street: organism.street,
+        postalCode: organism.postalCode,
+        city: organism.city,
+      },
+      tutor: {
+        firstName: tutor.firstName,
+        lastName: tutor.lastName,
+        email: tutor.email,
+        jobTitle: tutor.jobTitle,
+        phone: tutor.phone,
+        acceptsPhoneContact: tutor.acceptsPhoneContact,
+      },
+      periods: stage.periods.map((period) => ({
+        id: period.id,
+        startDate: period.startDate.toISOString(),
+        endDate: period.endDate.toISOString(),
+      })),
+      referent: assignment ? toReferentResponse(assignment.referent) : null,
+    };
   }
 }
