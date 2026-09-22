@@ -26,8 +26,8 @@ function DetailColumn({ title, children }: { title: string; children: ReactNode 
 }
 
 // Issue #147: the "Demandes à traiter" row-expand detail, everything the
-// student provided for one PENDING request, in a four-column layout
-// (student, organism/service, tutor/project/motivation, periods).
+// student provided for one PENDING request, in a three-column layout
+// (student, organism/service/tutor, periods/project).
 export function StageRequestDetail({ stageId }: { stageId: string }) {
   const { data: detail, isPending, isError } = useStageRequestDetail(stageId, true);
 
@@ -67,9 +67,6 @@ export function StageRequestDetail({ stageId }: { stageId: string }) {
         <RecapField label="Service" labelVariant="body2">
           {detail.service}
         </RecapField>
-      </DetailColumn>
-
-      <DetailColumn title="Tuteur & projet">
         <RecapField label="Tuteur" labelVariant="body2">
           {`${detail.tutor.firstName} ${detail.tutor.lastName} (${detail.tutor.jobTitle})`}
           <SecondaryLine>{detail.tutor.email}</SecondaryLine>
@@ -84,12 +81,6 @@ export function StageRequestDetail({ stageId }: { stageId: string }) {
             </>
           )}
         </RecapField>
-        <RecapField label="Type de handicap concerné" labelVariant="body2">
-          {detail.projectType}
-        </RecapField>
-        <RecapField label="Motivation" labelVariant="body2">
-          {detail.motivation}
-        </RecapField>
       </DetailColumn>
 
       <DetailColumn title="Périodes">
@@ -100,6 +91,12 @@ export function StageRequestDetail({ stageId }: { stageId: string }) {
         ))}
         <RecapField label="Durée totale" labelVariant="body2">
           {formatTotalDuration(detail.periods)}
+        </RecapField>
+        <RecapField label="Type de handicap concerné" labelVariant="body2">
+          {detail.projectType}
+        </RecapField>
+        <RecapField label="Motivation" labelVariant="body2">
+          {detail.motivation}
         </RecapField>
       </DetailColumn>
     </Stack>
