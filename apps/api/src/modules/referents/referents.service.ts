@@ -8,9 +8,8 @@ import type {
   CreateReferentResponse,
   ReferentListResponse,
 } from "shared";
+import { BCRYPT_ROUNDS } from "../../common/security/bcrypt";
 import { PrismaService } from "../../prisma/prisma.service";
-
-const BCRYPT_ROUNDS = 10;
 
 // ADR-0031: `User.passwordHash` is non-nullable, so a referent created from
 // the admin UI gets the bcrypt hash of a random secret that is never stored or
@@ -52,8 +51,7 @@ export class ReferentsService {
   // case-insensitive so a differently-cased address still finds that user.
   // The email is the person's identity: submitting it under a different name
   // is a 409, never a silent swap for the name already on file.
-  // Re-adding an archived referent un-archives it: the admin just asked for
-  // this person to be pickable. A concurrent create of the same new email
+  // An existing profile is left as is — archived included. A concurrent create of the same new email
   // hits User.email's unique constraint (P2002), which the global
   // PrismaExceptionFilter turns into a 409.
   async create(dto: CreateReferentRequest): Promise<CreateReferentResponse> {
@@ -74,7 +72,7 @@ export class ReferentsService {
           where: { id: existing.id },
           data: {
             ...(existing.roles.includes("REFERENT") ? {} : { roles: { push: "REFERENT" } }),
-            referentProfile: { upsert: { create: {}, update: { archived: false } } },
+            referentProfile: { upsert: { create: {}, update: {} } },
           },
           include: { referentProfile: true },
         })

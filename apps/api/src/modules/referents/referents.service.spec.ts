@@ -175,7 +175,7 @@ describe("ReferentsService", () => {
       expect(where).toEqual({ id: "user-admin" });
       expect(data).toEqual({
         roles: { push: "REFERENT" },
-        referentProfile: { upsert: { create: {}, update: { archived: false } } },
+        referentProfile: { upsert: { create: {}, update: {} } },
       });
       expect(result).toEqual({ id: "ref-admin", firstName: "Alice", lastName: "Admin" });
     });

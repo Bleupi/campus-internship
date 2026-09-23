@@ -6,6 +6,7 @@ import request from "supertest";
 import * as bcrypt from "bcrypt";
 import type { CreateReferentResponse, ReferentListResponse } from "shared";
 import { AppModule } from "../src/app.module";
+import { BCRYPT_ROUNDS } from "../src/common/security/bcrypt";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { seedAdminAndLogin } from "./helpers/admin";
 import { purgeE2eData } from "./helpers/cleanup";
@@ -302,7 +303,7 @@ describe("Referents (e2e) — issues #148, #150", () => {
       const existing = await prisma.user.create({
         data: {
           email,
-          passwordHash: await bcrypt.hash(password, 10),
+          passwordHash: await bcrypt.hash(password, BCRYPT_ROUNDS),
           firstName: "Alice",
           lastName: "Admin",
           roles: ["ADMIN"],
@@ -341,7 +342,7 @@ describe("Referents (e2e) — issues #148, #150", () => {
       const existing = await prisma.user.create({
         data: {
           email,
-          passwordHash: await bcrypt.hash("an-existing-password-long-enough", 10),
+          passwordHash: await bcrypt.hash("an-existing-password-long-enough", BCRYPT_ROUNDS),
           firstName: "Alice",
           lastName: "Admin",
           roles: ["ADMIN"],
@@ -364,7 +365,7 @@ describe("Referents (e2e) — issues #148, #150", () => {
       expect(user.lastName).toBe("Admin");
     });
 
-    it("re-adding an existing referent is idempotent: same profile, role not duplicated", async () => {
+    it("re-adding an existing referent is idempotent: same profile, role not duplicated, archived flag untouched", async () => {
       const referent = await seedReferent("Idempotent", true);
       const { email } = await prisma.user.findUniqueOrThrow({ where: { id: referent.userId } });
 
@@ -380,8 +381,8 @@ describe("Referents (e2e) — issues #148, #150", () => {
         include: { referentProfile: true },
       });
       expect(user.roles).toEqual(["REFERENT"]);
-      // Re-adding an archived referent makes it pickable again.
-      expect(user.referentProfile?.archived).toBe(false);
+      // No un-archiving: an existing profile's archived flag is left as is.
+      expect(user.referentProfile?.archived).toBe(true);
     });
 
     it("RBAC: a non-admin is rejected (403) and an anonymous caller is unauthorized (401)", async () => {
