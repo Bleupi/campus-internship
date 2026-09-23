@@ -312,7 +312,7 @@ describe("Referents (e2e) — issues #148, #150", () => {
       const response = await request(app.getHttpServer())
         .post("/admin/referents")
         .set("Cookie", adminCookie)
-        .send({ firstName: "Autre", lastName: "Nom", email: email.toUpperCase() })
+        .send({ firstName: "alice", lastName: "ADMIN", email: email.toUpperCase() })
         .expect(201);
 
       expect(response.body).toEqual({
@@ -333,6 +333,35 @@ describe("Referents (e2e) — issues #148, #150", () => {
       expect(user.lastName).toBe("Admin");
       expect(user.passwordHash).toBe(existing.passwordHash);
       await request(app.getHttpServer()).post("/auth/login").send({ email, password }).expect(200);
+    });
+
+    it("ADR-0031: an existing email under a different name is rejected with 409 — no role, no profile, nothing renamed", async () => {
+      const email = `e2e.referents.name-mismatch.${randomUUID()}@univ.fr`;
+      createdReferentEmails.push(email);
+      const existing = await prisma.user.create({
+        data: {
+          email,
+          passwordHash: await bcrypt.hash("an-existing-password-long-enough", 10),
+          firstName: "Alice",
+          lastName: "Admin",
+          roles: ["ADMIN"],
+        },
+      });
+
+      await request(app.getHttpServer())
+        .post("/admin/referents")
+        .set("Cookie", adminCookie)
+        .send({ firstName: "Autre", lastName: "Nom", email })
+        .expect(409);
+
+      const user = await prisma.user.findUniqueOrThrow({
+        where: { id: existing.id },
+        include: { referentProfile: true },
+      });
+      expect(user.roles).toEqual(["ADMIN"]);
+      expect(user.referentProfile).toBeNull();
+      expect(user.firstName).toBe("Alice");
+      expect(user.lastName).toBe("Admin");
     });
 
     it("re-adding an existing referent is idempotent: same profile, role not duplicated", async () => {

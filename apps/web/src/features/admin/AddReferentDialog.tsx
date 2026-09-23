@@ -13,6 +13,7 @@ import {
   Typography,
 } from "@mui/material";
 import { createReferentSchema, type CreateReferentRequest, type ReferentListItem } from "shared";
+import { ApiError } from "../../lib/api-client";
 import { useCreateReferent } from "./useCreateReferent";
 
 // Issue #150 (ADR-0031): the picker's "add a referent" escape hatch, for the
@@ -46,8 +47,13 @@ export function AddReferentDialog({
     try {
       onCreated(await createReferent.mutateAsync(values));
       onClose();
-    } catch {
-      setServerError("Impossible d'ajouter le référent, merci de réessayer.");
+    } catch (error) {
+      // ADR-0031: an existing email under another name is refused (409).
+      setServerError(
+        error instanceof ApiError && error.status === 409
+          ? "Cette adresse email appartient déjà à une personne d'un autre nom."
+          : "Impossible d'ajouter le référent, merci de réessayer.",
+      );
     }
   });
 

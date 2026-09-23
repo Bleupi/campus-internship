@@ -140,6 +140,14 @@ export function StageRequestsPage() {
         Demandes à traiter
       </Typography>
 
+      {/* Covers both the picker and the "add a referent" form, whose dialog is
+          already closed when the assignment of the new referent fails. */}
+      {assignReferent.isError && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => assignReferent.reset()}>
+          Impossible d'assigner le référent, merci de réessayer.
+        </Alert>
+      )}
+
       {requests.length === 0 ? (
         <EmptyState filtered={false} />
       ) : (

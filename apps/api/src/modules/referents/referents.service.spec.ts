@@ -1,4 +1,5 @@
 import { Test } from "@nestjs/testing";
+import { ConflictException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
 import { ReferentsService } from "./referents.service";
 
@@ -150,19 +151,24 @@ describe("ReferentsService", () => {
 
       expect(prisma.user.findFirst).toHaveBeenCalledWith({
         where: { email: { equals: "Claire.Martin@Example.org", mode: "insensitive" } },
-        select: { id: true, roles: true },
+        select: { id: true, roles: true, firstName: true, lastName: true },
       });
     });
 
     it("ADR-0031: an existing user's email adds the REFERENT role and a profile — name and password untouched, no new account", async () => {
-      prisma.user.findFirst.mockResolvedValue({ id: "user-admin", roles: ["ADMIN"] });
+      prisma.user.findFirst.mockResolvedValue({
+        id: "user-admin",
+        roles: ["ADMIN"],
+        firstName: "Alice",
+        lastName: "Admin",
+      });
       prisma.user.update.mockResolvedValue({
         firstName: "Alice",
         lastName: "Admin",
         referentProfile: { id: "ref-admin" },
       });
 
-      const result = await service.create(DTO);
+      const result = await service.create({ ...DTO, firstName: "Alice", lastName: "Admin" });
 
       expect(prisma.user.create).not.toHaveBeenCalled();
       const { where, data } = prisma.user.update.mock.calls[0][0];
@@ -175,10 +181,15 @@ describe("ReferentsService", () => {
     });
 
     it("does not duplicate the REFERENT role when the existing user already holds it", async () => {
-      prisma.user.findFirst.mockResolvedValue({ id: "user-ref", roles: ["REFERENT"] });
+      prisma.user.findFirst.mockResolvedValue({
+        id: "user-ref",
+        roles: ["REFERENT"],
+        firstName: "Claire",
+        lastName: "Martin",
+      });
       prisma.user.update.mockResolvedValue({
-        firstName: "Réf",
-        lastName: "Existant",
+        firstName: "Claire",
+        lastName: "Martin",
         referentProfile: { id: "ref-existing" },
       });
 
@@ -186,6 +197,42 @@ describe("ReferentsService", () => {
 
       const { data } = prisma.user.update.mock.calls[0][0];
       expect(data.roles).toBeUndefined();
+    });
+
+    it("ADR-0031: the email is the referent's identity — an existing email under a different name is rejected with a conflict, and nothing is written", async () => {
+      prisma.user.findFirst.mockResolvedValue({
+        id: "user-ref",
+        roles: ["REFERENT"],
+        firstName: "Claire",
+        lastName: "Martin",
+      });
+
+      await expect(service.create({ ...DTO, firstName: "Paul" })).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      await expect(service.create({ ...DTO, lastName: "Durand" })).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(prisma.user.create).not.toHaveBeenCalled();
+    });
+
+    it("compares the name ignoring case and accents, so the same person typed differently is still matched", async () => {
+      prisma.user.findFirst.mockResolvedValue({
+        id: "user-ref",
+        roles: ["REFERENT"],
+        firstName: "Élodie",
+        lastName: "Martin",
+      });
+      prisma.user.update.mockResolvedValue({
+        firstName: "Élodie",
+        lastName: "Martin",
+        referentProfile: { id: "ref-existing" },
+      });
+
+      const result = await service.create({ ...DTO, firstName: "elodie", lastName: "MARTIN" });
+
+      expect(result).toEqual({ id: "ref-existing", firstName: "Élodie", lastName: "Martin" });
     });
   });
 });

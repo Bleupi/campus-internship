@@ -17,7 +17,7 @@ Assigning a referent is mandatory before an admin can validate or refuse a stage
 An admin can create a referent on the fly from the assignment picker: `POST /admin/referents { firstName, lastName, email }` creates a `User` (roles `["REFERENT"]`) and its `ReferentProfile`.
 
 - The account is created with a random, never-disclosed password hash: it cannot be logged into. It is activated, if it ever needs to be, through the existing forgot-password flow (BR-13, which works for any role) — no invitation flow is built in V1, which has no referent-facing screen.
-- `email` is unique on `User`. If it already belongs to a `User` (e.g. an admin who is also a referent, ADR-0001), the `REFERENT` role and a `ReferentProfile` are added to that user; their existing name and password are never modified.
+- `email` is unique on `User`. If it already belongs to a `User` (e.g. an admin who is also a referent, ADR-0001), the `REFERENT` role and a `ReferentProfile` are added to that user; their existing name and password are never modified. The submitted first and last name must match the ones on file (ignoring case and accents); otherwise the request is rejected with a conflict. An email identifies a single person, so it can never be reused under another name.
 - Still no institutional-domain validation on `email` (ADR-0025 stands on that point).
 - The picker lists every non-archived `ReferentProfile`, not only those with assignments in the current year.
 

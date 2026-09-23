@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { Injectable } from "@nestjs/common";
+import { ConflictException, Injectable } from "@nestjs/common";
 import * as bcrypt from "bcrypt";
 import type {
   AssignReferentRequest,
@@ -19,6 +19,11 @@ const BCRYPT_ROUNDS = 10;
 // account is activated, if ever needed, via forgot-password (BR-13).
 async function unusablePasswordHash(): Promise<string> {
   return bcrypt.hash(randomBytes(32).toString("hex"), BCRYPT_ROUNDS);
+}
+
+// Case- and accent-insensitive, so "elodie MARTIN" matches "Élodie Martin".
+function sameName(a: string, b: string): boolean {
+  return a.localeCompare(b, "fr", { sensitivity: "base" }) === 0;
 }
 
 @Injectable()
@@ -45,6 +50,8 @@ export class ReferentsService {
   // the role and profile added instead — its name and password are never
   // touched, and no second account is created. The lookup is
   // case-insensitive so a differently-cased address still finds that user.
+  // The email is the person's identity: submitting it under a different name
+  // is a 409, never a silent swap for the name already on file.
   // Re-adding an archived referent un-archives it: the admin just asked for
   // this person to be pickable. A concurrent create of the same new email
   // hits User.email's unique constraint (P2002), which the global
@@ -52,8 +59,15 @@ export class ReferentsService {
   async create(dto: CreateReferentRequest): Promise<CreateReferentResponse> {
     const existing = await this.prisma.user.findFirst({
       where: { email: { equals: dto.email, mode: "insensitive" } },
-      select: { id: true, roles: true },
+      select: { id: true, roles: true, firstName: true, lastName: true },
     });
+
+    if (
+      existing &&
+      !(sameName(existing.firstName, dto.firstName) && sameName(existing.lastName, dto.lastName))
+    ) {
+      throw new ConflictException("This email already belongs to a user with a different name");
+    }
 
     const user = existing
       ? await this.prisma.user.update({
