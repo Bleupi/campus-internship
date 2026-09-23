@@ -6,6 +6,7 @@ import {
   IconButton,
   InputAdornment,
   Paper,
+  Snackbar,
   Stack,
   Tab,
   Table,
@@ -16,8 +17,10 @@ import {
   TableRow,
   Tabs,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
+import BlockOutlinedIcon from "@mui/icons-material/BlockOutlined";
 import ExpandLessOutlinedIcon from "@mui/icons-material/ExpandLessOutlined";
 import ExpandMoreOutlinedIcon from "@mui/icons-material/ExpandMoreOutlined";
 import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
@@ -25,6 +28,7 @@ import TaskAltOutlinedIcon from "@mui/icons-material/TaskAltOutlined";
 import type { AdminStageRequestListItem, ReferentListItem } from "shared";
 import { formatPeriodRange, mandatoryLabel } from "../stages/format-summary";
 import { AddReferentDialog } from "./AddReferentDialog";
+import { RefuseStageDialog, type RefusingRequest } from "./RefuseStageDialog";
 import { ReferentSelect } from "./ReferentSelect";
 import { StageRequestDetail } from "./StageRequestDetail";
 import { StructureTypeLabel } from "./StructureTypeLabel";
@@ -35,6 +39,8 @@ import { useStageRequests } from "./useStageRequests";
 // The expanded detail row's colSpan is derived from this, so the two can
 // never drift apart (the last, unlabelled column holds the expand toggle).
 const COLUMNS = ["Étudiant", "Organisme", "Période", "Demande", "Référent", ""];
+const CONFLICT_TOAST_MESSAGE = "Cette demande a été modifiée entre-temps. Rechargez la page.";
+const NO_REFERENT_HINT = "Assignez d'abord un référent pour pouvoir refuser cette demande";
 
 type TabKey = "all" | "withoutReferent" | "ready";
 
@@ -109,6 +115,8 @@ export function StageRequestsPage() {
   const [addingReferentFor, setAddingReferentFor] = useState<AdminStageRequestListItem | null>(
     null,
   );
+  const [refusing, setRefusing] = useState<RefusingRequest | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   // Issue #148: single assignment on the request's exact tuple (ADR-0014).
   // Issue #150: a referent created from the picker goes through here too, so
@@ -242,6 +250,26 @@ export function StageRequestsPage() {
                               onAddRequested={() => setAddingReferentFor(request)}
                             />
                           </TableCell>
+                          <TableCell
+                            sx={{ width: 40 }}
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <Tooltip title={hasReferent(request) ? "Refuser" : NO_REFERENT_HINT}>
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  aria-label="Refuser"
+                                  disabled={!hasReferent(request)}
+                                  onClick={() =>
+                                    setRefusing({ id: request.id, version: request.version })
+                                  }
+                                >
+                                  <BlockOutlinedIcon fontSize="small" />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          </TableCell>
                           <TableCell sx={{ width: 40 }}>
                             <IconButton
                               size="small"
@@ -278,6 +306,17 @@ export function StageRequestsPage() {
           onCreated={(referent) => assignTo(addingReferentFor, referent)}
         />
       )}
+      <RefuseStageDialog
+        request={refusing}
+        onClose={() => setRefusing(null)}
+        onConflict={() => setToast(CONFLICT_TOAST_MESSAGE)}
+      />
+      <Snackbar
+        open={toast !== null}
+        autoHideDuration={5000}
+        onClose={() => setToast(null)}
+        message={toast}
+      />
     </Box>
   );
 }

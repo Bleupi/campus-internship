@@ -1,0 +1,137 @@
+import { useState } from "react";
+import {
+  Alert,
+  Button,
+  Checkbox,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControlLabel,
+  FormGroup,
+  TextField,
+} from "@mui/material";
+import { ApiError } from "../../lib/api-client";
+import {
+  buildRefusalReason,
+  isRefusalReasonComplete,
+  MISSING_INFO_REASON,
+  REFUSAL_REASONS,
+} from "./refusal-reason";
+import { useRefuseStageRequest } from "./useRefuseStageRequest";
+
+export interface RefusingRequest {
+  id: string;
+  version: number;
+}
+
+interface RefuseStageDialogProps {
+  request: RefusingRequest | null;
+  onClose: () => void;
+  onConflict: () => void;
+}
+
+// Issue #151: refuse one PENDING request at a time (never bulk, CLAUDE.md
+// §12/#144's grilling). One dialog shared by every row of StageRequestsPage
+// rather than one per row, so it's only ever mounted once.
+export function RefuseStageDialog({ request, onClose, onConflict }: RefuseStageDialogProps) {
+  const [checkedReasons, setCheckedReasons] = useState<string[]>([]);
+  const [missingInfoDetail, setMissingInfoDetail] = useState("");
+  const [freeText, setFreeText] = useState("");
+  const [genericError, setGenericError] = useState(false);
+  const refuseMutation = useRefuseStageRequest();
+
+  function toggleReason(reason: string) {
+    setCheckedReasons((previous) =>
+      previous.includes(reason)
+        ? previous.filter((checked) => checked !== reason)
+        : [...previous, reason],
+    );
+  }
+
+  function handleClose() {
+    setCheckedReasons([]);
+    setMissingInfoDetail("");
+    setFreeText("");
+    setGenericError(false);
+    refuseMutation.reset();
+    onClose();
+  }
+
+  async function handleRefuse() {
+    if (!request) return;
+    setGenericError(false);
+    const reason = buildRefusalReason(checkedReasons, missingInfoDetail, freeText);
+    try {
+      await refuseMutation.mutateAsync({ id: request.id, version: request.version, reason });
+      handleClose();
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        onConflict();
+        handleClose();
+        return;
+      }
+      // Any other error: leave the dialog open (so the reason isn't lost)
+      // but say so — a silent no-op here would look like a successful click.
+      setGenericError(true);
+    }
+  }
+
+  const valid = isRefusalReasonComplete(checkedReasons, missingInfoDetail, freeText);
+
+  return (
+    <Dialog open={request !== null} onClose={handleClose} fullWidth maxWidth="sm">
+      <DialogTitle>Refuser la demande</DialogTitle>
+      <DialogContent>
+        {genericError && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            Une erreur est survenue, réessayez.
+          </Alert>
+        )}
+        <FormGroup>
+          {REFUSAL_REASONS.map((reason) => (
+            <FormControlLabel
+              key={reason}
+              control={
+                <Checkbox
+                  checked={checkedReasons.includes(reason)}
+                  onChange={() => toggleReason(reason)}
+                />
+              }
+              label={reason}
+            />
+          ))}
+        </FormGroup>
+        {checkedReasons.includes(MISSING_INFO_REASON) && (
+          <TextField
+            label="Informations manquantes"
+            fullWidth
+            value={missingInfoDetail}
+            onChange={(event) => setMissingInfoDetail(event.target.value)}
+            sx={{ mt: 1 }}
+          />
+        )}
+        <TextField
+          label="Précision (facultatif)"
+          fullWidth
+          multiline
+          minRows={2}
+          value={freeText}
+          onChange={(event) => setFreeText(event.target.value)}
+          sx={{ mt: 2 }}
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={handleClose}>Annuler</Button>
+        <Button
+          variant="contained"
+          color="error"
+          disabled={!valid || refuseMutation.isPending}
+          onClick={handleRefuse}
+        >
+          Refuser
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}

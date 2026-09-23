@@ -1,6 +1,12 @@
 import type { Readable } from "node:stream";
 import { ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import type { AdminProfileTransitionResponse, FileType, ProfileStatus } from "shared";
+import {
+  ADMIN_TITLE,
+  adminDisplayName,
+  composeStudentEmail,
+  type ActingAdmin,
+} from "../../common/admin-email.util";
 import { PrismaService } from "../../prisma/prisma.service";
 import { currentFileFilter } from "../files/current-file.util";
 import { FilesService } from "../files/files.service";
@@ -9,24 +15,6 @@ import { MailerService } from "../mailer/mailer.service";
 const VALIDATABLE_STATUSES: ProfileStatus[] = ["PENDING_VALIDATION"];
 const REJECTABLE_STATUSES: ProfileStatus[] = ["PENDING_VALIDATION", "VALID"];
 const CERTIFICATE_TYPE = "INSURANCE_CERTIFICATE" satisfies FileType;
-
-// TODO(#67 follow-up, see docs/ROADMAP_V2.md "Admin function/title as a
-// field"): hardcoded because there is a single admin today. Move this to a
-// real field on the acting admin before a second admin is onboarded, so we
-// never silently email a student the wrong title.
-const ADMIN_TITLE = "responsable de stages L2 et L3 APA-S";
-
-interface ActingAdmin {
-  firstName: string;
-  lastName: string;
-}
-
-// BR-11: "NOM Prénom" — last name uppercased, first name as stored, space
-// separated, no comma. Used identically in the body mention and the
-// signature; only the body mention also carries ADMIN_TITLE.
-function adminDisplayName(admin: ActingAdmin): string {
-  return `${admin.lastName.toUpperCase()} ${admin.firstName}`;
-}
 
 @Injectable()
 export class AdminStudentsService {
@@ -62,7 +50,7 @@ export class AdminStudentsService {
     await this.notifyStudent(
       profile,
       "Votre profil a été validé",
-      this.composeEmail(
+      composeStudentEmail(
         profile.user.firstName,
         adminName,
         `Votre attestation d'assurance de responsabilité civile avec mention stage a été vérifiée et votre profil de stage est validé par ${adminName}, ${ADMIN_TITLE}.`,
@@ -93,7 +81,7 @@ export class AdminStudentsService {
     await this.notifyStudent(
       profile,
       "Votre profil a été refusé",
-      this.composeEmail(
+      composeStudentEmail(
         profile.user.firstName,
         adminName,
         `Votre profil de stage a été examiné par ${adminName}, ${ADMIN_TITLE}, et n'a pas pu être validé, pour le motif suivant :\n\n${reason}`,
@@ -153,24 +141,6 @@ export class AdminStudentsService {
       where: { id: studentId },
       select: { personalEmail: true, user: { select: { email: true, firstName: true } } },
     });
-  }
-
-  // Shared plain-text structure for every student-facing email: a
-  // personalized greeting, one or more body paragraphs (the reason, for a
-  // refusal, is just another paragraph — never the whole message on its
-  // own), and a signature. Kept in the caller (not MailerService, which
-  // stays content-agnostic per ADR-0026) since deciding what a notification
-  // says is business logic, not transport. BR-11: the signature is the
-  // acting admin's "NOM Prénom" only — never their function/title, which
-  // (when present) is confined to a body paragraph instead.
-  private composeEmail(
-    studentFirstName: string,
-    signatureName: string,
-    ...paragraphs: string[]
-  ): string {
-    return [`Bonjour ${studentFirstName},`, ...paragraphs, `Cordialement,\n${signatureName}`].join(
-      "\n\n",
-    );
   }
 
   // BR-11: the student is notified by real email on validation/refusal — to

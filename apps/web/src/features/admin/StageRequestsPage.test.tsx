@@ -12,6 +12,7 @@ const getStructureTypesMock = vi.fn();
 const getReferentsMock = vi.fn();
 const assignReferentMock = vi.fn();
 const createReferentMock = vi.fn();
+const refuseStageRequestMock = vi.fn();
 
 vi.mock("./api", () => ({
   getStageRequests: (...args: unknown[]) => getStageRequestsMock(...args),
@@ -19,6 +20,7 @@ vi.mock("./api", () => ({
   getReferents: (...args: unknown[]) => getReferentsMock(...args),
   assignReferent: (...args: unknown[]) => assignReferentMock(...args),
   createReferent: (...args: unknown[]) => createReferentMock(...args),
+  refuseStageRequest: (...args: unknown[]) => refuseStageRequestMock(...args),
 }));
 
 vi.mock("../organisms/api", () => ({
@@ -126,6 +128,7 @@ describe("StageRequestsPage — issue #146", () => {
     getReferentsMock.mockReset();
     assignReferentMock.mockReset();
     createReferentMock.mockReset();
+    refuseStageRequestMock.mockReset();
     getStructureTypesMock.mockResolvedValue(STRUCTURE_TYPES);
     getReferentsMock.mockResolvedValue([referent]);
   });
@@ -680,6 +683,108 @@ describe("StageRequestsPage — issue #146", () => {
       expect(await screen.findByRole("alert")).toHaveTextContent(
         /impossible de charger le détail/i,
       );
+    });
+  });
+
+  describe("Refuse a request — issue #151", () => {
+    it("disables the refuse button, with a hint, while the request has no referent", async () => {
+      getStageRequestsMock.mockResolvedValue([request({ referent: null })]);
+      renderPage();
+
+      const row = (await screen.findByText("Alice Martin")).closest("tr")!;
+      expect(within(row).getByRole("button", { name: "Refuser" })).toBeDisabled();
+    });
+
+    it("enables the refuse button once a referent is assigned, and opens the reason dialog", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([request({ referent })]);
+      renderPage();
+
+      const row = (await screen.findByText("Alice Martin")).closest("tr")!;
+      const refuseButton = within(row).getByRole("button", { name: "Refuser" });
+      expect(refuseButton).toBeEnabled();
+      await user.click(refuseButton);
+
+      expect(await screen.findByText("Refuser la demande")).toBeInTheDocument();
+      // Clicking the row's refuse button must not also toggle the expand row.
+      expect(getStageRequestDetailMock).not.toHaveBeenCalled();
+    });
+
+    it("keeps Refuser disabled until at least one reason is given", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([request({ referent })]);
+      renderPage();
+
+      const row = (await screen.findByText("Alice Martin")).closest("tr")!;
+      await user.click(within(row).getByRole("button", { name: "Refuser" }));
+      const dialog = await screen.findByRole("dialog");
+
+      const submit = within(dialog).getByRole("button", { name: "Refuser" });
+      expect(submit).toBeDisabled();
+
+      await user.click(within(dialog).getByLabelText("L'adresse de l'organisme est incomplète."));
+      expect(submit).toBeEnabled();
+    });
+
+    it("keeps Refuser disabled when the missing-information reason is ticked without its detail filled", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([request({ referent })]);
+      renderPage();
+
+      const row = (await screen.findByText("Alice Martin")).closest("tr")!;
+      await user.click(within(row).getByRole("button", { name: "Refuser" }));
+      const dialog = await screen.findByRole("dialog");
+
+      await user.click(within(dialog).getByLabelText("Il manque les informations suivantes :"));
+      const submit = within(dialog).getByRole("button", { name: "Refuser" });
+      expect(submit).toBeDisabled();
+
+      await user.type(within(dialog).getByLabelText("Informations manquantes"), "le certificat");
+      expect(submit).toBeEnabled();
+    });
+
+    it("builds the reason string, calls refuseStageRequest with the request's version, and closes the dialog on success", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([request({ referent, version: 3 })]);
+      refuseStageRequestMock.mockResolvedValue({
+        id: "stage-1",
+        status: "REFUSED",
+        decidedAt: "2026-09-23T10:00:00.000Z",
+      });
+      renderPage();
+
+      const row = (await screen.findByText("Alice Martin")).closest("tr")!;
+      await user.click(within(row).getByRole("button", { name: "Refuser" }));
+      const dialog = await screen.findByRole("dialog");
+      await user.click(within(dialog).getByLabelText("L'adresse de l'organisme est incomplète."));
+      await user.type(within(dialog).getByLabelText("Précision (facultatif)"), "À vérifier");
+      await user.click(within(dialog).getByRole("button", { name: "Refuser" }));
+
+      await waitFor(() =>
+        expect(refuseStageRequestMock).toHaveBeenCalledWith("stage-1", {
+          version: 3,
+          reason: "- L'adresse de l'organisme est incomplète.\nAutre précision : À vérifier",
+        }),
+      );
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    });
+
+    it("BR-09: shows a reload toast on a 409 conflict and closes the dialog", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([request({ referent })]);
+      refuseStageRequestMock.mockRejectedValue(new ApiError(409, "conflict"));
+      renderPage();
+
+      const row = (await screen.findByText("Alice Martin")).closest("tr")!;
+      await user.click(within(row).getByRole("button", { name: "Refuser" }));
+      const dialog = await screen.findByRole("dialog");
+      await user.click(within(dialog).getByLabelText("L'adresse de l'organisme est incomplète."));
+      await user.click(within(dialog).getByRole("button", { name: "Refuser" }));
+
+      expect(
+        await screen.findByText("Cette demande a été modifiée entre-temps. Rechargez la page."),
+      ).toBeInTheDocument();
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     });
   });
 });
