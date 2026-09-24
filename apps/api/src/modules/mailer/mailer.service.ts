@@ -87,6 +87,7 @@ export class MailerService {
   async sendSafely(input: SendEmailInput, logger: Logger): Promise<void> {
     try {
       await this.send(input);
+      logger.log(`Emailed ${input.to.email}: "${input.subject}"`);
     } catch (error) {
       logger.error(
         `Failed to email ${input.to.email}: ${error instanceof Error ? error.message : String(error)}`,
