@@ -311,7 +311,7 @@ function liveStageCount(overrides: Record<string, unknown> = {}, count = 1) {
   };
 }
 
-describe("AdminStageRequestsService", () => {
+describe("AdminStageRequestsService.list — issue #149 (ADR-0014)", () => {
   let service: AdminStageRequestsService;
   let tx: {
     stage: { findMany: jest.Mock; groupBy: jest.Mock };
@@ -339,89 +339,87 @@ describe("AdminStageRequestsService", () => {
     service = module.get(AdminStageRequestsService);
   });
 
-  describe("list — other live stages sharing the referent tuple (issue #149, ADR-0014)", () => {
-    it("counts only DRAFT/PENDING stages of the listed students, grouped on the full four-tuple", async () => {
-      tx.stage.findMany.mockResolvedValue([
-        pendingStage({ id: "a", studentId: "student-1" }),
-        pendingStage({ id: "b", studentId: "student-2" }),
-      ]);
-      tx.stage.groupBy.mockResolvedValue([
-        liveStageCount(),
-        liveStageCount({ studentId: "student-2" }),
-      ]);
+  it("counts only DRAFT/PENDING stages of the listed students, grouped on the full four-tuple", async () => {
+    tx.stage.findMany.mockResolvedValue([
+      pendingStage({ id: "a", studentId: "student-1" }),
+      pendingStage({ id: "b", studentId: "student-2" }),
+    ]);
+    tx.stage.groupBy.mockResolvedValue([
+      liveStageCount(),
+      liveStageCount({ studentId: "student-2" }),
+    ]);
 
-      await service.list();
+    await service.list();
 
-      expect(tx.stage.groupBy).toHaveBeenCalledWith({
-        by: ["studentId", "schoolYear", "semester", "mandatory"],
-        where: {
-          studentId: { in: ["student-1", "student-2"] },
-          status: { in: ["DRAFT", "PENDING"] },
-        },
-        _count: { _all: true },
-      });
+    expect(tx.stage.groupBy).toHaveBeenCalledWith({
+      by: ["studentId", "schoolYear", "semester", "mandatory"],
+      where: {
+        studentId: { in: ["student-1", "student-2"] },
+        status: { in: ["DRAFT", "PENDING"] },
+      },
+      _count: { _all: true },
     });
+  });
 
-    it("excludes the request itself: a request alone on its tuple has 0 other live stages", async () => {
-      tx.stage.findMany.mockResolvedValue([pendingStage()]);
-      tx.stage.groupBy.mockResolvedValue([liveStageCount({}, 1)]);
+  it("excludes the request itself: a request alone on its tuple has 0 other live stages", async () => {
+    tx.stage.findMany.mockResolvedValue([pendingStage()]);
+    tx.stage.groupBy.mockResolvedValue([liveStageCount({}, 1)]);
 
-      const [item] = await service.list();
+    const [item] = await service.list();
 
-      expect(item!.otherLiveStageCount).toBe(0);
-    });
+    expect(item!.otherLiveStageCount).toBe(0);
+  });
 
-    it("counts the other live stages sharing the exact tuple (e.g. a DRAFT and another PENDING → 2)", async () => {
-      tx.stage.findMany.mockResolvedValue([pendingStage()]);
-      tx.stage.groupBy.mockResolvedValue([liveStageCount({}, 3)]);
+  it("counts the other live stages sharing the exact tuple (e.g. a DRAFT and another PENDING → 2)", async () => {
+    tx.stage.findMany.mockResolvedValue([pendingStage()]);
+    tx.stage.groupBy.mockResolvedValue([liveStageCount({}, 3)]);
 
-      const [item] = await service.list();
+    const [item] = await service.list();
 
-      expect(item!.otherLiveStageCount).toBe(2);
-    });
+    expect(item!.otherLiveStageCount).toBe(2);
+  });
 
-    it("ignores live stages on another tuple: other mandatory value, semester, school year, or student", async () => {
-      tx.stage.findMany.mockResolvedValue([pendingStage()]);
-      tx.stage.groupBy.mockResolvedValue([
-        liveStageCount({}, 1),
-        liveStageCount({ mandatory: false }, 4),
-        liveStageCount({ semester: "S2" }, 4),
-        liveStageCount({ schoolYear: "2027-2028" }, 4),
-        liveStageCount({ studentId: "student-2" }, 4),
-      ]);
+  it("ignores live stages on another tuple: other mandatory value, semester, school year, or student", async () => {
+    tx.stage.findMany.mockResolvedValue([pendingStage()]);
+    tx.stage.groupBy.mockResolvedValue([
+      liveStageCount({}, 1),
+      liveStageCount({ mandatory: false }, 4),
+      liveStageCount({ semester: "S2" }, 4),
+      liveStageCount({ schoolYear: "2027-2028" }, 4),
+      liveStageCount({ studentId: "student-2" }, 4),
+    ]);
 
-      const [item] = await service.list();
+    const [item] = await service.list();
 
-      expect(item!.otherLiveStageCount).toBe(0);
-    });
+    expect(item!.otherLiveStageCount).toBe(0);
+  });
 
-    it("fails loudly, naming the stage, when a PENDING stage is missing from its own live group", async () => {
-      tx.stage.findMany.mockResolvedValue([pendingStage()]);
-      tx.stage.groupBy.mockResolvedValue([]);
+  it("fails loudly, naming the stage, when a PENDING stage is missing from its own live group", async () => {
+    tx.stage.findMany.mockResolvedValue([pendingStage()]);
+    tx.stage.groupBy.mockResolvedValue([]);
 
-      await expect(service.list()).rejects.toThrow(
-        new InternalServerErrorException(
-          "PENDING stage stage-1 is missing from its own live tuple group",
-        ),
-      );
-    });
+    await expect(service.list()).rejects.toThrow(
+      new InternalServerErrorException(
+        "PENDING stage stage-1 is missing from its own live tuple group",
+      ),
+    );
+  });
 
-    it("gives each listed request the count of its own tuple", async () => {
-      tx.stage.findMany.mockResolvedValue([
-        pendingStage({ id: "mandatory" }),
-        pendingStage({ id: "optional", mandatory: false }),
-      ]);
-      tx.stage.groupBy.mockResolvedValue([
-        liveStageCount({}, 2),
-        liveStageCount({ mandatory: false }, 1),
-      ]);
+  it("gives each listed request the count of its own tuple", async () => {
+    tx.stage.findMany.mockResolvedValue([
+      pendingStage({ id: "mandatory" }),
+      pendingStage({ id: "optional", mandatory: false }),
+    ]);
+    tx.stage.groupBy.mockResolvedValue([
+      liveStageCount({}, 2),
+      liveStageCount({ mandatory: false }, 1),
+    ]);
 
-      const list = await service.list();
+    const list = await service.list();
 
-      expect(list.map((item) => [item.id, item.otherLiveStageCount])).toEqual([
-        ["mandatory", 1],
-        ["optional", 0],
-      ]);
-    });
+    expect(list.map((item) => [item.id, item.otherLiveStageCount])).toEqual([
+      ["mandatory", 1],
+      ["optional", 0],
+    ]);
   });
 });
