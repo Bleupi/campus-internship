@@ -57,7 +57,7 @@ export class AdminStageRequestsService {
   async list(): Promise<AdminStageRequestListResponse> {
     // One snapshot for both reads, as in the certificate queue: a row deleted
     // between two statements must not leave a null relation to dereference.
-    const { stages, assignments, liveTuples } = await this.prisma.$transaction(
+    const { stages, assignments, liveStageCounts } = await this.prisma.$transaction(
       async (tx) => {
         const stages = await tx.stage.findMany({
           where: { status: "PENDING" },
@@ -84,12 +84,12 @@ export class AdminStageRequestsService {
         // Issue #149: live stages per tuple, so each row knows what else a
         // referent change on it would reassign. Decided stages are left out:
         // their referent is frozen in the snapshot (BR-08).
-        const liveTuples = await tx.stage.groupBy({
+        const liveStageCounts = await tx.stage.groupBy({
           by: ["studentId", "schoolYear", "semester", "mandatory"],
           where: { studentId: { in: studentIds }, status: { in: ["DRAFT", "PENDING"] } },
           _count: { _all: true },
         });
-        return { stages, assignments, liveTuples };
+        return { stages, assignments, liveStageCounts };
       },
       { isolationLevel: "RepeatableRead" },
     );
@@ -98,7 +98,7 @@ export class AdminStageRequestsService {
       assignments.map((assignment) => [tupleKey(assignment), assignment.referent]),
     );
     const liveCountByTuple = new Map(
-      liveTuples.map((group) => [tupleKey(group), group._count._all]),
+      liveStageCounts.map((group) => [tupleKey(group), group._count._all]),
     );
 
     return stages.map((stage) => {

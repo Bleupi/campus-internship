@@ -300,7 +300,7 @@ function pendingStage(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function liveGroup(overrides: Record<string, unknown> = {}, count = 1) {
+function liveStageCount(overrides: Record<string, unknown> = {}, count = 1) {
   return {
     studentId: "student-1",
     schoolYear: "2026-2027",
@@ -345,7 +345,10 @@ describe("AdminStageRequestsService", () => {
         pendingStage({ id: "a", studentId: "student-1" }),
         pendingStage({ id: "b", studentId: "student-2" }),
       ]);
-      tx.stage.groupBy.mockResolvedValue([liveGroup(), liveGroup({ studentId: "student-2" })]);
+      tx.stage.groupBy.mockResolvedValue([
+        liveStageCount(),
+        liveStageCount({ studentId: "student-2" }),
+      ]);
 
       await service.list();
 
@@ -361,7 +364,7 @@ describe("AdminStageRequestsService", () => {
 
     it("excludes the request itself: a request alone on its tuple has 0 other live stages", async () => {
       tx.stage.findMany.mockResolvedValue([pendingStage()]);
-      tx.stage.groupBy.mockResolvedValue([liveGroup({}, 1)]);
+      tx.stage.groupBy.mockResolvedValue([liveStageCount({}, 1)]);
 
       const [item] = await service.list();
 
@@ -370,7 +373,7 @@ describe("AdminStageRequestsService", () => {
 
     it("counts the other live stages sharing the exact tuple (e.g. a DRAFT and another PENDING → 2)", async () => {
       tx.stage.findMany.mockResolvedValue([pendingStage()]);
-      tx.stage.groupBy.mockResolvedValue([liveGroup({}, 3)]);
+      tx.stage.groupBy.mockResolvedValue([liveStageCount({}, 3)]);
 
       const [item] = await service.list();
 
@@ -380,11 +383,11 @@ describe("AdminStageRequestsService", () => {
     it("ignores live stages on another tuple: other mandatory value, semester, school year, or student", async () => {
       tx.stage.findMany.mockResolvedValue([pendingStage()]);
       tx.stage.groupBy.mockResolvedValue([
-        liveGroup({}, 1),
-        liveGroup({ mandatory: false }, 4),
-        liveGroup({ semester: "S2" }, 4),
-        liveGroup({ schoolYear: "2027-2028" }, 4),
-        liveGroup({ studentId: "student-2" }, 4),
+        liveStageCount({}, 1),
+        liveStageCount({ mandatory: false }, 4),
+        liveStageCount({ semester: "S2" }, 4),
+        liveStageCount({ schoolYear: "2027-2028" }, 4),
+        liveStageCount({ studentId: "student-2" }, 4),
       ]);
 
       const [item] = await service.list();
@@ -408,7 +411,10 @@ describe("AdminStageRequestsService", () => {
         pendingStage({ id: "mandatory" }),
         pendingStage({ id: "optional", mandatory: false }),
       ]);
-      tx.stage.groupBy.mockResolvedValue([liveGroup({}, 2), liveGroup({ mandatory: false }, 1)]);
+      tx.stage.groupBy.mockResolvedValue([
+        liveStageCount({}, 2),
+        liveStageCount({ mandatory: false }, 1),
+      ]);
 
       const list = await service.list();
 
