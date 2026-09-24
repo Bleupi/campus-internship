@@ -3,8 +3,10 @@ import type { INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import cookieParser from "cookie-parser";
 import request from "supertest";
-import type { ReferentListResponse } from "shared";
+import * as bcrypt from "bcrypt";
+import type { CreateReferentResponse, ReferentListResponse } from "shared";
 import { AppModule } from "../src/app.module";
+import { BCRYPT_ROUNDS } from "../src/common/security/bcrypt";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { seedAdminAndLogin } from "./helpers/admin";
 import { purgeE2eData } from "./helpers/cleanup";
@@ -12,7 +14,8 @@ import { cookieHeader, cookieMap, requireCookie } from "./helpers/cookies";
 
 // Issue #148: GET /referents (the picker's option list) and
 // PATCH /referents/assignments (the single-assignment upsert, ADR-0014).
-describe("Referents (e2e) — issue #148", () => {
+// Issue #150: POST /admin/referents (add a referent on the fly, ADR-0031).
+describe("Referents (e2e) — issues #148, #150", () => {
   let app: INestApplication;
   let prisma: PrismaService;
   const createdUserEmails: string[] = [];
@@ -259,6 +262,151 @@ describe("Referents (e2e) — issue #148", () => {
         .patch("/referents/assignments")
         .set("Cookie", adminCookie)
         .send({ studentId: "not-a-uuid" })
+        .expect(400);
+    });
+  });
+
+  describe("POST /admin/referents", () => {
+    it("ADR-0031: a new email creates a REFERENT user with a profile and a non-usable password, and it joins the picker list", async () => {
+      const email = `e2e.referents.created.${randomUUID()}@gmail.com`;
+      createdReferentEmails.push(email);
+
+      const response = await request(app.getHttpServer())
+        .post("/admin/referents")
+        .set("Cookie", adminCookie)
+        .send({ firstName: " Claire ", lastName: "Martin", email })
+        .expect(201);
+
+      const body = response.body as CreateReferentResponse;
+      expect(body).toEqual({ id: expect.any(String), firstName: "Claire", lastName: "Martin" });
+      const user = await prisma.user.findUniqueOrThrow({
+        where: { email },
+        include: { referentProfile: true },
+      });
+      expect(user.roles).toEqual(["REFERENT"]);
+      expect(user.referentProfile).toMatchObject({ id: body.id, archived: false });
+
+      // A real bcrypt hash of a never-disclosed secret, not a known password.
+      expect(user.passwordHash).toMatch(/^\$2[aby]\$/);
+
+      const list = await request(app.getHttpServer())
+        .get("/referents")
+        .set("Cookie", adminCookie)
+        .expect(200);
+      expect((list.body as ReferentListResponse).some((r) => r.id === body.id)).toBe(true);
+    });
+
+    it("ADR-0031: an existing user's email adds the role and profile to that user — name and password unchanged, no second account", async () => {
+      const email = `e2e.referents.admin-referent.${randomUUID()}@univ.fr`;
+      createdReferentEmails.push(email);
+      const password = "an-existing-password-long-enough";
+      const existing = await prisma.user.create({
+        data: {
+          email,
+          passwordHash: await bcrypt.hash(password, BCRYPT_ROUNDS),
+          firstName: "Alice",
+          lastName: "Admin",
+          roles: ["ADMIN"],
+        },
+      });
+
+      const response = await request(app.getHttpServer())
+        .post("/admin/referents")
+        .set("Cookie", adminCookie)
+        .send({ firstName: "alice", lastName: "ADMIN", email: email.toUpperCase() })
+        .expect(201);
+
+      expect(response.body).toEqual({
+        id: expect.any(String),
+        firstName: "Alice",
+        lastName: "Admin",
+      });
+      expect(
+        await prisma.user.count({ where: { email: { equals: email, mode: "insensitive" } } }),
+      ).toBe(1);
+      const user = await prisma.user.findUniqueOrThrow({
+        where: { id: existing.id },
+        include: { referentProfile: true },
+      });
+      expect(user.roles.sort()).toEqual(["ADMIN", "REFERENT"]);
+      expect(user.referentProfile?.id).toBe((response.body as CreateReferentResponse).id);
+      expect(user.firstName).toBe("Alice");
+      expect(user.lastName).toBe("Admin");
+      expect(user.passwordHash).toBe(existing.passwordHash);
+      await request(app.getHttpServer()).post("/auth/login").send({ email, password }).expect(200);
+    });
+
+    it("ADR-0031: an existing email under a different name is rejected with 409 — no role, no profile, nothing renamed", async () => {
+      const email = `e2e.referents.name-mismatch.${randomUUID()}@univ.fr`;
+      createdReferentEmails.push(email);
+      const existing = await prisma.user.create({
+        data: {
+          email,
+          passwordHash: await bcrypt.hash("an-existing-password-long-enough", BCRYPT_ROUNDS),
+          firstName: "Alice",
+          lastName: "Admin",
+          roles: ["ADMIN"],
+        },
+      });
+
+      await request(app.getHttpServer())
+        .post("/admin/referents")
+        .set("Cookie", adminCookie)
+        .send({ firstName: "Autre", lastName: "Nom", email })
+        .expect(409);
+
+      const user = await prisma.user.findUniqueOrThrow({
+        where: { id: existing.id },
+        include: { referentProfile: true },
+      });
+      expect(user.roles).toEqual(["ADMIN"]);
+      expect(user.referentProfile).toBeNull();
+      expect(user.firstName).toBe("Alice");
+      expect(user.lastName).toBe("Admin");
+    });
+
+    it("re-adding an existing referent is idempotent: same profile, role not duplicated, archived flag untouched", async () => {
+      const referent = await seedReferent("Idempotent", true);
+      const { email } = await prisma.user.findUniqueOrThrow({ where: { id: referent.userId } });
+
+      const response = await request(app.getHttpServer())
+        .post("/admin/referents")
+        .set("Cookie", adminCookie)
+        .send({ firstName: "Réf", lastName: "Idempotent", email })
+        .expect(201);
+
+      expect((response.body as CreateReferentResponse).id).toBe(referent.id);
+      const user = await prisma.user.findUniqueOrThrow({
+        where: { email },
+        include: { referentProfile: true },
+      });
+      expect(user.roles).toEqual(["REFERENT"]);
+      // No un-archiving: an existing profile's archived flag is left as is.
+      expect(user.referentProfile?.archived).toBe(true);
+    });
+
+    it("RBAC: a non-admin is rejected (403) and an anonymous caller is unauthorized (401)", async () => {
+      const student = await signupStudent();
+      const body = {
+        firstName: "Réf",
+        lastName: "Rbac",
+        email: `e2e.referents.rbac.${randomUUID()}@univ.fr`,
+      };
+
+      await request(app.getHttpServer())
+        .post("/admin/referents")
+        .set("Cookie", cookieHeader({ access_token: student.token }))
+        .send(body)
+        .expect(403);
+      await request(app.getHttpServer()).post("/admin/referents").send(body).expect(401);
+      expect(await prisma.user.count({ where: { email: body.email } })).toBe(0);
+    });
+
+    it("rejects an invalid body (blank name, malformed email) with 400", async () => {
+      await request(app.getHttpServer())
+        .post("/admin/referents")
+        .set("Cookie", adminCookie)
+        .send({ firstName: " ", lastName: "Nom", email: "not-an-email" })
         .expect(400);
     });
   });
