@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { INestApplication } from "@nestjs/common";
 import * as bcrypt from "bcrypt";
 import request from "supertest";
+import { BCRYPT_ROUNDS } from "../../src/common/security/bcrypt";
 import type { PrismaService } from "../../src/prisma/prisma.service";
 import { cookieHeader, cookieMap } from "./cookies";
 
@@ -21,7 +22,7 @@ export async function seedAdminAndLogin(
   await prisma.user.create({
     data: {
       email,
-      passwordHash: await bcrypt.hash(password, 10),
+      passwordHash: await bcrypt.hash(password, BCRYPT_ROUNDS),
       firstName: "Admin",
       lastName: "Test",
       roles: ["ADMIN"],

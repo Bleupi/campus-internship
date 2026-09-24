@@ -21,6 +21,7 @@ import {
 import { PrismaClient, type Promotion } from "@prisma/client";
 import * as bcrypt from "bcrypt";
 import { getCurrentSchoolYear, getSchoolYearEnd, STUDENT_EMAIL_DOMAIN } from "shared";
+import { BCRYPT_ROUNDS } from "../src/common/security/bcrypt";
 
 if (process.env.NODE_ENV === "production") {
   throw new Error("Refusing to run the dev seed script against production.");
@@ -283,7 +284,7 @@ async function seedStudent(student: SeedStudent): Promise<void> {
   await prisma.stage.deleteMany({ where: { student: { user: { email } } } });
   await prisma.user.deleteMany({ where: { email } });
 
-  const passwordHash = await bcrypt.hash(SEED_PASSWORD, 10);
+  const passwordHash = await bcrypt.hash(SEED_PASSWORD, BCRYPT_ROUNDS);
   const created = daysAgo(student.createdDaysAgo);
   const updated = daysAgo(student.updatedDaysAgo);
 

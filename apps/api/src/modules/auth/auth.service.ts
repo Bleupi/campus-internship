@@ -7,13 +7,13 @@ import type { StudentProfile, User } from "@prisma/client";
 import * as bcrypt from "bcrypt";
 import ms from "ms";
 import { getCurrentSchoolYear, type AuthUser, type ProfileStatus } from "shared";
+import { BCRYPT_ROUNDS } from "../../common/security/bcrypt";
 import type { Env } from "../../config/env.schema";
 import { PrismaService } from "../../prisma/prisma.service";
 import { MailerService } from "../mailer/mailer.service";
 import type { LoginDto } from "./dto/login.dto";
 import type { SignupDto } from "./dto/signup.dto";
 
-const BCRYPT_ROUNDS = 10;
 const LOGIN_FAILURE_MESSAGE = "Email ou mot de passe incorrect";
 const REFRESH_FAILURE_MESSAGE = "Session invalide, merci de vous reconnecter";
 // BR-13: unknown, expired, and already-used reset tokens are indistinguishable

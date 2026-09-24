@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "../../lib/api-client";
 import { StageRequestsPage } from "./StageRequestsPage";
 
 const getStageRequestsMock = vi.fn();
@@ -10,12 +11,14 @@ const getStageRequestDetailMock = vi.fn();
 const getStructureTypesMock = vi.fn();
 const getReferentsMock = vi.fn();
 const assignReferentMock = vi.fn();
+const createReferentMock = vi.fn();
 
 vi.mock("./api", () => ({
   getStageRequests: (...args: unknown[]) => getStageRequestsMock(...args),
   getStageRequestDetail: (...args: unknown[]) => getStageRequestDetailMock(...args),
   getReferents: (...args: unknown[]) => getReferentsMock(...args),
   assignReferent: (...args: unknown[]) => assignReferentMock(...args),
+  createReferent: (...args: unknown[]) => createReferentMock(...args),
 }));
 
 vi.mock("../organisms/api", () => ({
@@ -122,6 +125,7 @@ describe("StageRequestsPage — issue #146", () => {
     getStructureTypesMock.mockReset();
     getReferentsMock.mockReset();
     assignReferentMock.mockReset();
+    createReferentMock.mockReset();
     getStructureTypesMock.mockResolvedValue(STRUCTURE_TYPES);
     getReferentsMock.mockResolvedValue([referent]);
   });
@@ -343,6 +347,21 @@ describe("StageRequestsPage — issue #146", () => {
       );
     });
 
+    it("shows an error when the assignment fails", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([request({ referent: null })]);
+      assignReferentMock.mockRejectedValue(new Error("boom"));
+      renderPage();
+
+      const row = (await screen.findByText("Alice Martin")).closest("tr")!;
+      await user.click(within(row).getByRole("combobox"));
+      await user.click(await screen.findByRole("option", { name: "Claire Bernard" }));
+
+      expect(
+        await screen.findByText("Impossible d'assigner le référent, merci de réessayer."),
+      ).toBeInTheDocument();
+    });
+
     it("clicking the picker does not expand or collapse the row's detail", async () => {
       const user = userEvent.setup();
       getStageRequestsMock.mockResolvedValue([request({ referent: null })]);
@@ -350,6 +369,183 @@ describe("StageRequestsPage — issue #146", () => {
 
       const row = (await screen.findByText("Alice Martin")).closest("tr")!;
       await user.click(within(row).getByRole("combobox"));
+
+      expect(getStageRequestDetailMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("add a referent on the fly — issue #150", () => {
+    const created = { id: "ref-new", firstName: "Paul", lastName: "Durand" };
+
+    async function openAddDialog(user: ReturnType<typeof userEvent.setup>) {
+      const row = (await screen.findByText("Alice Martin")).closest("tr")!;
+      await user.click(within(row).getByRole("combobox"));
+      await user.click(await screen.findByRole("option", { name: "Ajouter un référent" }));
+      return screen.findByRole("dialog", { name: "Ajouter un référent" });
+    }
+
+    it("the picker offers an 'add a referent' option that opens a first name / last name / email form for the current request", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([request({ referent: null })]);
+      renderPage();
+
+      const dialog = await openAddDialog(user);
+
+      expect(within(dialog).getByText(/Alice Martin/)).toBeInTheDocument();
+      expect(within(dialog).getByLabelText("Prénom")).toBeInTheDocument();
+      expect(within(dialog).getByLabelText("Nom")).toBeInTheDocument();
+      expect(within(dialog).getByLabelText("Email")).toBeInTheDocument();
+      expect(assignReferentMock).not.toHaveBeenCalled();
+    });
+
+    it("closes the picker's dropdown once the 'add a referent' form is open", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([request({ referent: null })]);
+      renderPage();
+
+      await openAddDialog(user);
+
+      expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    });
+
+    it("keeps the picker's dropdown closed when the 'add a referent' form is cancelled", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([request({ referent: null })]);
+      renderPage();
+
+      const dialog = await openAddDialog(user);
+      await user.click(within(dialog).getByRole("button", { name: "Annuler" }));
+
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    });
+
+    it("validates the form against the shared schema: nothing is sent while it is invalid", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([request({ referent: null })]);
+      renderPage();
+
+      const dialog = await openAddDialog(user);
+      await user.type(within(dialog).getByLabelText("Email"), "not-an-email");
+      await user.click(within(dialog).getByRole("button", { name: "Ajouter" }));
+
+      expect(await within(dialog).findByText("Le prénom est requis")).toBeInTheDocument();
+      expect(within(dialog).getByText("Le nom est requis")).toBeInTheDocument();
+      expect(within(dialog).getByText("Adresse email invalide")).toBeInTheDocument();
+      expect(createReferentMock).not.toHaveBeenCalled();
+    });
+
+    it("ADR-0031: submitting creates the referent, then assigns it to the request on its exact tuple, and closes the form", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock
+        .mockResolvedValueOnce([request({ referent: null })])
+        .mockResolvedValue([request({ referent: created })]);
+      createReferentMock.mockResolvedValue(created);
+      assignReferentMock.mockResolvedValue(created);
+      renderPage();
+
+      const dialog = await openAddDialog(user);
+      await user.type(within(dialog).getByLabelText("Prénom"), "Paul");
+      await user.type(within(dialog).getByLabelText("Nom"), "Durand");
+      await user.type(within(dialog).getByLabelText("Email"), "paul.durand@example.org");
+      await user.click(within(dialog).getByRole("button", { name: "Ajouter" }));
+
+      await waitFor(() =>
+        expect(assignReferentMock).toHaveBeenCalledWith({
+          studentId: "student-1",
+          schoolYear: "2026-2027",
+          semester: "S1",
+          mandatory: true,
+          referentId: "ref-new",
+        }),
+      );
+      expect(createReferentMock).toHaveBeenCalledWith({
+        firstName: "Paul",
+        lastName: "Durand",
+        email: "paul.durand@example.org",
+      });
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      const row = screen.getByText("Alice Martin").closest("tr")!;
+      await waitFor(() => expect(within(row).getByDisplayValue("Paul Durand")).toBeInTheDocument());
+    });
+
+    it("keeps the form open with an error, and assigns nothing, when the referent cannot be created", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([request({ referent: null })]);
+      createReferentMock.mockRejectedValue(new Error("boom"));
+      renderPage();
+
+      const dialog = await openAddDialog(user);
+      await user.type(within(dialog).getByLabelText("Prénom"), "Paul");
+      await user.type(within(dialog).getByLabelText("Nom"), "Durand");
+      await user.type(within(dialog).getByLabelText("Email"), "paul.durand@example.org");
+      await user.click(within(dialog).getByRole("button", { name: "Ajouter" }));
+
+      expect(
+        await within(dialog).findByText("Impossible d'ajouter le référent, merci de réessayer."),
+      ).toBeInTheDocument();
+      expect(assignReferentMock).not.toHaveBeenCalled();
+    });
+
+    it("ADR-0031: an email already used under another name keeps the form open with a specific error, and assigns nothing", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([request({ referent: null })]);
+      createReferentMock.mockRejectedValue(new ApiError(409, "Conflict"));
+      renderPage();
+
+      const dialog = await openAddDialog(user);
+      await user.type(within(dialog).getByLabelText("Prénom"), "Paul");
+      await user.type(within(dialog).getByLabelText("Nom"), "Durand");
+      await user.type(within(dialog).getByLabelText("Email"), "claire.bernard@example.org");
+      await user.click(within(dialog).getByRole("button", { name: "Ajouter" }));
+
+      expect(
+        await within(dialog).findByText(
+          "Cette adresse email appartient déjà à une personne d'un autre nom.",
+        ),
+      ).toBeInTheDocument();
+      expect(assignReferentMock).not.toHaveBeenCalled();
+    });
+
+    it("shows an error on the page when the referent was created but its assignment then fails", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([request({ referent: null })]);
+      createReferentMock.mockResolvedValue(created);
+      assignReferentMock.mockRejectedValue(new Error("boom"));
+      renderPage();
+
+      const dialog = await openAddDialog(user);
+      await user.type(within(dialog).getByLabelText("Prénom"), "Paul");
+      await user.type(within(dialog).getByLabelText("Nom"), "Durand");
+      await user.type(within(dialog).getByLabelText("Email"), "paul.durand@example.org");
+      await user.click(within(dialog).getByRole("button", { name: "Ajouter" }));
+
+      expect(
+        await screen.findByText("Impossible d'assigner le référent, merci de réessayer."),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("cancelling closes the form without creating or assigning anything", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([request({ referent: null })]);
+      renderPage();
+
+      const dialog = await openAddDialog(user);
+      await user.click(within(dialog).getByRole("button", { name: "Annuler" }));
+
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(createReferentMock).not.toHaveBeenCalled();
+      expect(assignReferentMock).not.toHaveBeenCalled();
+    });
+
+    it("clicking inside the form does not expand the row behind it", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([request({ referent: null })]);
+      renderPage();
+
+      const dialog = await openAddDialog(user);
+      await user.click(within(dialog).getByLabelText("Prénom"));
 
       expect(getStageRequestDetailMock).not.toHaveBeenCalled();
     });
