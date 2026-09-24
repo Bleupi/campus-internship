@@ -1,7 +1,34 @@
-import { Injectable, InternalServerErrorException, NotFoundException } from "@nestjs/common";
-import type { AdminStageRequestDetailResponse, AdminStageRequestListResponse } from "shared";
+import { ConflictException, Injectable, InternalServerErrorException, NotFoundException, Logger } from "@nestjs/common";
+import {
+  STAGE_CONFLICT_CODES,
+  type AdminStageRequestDetailResponse,
+  type AdminStageRequestListResponse,
+  type RefuseStageRequest,
+  type RefuseStageResponse,
+  type StageConflictCode,
+} from "shared";
+import {
+  ADMIN_TITLE,
+  adminDisplayName,
+  composeStudentEmail,
+  type ActingAdmin as AdminNameAndFunction,
+} from "../../common/admin-email.util";
 import { PrismaService } from "../../prisma/prisma.service";
+import { MailerService } from "../mailer/mailer.service";
 import { toReferentResponse } from "./referent-response";
+import { CURRENT_STAGE_SNAPSHOT_VERSION, parseStageSnapshot } from "./stage-snapshot.schema";
+
+// This writer also freezes the admin's id into the snapshot (BR-08's
+// decidedBy), which admin-email.util.ts's shared ActingAdmin (used purely
+// for the BR-11 naming/email convention) doesn't carry.
+type ActingAdmin = AdminNameAndFunction & { id: string };
+
+// Same 409-with-machine-readable-code shape as stages.service.ts's own
+// stageConflict() — duplicated rather than imported across modules for one
+// small helper.
+function stageConflict(code: StageConflictCode, message: string): ConflictException {
+  return new ConflictException({ statusCode: 409, error: "Conflict", message, code });
+}
 
 // Same tuple the assignment table is keyed on (ADR-0014).
 function tupleKey(tuple: {
@@ -15,7 +42,12 @@ function tupleKey(tuple: {
 
 @Injectable()
 export class AdminStageRequestsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(AdminStageRequestsService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mailerService: MailerService,
+  ) {}
 
   // Issue #146: every PENDING stage, oldest submission first (`id` only breaks
   // ties, for a deterministic order). No pagination in V1. The referent is not
@@ -228,5 +260,177 @@ export class AdminStageRequestsService {
       })),
       referent: assignment ? toReferentResponse(assignment.referent) : null,
     };
+  }
+
+  // Issue #151 (BR-03, BR-08, BR-09): PENDING -> REFUSED. Freezes an
+  // immutable snapshot, requires the referent assigned for the stage's exact
+  // tuple, and matches the version it was read at before writing.
+  async refuse(
+    id: string,
+    dto: RefuseStageRequest,
+    admin: ActingAdmin,
+  ): Promise<RefuseStageResponse> {
+    const stage = await this.prisma.stage.findUnique({
+      where: { id },
+      include: {
+        organism: true,
+        tutor: true,
+        periods: { orderBy: { startDate: "asc" } },
+        student: {
+          select: {
+            id: true,
+            promotion: true,
+            personalEmail: true,
+            user: { select: { firstName: true, lastName: true, email: true } },
+          },
+        },
+      },
+    });
+    if (!stage) {
+      throw new NotFoundException("Demande de stage introuvable");
+    }
+    if (stage.status !== "PENDING") {
+      throw stageConflict(
+        STAGE_CONFLICT_CODES.NOT_PENDING,
+        "Seule une demande soumise peut être refusée",
+      );
+    }
+
+    // BR-03: the referent frozen into the snapshot is the one assigned for
+    // this stage's exact (student, schoolYear, semester, mandatory) tuple —
+    // a referent assigned for the other `mandatory` value never satisfies it.
+    const assignment = await this.prisma.referentAssignment.findUnique({
+      where: {
+        studentId_schoolYear_semester_mandatory: {
+          studentId: stage.studentId,
+          schoolYear: stage.schoolYear,
+          semester: stage.semester,
+          mandatory: stage.mandatory,
+        },
+      },
+      include: { referent: { include: { user: { select: { firstName: true, lastName: true } } } } },
+    });
+    if (!assignment) {
+      throw stageConflict(
+        STAGE_CONFLICT_CODES.NO_REFERENT,
+        "Un référent doit être assigné avant de refuser cette demande",
+      );
+    }
+
+    // Same invariant as getById() above, restated: a PENDING stage was
+    // submitted, its organism/tutor were resolved, its request was complete
+    // (BR-02), and its student's profile was VALID at submission (promotion
+    // set, students.service.ts, never cleared afterward).
+    const { submittedAt, organism, tutor, student, service, projectType, motivation } = stage;
+    if (
+      !submittedAt ||
+      !organism ||
+      !tutor ||
+      !student.promotion ||
+      !service ||
+      !projectType ||
+      !motivation
+    ) {
+      throw new Error(
+        `PENDING stage ${stage.id} has no submittedAt, organism, tutor, promotion, service, projectType, or motivation`,
+      );
+    }
+
+    const referent = toReferentResponse(assignment.referent);
+    const decidedAt = new Date();
+    // ADR-0033: the stage detail's own shape, minus what stays a live column
+    // (id, status, version, submittedAt, refusalReason), plus what only
+    // exists at decision time (decidedAt, decidedBy, promotion). Parsed here
+    // too (not just assumed), so a snapshot this write can't read back fails
+    // at write time instead of freezing a corrupt document.
+    const snapshot = parseStageSnapshot(
+      {
+        schoolYear: stage.schoolYear,
+        semester: stage.semester,
+        mandatory: stage.mandatory,
+        service,
+        projectType,
+        motivation,
+        organism: {
+          id: organism.id,
+          name: organism.name,
+          structureType: organism.structureType,
+          city: organism.city,
+          postalCode: organism.postalCode,
+          street: organism.street,
+        },
+        tutor: {
+          id: tutor.id,
+          firstName: tutor.firstName,
+          lastName: tutor.lastName,
+          email: tutor.email,
+          jobTitle: tutor.jobTitle,
+          phone: tutor.phone,
+          acceptsPhoneContact: tutor.acceptsPhoneContact,
+        },
+        periods: stage.periods.map((period) => ({
+          id: period.id,
+          startDate: period.startDate.toISOString(),
+          endDate: period.endDate.toISOString(),
+        })),
+        referent,
+        promotion: student.promotion,
+        decidedAt: decidedAt.toISOString(),
+        decidedBy: { ...admin, title: ADMIN_TITLE },
+      },
+      CURRENT_STAGE_SNAPSHOT_VERSION,
+    );
+
+    // BR-09: matching on the version we were given makes a write that lost a
+    // race update zero rows, instead of silently overwriting.
+    const { count } = await this.prisma.stage.updateMany({
+      where: { id: stage.id, status: "PENDING", version: dto.version },
+      data: {
+        status: "REFUSED",
+        refusalReason: dto.reason,
+        snapshot,
+        snapshotVersion: CURRENT_STAGE_SNAPSHOT_VERSION,
+        decidedAt,
+        version: { increment: 1 },
+      },
+    });
+    if (count === 0) {
+      throw stageConflict(
+        STAGE_CONFLICT_CODES.VERSION_CONFLICT,
+        "Cette demande a été modifiée entre-temps. Rechargez la page et réessayez.",
+      );
+    }
+
+    await this.notifyStudentOfRefusal(student, organism.name, dto.reason, admin);
+
+    return { id: stage.id, status: "REFUSED", decidedAt: decidedAt.toISOString() };
+  }
+
+  // BR-07/BR-11: same recipients/naming/failure-handling convention as
+  // AdminStudentsService's profile emails — institutional address always,
+  // personal address cc'd when on file, acting admin named "NOM Prénom,
+  // <function>", and a send failure never rolls back the already-committed
+  // decision (ADR-0026, MailerService.sendSafely).
+  private async notifyStudentOfRefusal(
+    student: { personalEmail: string | null; user: { email: string; firstName: string } },
+    organismName: string,
+    reason: string,
+    admin: ActingAdmin,
+  ): Promise<void> {
+    const adminName = adminDisplayName(admin);
+    await this.mailerService.sendSafely(
+      {
+        to: { email: student.user.email },
+        cc: student.personalEmail ? { email: student.personalEmail } : undefined,
+        subject: "Votre demande de stage a été refusée",
+        text: composeStudentEmail(
+          student.user.firstName,
+          adminName,
+          `Votre demande de stage auprès de ${organismName} a été examinée par ${adminName}, ${ADMIN_TITLE}, et n'a pas pu être validée, pour le motif suivant :\n\n${reason}`,
+          "Vous pouvez corriger votre demande et la soumettre à nouveau depuis votre espace étudiant.",
+        ),
+      },
+      this.logger,
+    );
   }
 }

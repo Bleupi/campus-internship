@@ -8,6 +8,8 @@ import type {
   CreateReferentRequest,
   CreateReferentResponse,
   ReferentListResponse,
+  RefuseStageRequest,
+  RefuseStageResponse,
 } from "shared";
 import { apiClient } from "../../lib/api-client";
 
@@ -62,4 +64,9 @@ export function assignReferent(payload: AssignReferentRequest) {
 // the user already holding that email.
 export function createReferent(payload: CreateReferentRequest) {
   return apiClient.post<CreateReferentResponse>("/admin/referents", payload);
+}
+
+// Issue #151 (BR-03, BR-08, BR-09): PENDING -> REFUSED.
+export function refuseStageRequest(id: string, payload: RefuseStageRequest) {
+  return apiClient.patch<RefuseStageResponse>(`/admin/stage-requests/${id}/refuse`, payload);
 }

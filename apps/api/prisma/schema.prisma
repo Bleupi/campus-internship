@@ -236,6 +236,8 @@ model Stage {
 
   snapshot        Json?
   snapshotVersion Int?
+  // Set when the stage becomes VALIDATED/REFUSED; sorts/paginates the admin history.
+  decidedAt       DateTime?
 
   parentStage   Stage?  @relation("StageLineage", fields: [parentStageId], references: [id])
   parentStageId String?
@@ -248,6 +250,7 @@ model Stage {
 
   @@index([status])
   @@index([studentId])
+  @@index([decidedAt])
 }
 
 model StagePeriod {

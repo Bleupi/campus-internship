@@ -312,6 +312,7 @@ model Stage {
 
   @@index([status])
   @@index([studentId])
+  @@index([decidedAt])
 }
 
 model StagePeriod {

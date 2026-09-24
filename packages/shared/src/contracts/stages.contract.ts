@@ -1,18 +1,24 @@
 import type { z } from "zod";
 import type { Promotion, Semester, StageStatus } from "../enums";
 import type { createStageDraftSchema } from "../schemas/create-stage-draft.schema";
+import type { refuseStageSchema } from "../schemas/refuse-stage.schema";
 import type { updateStageDraftSchema } from "../schemas/update-stage-draft.schema";
 
 export type CreateStageDraftRequest = z.infer<typeof createStageDraftSchema>;
 export type UpdateStageDraftRequest = z.infer<typeof updateStageDraftSchema>;
 
-// Issue #116. Both answer 409, so the body carries which one it is: a stale
-// version asks the student to reload the draft (BR-09), a frozen row asks them
-// to create a new organism/tutor instead of correcting the shared one.
+// Issue #116/#151. All answer 409, so the body carries which one it is: a
+// stale version asks the caller to reload (BR-09), a frozen row asks the
+// student to create a new organism/tutor instead of correcting the shared
+// one, NOT_DRAFT/NOT_PENDING guard the student- and admin-side status
+// preconditions, and NO_REFERENT is BR-03 (validate/refuse without an
+// assigned referent).
 export const STAGE_CONFLICT_CODES = {
   VERSION_CONFLICT: "STAGE_VERSION_CONFLICT",
   ROW_FROZEN: "STAGE_ROW_FROZEN",
   NOT_DRAFT: "STAGE_NOT_DRAFT",
+  NOT_PENDING: "STAGE_NOT_PENDING",
+  NO_REFERENT: "STAGE_NO_REFERENT",
 } as const;
 export type StageConflictCode = (typeof STAGE_CONFLICT_CODES)[keyof typeof STAGE_CONFLICT_CODES];
 
@@ -179,4 +185,18 @@ export interface AdminStageRequestDetailResponse {
   tutor: AdminStageRequestTutorDetail;
   periods: StageDraftPeriodResponse[];
   referent: StageReferentResponse | null;
+}
+
+// Issue #151 (BR-08, ADR-0003, ADR-0033): the wire request/response for
+// refusing a stage. The frozen snapshot's own shape is `StageSnapshot`
+// (apps/api/src/modules/stages/stage-snapshot.schema.ts) — ADR-0033 keeps it
+// out of `packages/shared` since only the API writes and reads it.
+export type RefuseStageRequest = z.infer<typeof refuseStageSchema>;
+
+// Confirms the transition; the web drops the row from "Demandes à traiter"
+// via a refetch rather than needing the full snapshot back.
+export interface RefuseStageResponse {
+  id: string;
+  status: "REFUSED";
+  decidedAt: string;
 }
