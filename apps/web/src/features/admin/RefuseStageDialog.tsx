@@ -10,12 +10,13 @@ import {
   FormControlLabel,
   FormGroup,
   TextField,
+  Typography,
 } from "@mui/material";
 import { ApiError } from "../../lib/api-client";
 import {
   buildRefusalReason,
   isRefusalReasonComplete,
-  MISSING_INFO_REASON,
+  MISSING_INFO_HINT,
   REFUSAL_REASONS,
 } from "./refusal-reason";
 import { useRefuseStageRequest } from "./useRefuseStageRequest";
@@ -36,7 +37,6 @@ interface RefuseStageDialogProps {
 // rather than one per row, so it's only ever mounted once.
 export function RefuseStageDialog({ request, onClose, onConflict }: RefuseStageDialogProps) {
   const [checkedReasons, setCheckedReasons] = useState<string[]>([]);
-  const [missingInfoDetail, setMissingInfoDetail] = useState("");
   const [freeText, setFreeText] = useState("");
   const [genericError, setGenericError] = useState(false);
   const refuseMutation = useRefuseStageRequest();
@@ -51,7 +51,6 @@ export function RefuseStageDialog({ request, onClose, onConflict }: RefuseStageD
 
   function handleClose() {
     setCheckedReasons([]);
-    setMissingInfoDetail("");
     setFreeText("");
     setGenericError(false);
     refuseMutation.reset();
@@ -61,7 +60,7 @@ export function RefuseStageDialog({ request, onClose, onConflict }: RefuseStageD
   async function handleRefuse() {
     if (!request) return;
     setGenericError(false);
-    const reason = buildRefusalReason(checkedReasons, missingInfoDetail, freeText);
+    const reason = buildRefusalReason(checkedReasons, freeText);
     try {
       await refuseMutation.mutateAsync({ id: request.id, version: request.version, reason });
       handleClose();
@@ -77,7 +76,7 @@ export function RefuseStageDialog({ request, onClose, onConflict }: RefuseStageD
     }
   }
 
-  const valid = isRefusalReasonComplete(checkedReasons, missingInfoDetail, freeText);
+  const valid = isRefusalReasonComplete(checkedReasons, freeText);
 
   return (
     <Dialog open={request !== null} onClose={handleClose} fullWidth maxWidth="sm">
@@ -102,15 +101,9 @@ export function RefuseStageDialog({ request, onClose, onConflict }: RefuseStageD
             />
           ))}
         </FormGroup>
-        {checkedReasons.includes(MISSING_INFO_REASON) && (
-          <TextField
-            label="Informations manquantes"
-            fullWidth
-            value={missingInfoDetail}
-            onChange={(event) => setMissingInfoDetail(event.target.value)}
-            sx={{ mt: 1 }}
-          />
-        )}
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+          {MISSING_INFO_HINT}
+        </Typography>
         <TextField
           label="Précision (facultatif)"
           fullWidth
@@ -118,7 +111,7 @@ export function RefuseStageDialog({ request, onClose, onConflict }: RefuseStageD
           minRows={2}
           value={freeText}
           onChange={(event) => setFreeText(event.target.value)}
-          sx={{ mt: 2 }}
+          sx={{ mt: 1 }}
         />
       </DialogContent>
       <DialogActions>

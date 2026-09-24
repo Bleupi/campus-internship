@@ -726,7 +726,7 @@ describe("StageRequestsPage — issue #146", () => {
       expect(submit).toBeEnabled();
     });
 
-    it("keeps Refuser disabled when the missing-information reason is ticked without its detail filled", async () => {
+    it("shows the missing-information hint as static text above Précision, not a selectable reason with its own input", async () => {
       const user = userEvent.setup();
       getStageRequestsMock.mockResolvedValue([request({ referent })]);
       renderPage();
@@ -735,12 +735,17 @@ describe("StageRequestsPage — issue #146", () => {
       await user.click(within(row).getByRole("button", { name: "Refuser" }));
       const dialog = await screen.findByRole("dialog");
 
-      await user.click(within(dialog).getByLabelText("Il manque les informations suivantes :"));
-      const submit = within(dialog).getByRole("button", { name: "Refuser" });
-      expect(submit).toBeDisabled();
+      expect(
+        within(dialog).queryByLabelText("Il manque les informations suivantes :"),
+      ).not.toBeInTheDocument();
+      expect(within(dialog).queryByLabelText("Informations manquantes")).not.toBeInTheDocument();
 
-      await user.type(within(dialog).getByLabelText("Informations manquantes"), "le certificat");
-      expect(submit).toBeEnabled();
+      const hint = within(dialog).getByText("Il manque les informations suivantes :");
+      const precisionField = within(dialog).getByLabelText("Précision (facultatif)");
+      const hintPrecedesPrecision = Boolean(
+        hint.compareDocumentPosition(precisionField) & Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+      expect(hintPrecedesPrecision).toBe(true);
     });
 
     it("builds the reason string, calls refuseStageRequest with the request's version, and closes the dialog on success", async () => {

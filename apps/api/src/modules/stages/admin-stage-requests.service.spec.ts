@@ -247,6 +247,7 @@ describe("AdminStageRequestsService.refuse — issue #151", () => {
       await service.refuse(STAGE_ID, { version: 0, reason: "Motif" }, ADMIN);
 
       const input = mailerService.sendSafely.mock.calls[0][0];
+      expect(input.to).toEqual({ email: UNIVERSITY_EMAIL });
       expect(input.cc).toEqual({ email: PERSONAL_EMAIL });
     });
 
