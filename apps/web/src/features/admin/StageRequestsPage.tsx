@@ -2,7 +2,13 @@ import { Fragment, useState } from "react";
 import {
   Alert,
   Box,
+  Button,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   IconButton,
   InputAdornment,
   Paper,
@@ -84,6 +90,16 @@ function formatFirstPeriod(request: AdminStageRequestListItem): string {
   return request.periodCount > 1 ? `${range} (+${request.periodCount - 1})` : range;
 }
 
+// Issue #149: "s'applique aussi à N autre(s) demande(s) en cours de l'étudiant X".
+function impactMessage(request: AdminStageRequestListItem): string {
+  const count = request.otherLiveStageCount;
+  const plural = count > 1 ? "s" : "";
+  const { firstName, lastName } = request.student;
+  return `Ce changement s'applique aussi à ${count} autre${plural} demande${plural} en cours de l'étudiant ${firstName} ${lastName}.`;
+}
+
+type PendingAssignment = { request: AdminStageRequestListItem; referent: ReferentListItem };
+
 function EmptyState({ filtered }: { filtered: boolean }) {
   if (filtered) {
     return (
@@ -117,12 +133,13 @@ export function StageRequestsPage() {
   );
   const [refusing, setRefusing] = useState<RefusingRequest | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  // Issue #149: a change awaiting confirmation because it also reaches the
+  // student's other live requests. The picker stays on the current referent
+  // meanwhile (it is controlled by the list data), so cancelling needs no undo.
+  const [pendingAssignment, setPendingAssignment] = useState<PendingAssignment | null>(null);
 
   // Issue #148: single assignment on the request's exact tuple (ADR-0014).
-  // Issue #150: a referent created from the picker goes through here too, so
-  // #149's impact confirmation must gate this function, not the picker's
-  // onChange, for both paths to get it.
-  const assignTo = (request: AdminStageRequestListItem, referent: ReferentListItem) =>
+  const applyAssignment = ({ request, referent }: PendingAssignment) =>
     assignReferent.mutate({
       studentId: request.student.id,
       schoolYear: request.schoolYear,
@@ -130,6 +147,20 @@ export function StageRequestsPage() {
       mandatory: request.mandatory,
       referentId: referent.id,
     });
+
+  // Issue #150: a referent created from the picker goes through here too, so
+  // both paths get #149's impact confirmation. The assignment is keyed on the
+  // tuple, so it also reassigns every other live stage sharing it: ask first
+  // only then, and keep a change that touches this request alone instant.
+  const assignTo = (request: AdminStageRequestListItem, referent: ReferentListItem) => {
+    if (request.otherLiveStageCount > 0) setPendingAssignment({ request, referent });
+    else applyAssignment({ request, referent });
+  };
+
+  const confirmPendingAssignment = () => {
+    if (pendingAssignment) applyAssignment(pendingAssignment);
+    setPendingAssignment(null);
+  };
 
   if (isLoading) {
     return <Typography sx={{ color: "text.secondary" }}>Chargement…</Typography>;
@@ -306,6 +337,25 @@ export function StageRequestsPage() {
           onCreated={(referent) => assignTo(addingReferentFor, referent)}
         />
       )}
+
+      <Dialog
+        open={pendingAssignment !== null}
+        onClose={() => setPendingAssignment(null)}
+        aria-labelledby="impact-dialog-title"
+      >
+        <DialogTitle id="impact-dialog-title">Changer le référent</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            {pendingAssignment && impactMessage(pendingAssignment.request)}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPendingAssignment(null)}>Annuler</Button>
+          <Button onClick={confirmPendingAssignment} variant="contained" autoFocus>
+            Confirmer
+          </Button>
+        </DialogActions>
+      </Dialog>
       <RefuseStageDialog
         request={refusing}
         onClose={() => setRefusing(null)}

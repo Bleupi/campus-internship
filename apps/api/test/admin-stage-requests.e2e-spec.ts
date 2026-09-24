@@ -220,6 +220,7 @@ describe("Admin stage requests list (e2e) — issue #146", () => {
       },
       periodCount: 2,
       referent: null,
+      otherLiveStageCount: 0,
     });
   });
 
@@ -318,6 +319,31 @@ describe("Admin stage requests list (e2e) — issue #146", () => {
     expect(await prisma.referentAssignment.count({ where: { studentId: student.profileId } })).toBe(
       1,
     );
+  });
+
+  it("issue #149 / ADR-0014: counts the other live (DRAFT/PENDING) stages of the same student sharing the exact tuple, never decided ones nor the request itself", async () => {
+    const student = await signupStudent();
+    const other = await signupStudent();
+    const listed = await seedStage(student.profileId);
+    const pendingSibling = await seedStage(student.profileId);
+    await seedStage(student.profileId, { status: "DRAFT" });
+    await seedStage(student.profileId, { status: "VALIDATED" });
+    await seedStage(student.profileId, { status: "REFUSED" });
+    // Same student, other tuple: other `mandatory` value, other semester.
+    const optional = await seedStage(student.profileId, { mandatory: false });
+    await seedStage(student.profileId, {
+      semester: "S2",
+      periods: [{ startDate: new Date("2100-02-01"), endDate: new Date("2100-02-28") }],
+    });
+    // Same tuple, other student.
+    await seedStage(other.profileId);
+
+    const list = await fetchList();
+    const countOf = (id: string) => list.find((item) => item.id === id)?.otherLiveStageCount;
+
+    expect(countOf(listed.id)).toBe(2);
+    expect(countOf(pendingSibling.id)).toBe(2);
+    expect(countOf(optional.id)).toBe(0);
   });
 
   it("RBAC: a non-admin is rejected (403) and an anonymous caller is unauthorized (401)", async () => {

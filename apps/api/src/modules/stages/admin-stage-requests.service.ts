@@ -57,7 +57,7 @@ export class AdminStageRequestsService {
   async list(): Promise<AdminStageRequestListResponse> {
     // One snapshot for both reads, as in the certificate queue: a row deleted
     // between two statements must not leave a null relation to dereference.
-    const { stages, assignments } = await this.prisma.$transaction(
+    const { stages, assignments, liveTuples } = await this.prisma.$transaction(
       async (tx) => {
         const stages = await tx.stage.findMany({
           where: { status: "PENDING" },
@@ -74,19 +74,31 @@ export class AdminStageRequestsService {
             },
           },
         });
+        const studentIds = [...new Set(stages.map((stage) => stage.studentId))];
         const assignments = await tx.referentAssignment.findMany({
-          where: { studentId: { in: [...new Set(stages.map((stage) => stage.studentId))] } },
+          where: { studentId: { in: studentIds } },
           include: {
             referent: { include: { user: { select: { firstName: true, lastName: true } } } },
           },
         });
-        return { stages, assignments };
+        // Issue #149: live stages per tuple, so each row knows what else a
+        // referent change on it would reassign. Decided stages are left out:
+        // their referent is frozen in the snapshot (BR-08).
+        const liveTuples = await tx.stage.groupBy({
+          by: ["studentId", "schoolYear", "semester", "mandatory"],
+          where: { studentId: { in: studentIds }, status: { in: ["DRAFT", "PENDING"] } },
+          _count: { _all: true },
+        });
+        return { stages, assignments, liveTuples };
       },
       { isolationLevel: "RepeatableRead" },
     );
 
     const referentByTuple = new Map(
       assignments.map((assignment) => [tupleKey(assignment), assignment.referent]),
+    );
+    const liveCountByTuple = new Map(
+      liveTuples.map((group) => [tupleKey(group), group._count._all]),
     );
 
     return stages.map((stage) => {
@@ -105,6 +117,14 @@ export class AdminStageRequestsService {
         );
       }
       const referent = referentByTuple.get(tupleKey(stage));
+      // The stage itself is PENDING, so it is always part of its own live
+      // group (same snapshot); a missing group is a broken invariant.
+      const liveCount = liveCountByTuple.get(tupleKey(stage));
+      if (liveCount === undefined) {
+        throw new InternalServerErrorException(
+          `PENDING stage ${stage.id} is missing from its own live tuple group`,
+        );
+      }
       const [firstPeriod] = stage.periods;
       return {
         id: stage.id,
@@ -130,6 +150,7 @@ export class AdminStageRequestsService {
           : null,
         periodCount: stage.periods.length,
         referent: referent ? toReferentResponse(referent) : null,
+        otherLiveStageCount: liveCount - 1,
       };
     });
   }

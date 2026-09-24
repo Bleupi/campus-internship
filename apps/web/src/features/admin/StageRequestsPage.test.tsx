@@ -54,6 +54,7 @@ function request(overrides: Record<string, unknown> = {}) {
     },
     periodCount: 1,
     referent: null,
+    otherLiveStageCount: 0,
     ...overrides,
   };
 }
@@ -374,6 +375,114 @@ describe("StageRequestsPage — issue #146", () => {
       await user.click(within(row).getByRole("combobox"));
 
       expect(getStageRequestDetailMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("impact confirmation — issue #149", () => {
+    const tuple = {
+      studentId: "student-1",
+      schoolYear: "2026-2027",
+      semester: "S1",
+      mandatory: true,
+      referentId: "ref-1",
+    };
+
+    async function pickReferent(user: ReturnType<typeof userEvent.setup>) {
+      const row = (await screen.findByText("Alice Martin")).closest("tr")!;
+      await user.click(within(row).getByRole("combobox"));
+      await user.click(await screen.findByRole("option", { name: "Claire Bernard" }));
+    }
+
+    it("ADR-0014: a change that also reaches the student's other live requests asks first, naming how many and whose, and applies only once confirmed", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([request({ otherLiveStageCount: 2 })]);
+      assignReferentMock.mockResolvedValue(referent);
+      renderPage();
+
+      await pickReferent(user);
+
+      const dialog = await screen.findByRole("dialog", { name: "Changer le référent" });
+      expect(
+        within(dialog).getByText(
+          "Ce changement s'applique aussi à 2 autres demandes en cours de l'étudiant Alice Martin.",
+        ),
+      ).toBeInTheDocument();
+      expect(assignReferentMock).not.toHaveBeenCalled();
+
+      await user.click(within(dialog).getByRole("button", { name: "Confirmer" }));
+
+      expect(assignReferentMock).toHaveBeenCalledWith(tuple);
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    });
+
+    it("uses the singular for a single other live request", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([request({ otherLiveStageCount: 1 })]);
+      renderPage();
+
+      await pickReferent(user);
+
+      const dialog = await screen.findByRole("dialog", { name: "Changer le référent" });
+      expect(
+        within(dialog).getByText(
+          "Ce changement s'applique aussi à 1 autre demande en cours de l'étudiant Alice Martin.",
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it("cancelling leaves the assignment untouched and the picker on the current referent", async () => {
+      const user = userEvent.setup();
+      const current = { id: "ref-0", firstName: "Jean", lastName: "Petit" };
+      getReferentsMock.mockResolvedValue([current, referent]);
+      getStageRequestsMock.mockResolvedValue([
+        request({ referent: current, otherLiveStageCount: 1 }),
+      ]);
+      renderPage();
+
+      await pickReferent(user);
+      const dialog = await screen.findByRole("dialog", { name: "Changer le référent" });
+      await user.click(within(dialog).getByRole("button", { name: "Annuler" }));
+
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(assignReferentMock).not.toHaveBeenCalled();
+      const row = screen.getByText("Alice Martin").closest("tr")!;
+      expect(within(row).getByDisplayValue("Jean Petit")).toBeInTheDocument();
+    });
+
+    it("a change that touches only this request applies immediately, with no confirmation", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([request({ otherLiveStageCount: 0 })]);
+      assignReferentMock.mockResolvedValue(referent);
+      renderPage();
+
+      await pickReferent(user);
+
+      expect(assignReferentMock).toHaveBeenCalledWith(tuple);
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("a referent created on the fly goes through the same confirmation (ADR-0031)", async () => {
+      const user = userEvent.setup();
+      const created = { id: "ref-new", firstName: "Paul", lastName: "Durand" };
+      getStageRequestsMock.mockResolvedValue([request({ otherLiveStageCount: 1 })]);
+      createReferentMock.mockResolvedValue(created);
+      assignReferentMock.mockResolvedValue(created);
+      renderPage();
+
+      const row = (await screen.findByText("Alice Martin")).closest("tr")!;
+      await user.click(within(row).getByRole("combobox"));
+      await user.click(await screen.findByRole("option", { name: "Ajouter un référent" }));
+      const form = await screen.findByRole("dialog", { name: "Ajouter un référent" });
+      await user.type(within(form).getByLabelText("Prénom"), "Paul");
+      await user.type(within(form).getByLabelText("Nom"), "Durand");
+      await user.type(within(form).getByLabelText("Email"), "paul.durand@example.org");
+      await user.click(within(form).getByRole("button", { name: "Ajouter" }));
+
+      const dialog = await screen.findByRole("dialog", { name: "Changer le référent" });
+      expect(assignReferentMock).not.toHaveBeenCalled();
+      await user.click(within(dialog).getByRole("button", { name: "Confirmer" }));
+
+      expect(assignReferentMock).toHaveBeenCalledWith({ ...tuple, referentId: "ref-new" });
     });
   });
 

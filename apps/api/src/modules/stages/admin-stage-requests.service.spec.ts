@@ -1,4 +1,4 @@
-import { NotFoundException } from "@nestjs/common";
+import { InternalServerErrorException, NotFoundException } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import { PrismaService } from "../../prisma/prisma.service";
 import { MailerService } from "../mailer/mailer.service";
@@ -274,6 +274,148 @@ describe("AdminStageRequestsService.refuse — issue #151", () => {
       id: STAGE_ID,
       status: "REFUSED",
       decidedAt: expect.any(String),
+    });
+  });
+});
+
+function pendingStage(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "stage-1",
+    version: 0,
+    studentId: "student-1",
+    schoolYear: "2026-2027",
+    semester: "S1",
+    mandatory: true,
+    status: "PENDING",
+    service: "Service de cardiologie",
+    submittedAt: new Date("2026-09-01T10:00:00.000Z"),
+    organism: { name: "Hôpital Cochin", structureType: "Secteur Sanitaire" },
+    periods: [],
+    student: {
+      id: "student-1",
+      promotion: "L3",
+      user: { firstName: "Alice", lastName: "Martin" },
+    },
+    ...overrides,
+  };
+}
+
+function liveGroup(overrides: Record<string, unknown> = {}, count = 1) {
+  return {
+    studentId: "student-1",
+    schoolYear: "2026-2027",
+    semester: "S1",
+    mandatory: true,
+    _count: { _all: count },
+    ...overrides,
+  };
+}
+
+describe("AdminStageRequestsService", () => {
+  let service: AdminStageRequestsService;
+  let tx: {
+    stage: { findMany: jest.Mock; groupBy: jest.Mock };
+    referentAssignment: { findMany: jest.Mock };
+  };
+
+  beforeEach(async () => {
+    tx = {
+      stage: { findMany: jest.fn(), groupBy: jest.fn() },
+      referentAssignment: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const prisma = {
+      $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
+    };
+
+    const module = await Test.createTestingModule({
+      providers: [
+        AdminStageRequestsService,
+        { provide: PrismaService, useValue: prisma },
+        // list() never sends mail; the service just needs it injected (#151).
+        { provide: MailerService, useValue: {} },
+      ],
+    }).compile();
+
+    service = module.get(AdminStageRequestsService);
+  });
+
+  describe("list — other live stages sharing the referent tuple (issue #149, ADR-0014)", () => {
+    it("counts only DRAFT/PENDING stages of the listed students, grouped on the full four-tuple", async () => {
+      tx.stage.findMany.mockResolvedValue([
+        pendingStage({ id: "a", studentId: "student-1" }),
+        pendingStage({ id: "b", studentId: "student-2" }),
+      ]);
+      tx.stage.groupBy.mockResolvedValue([liveGroup(), liveGroup({ studentId: "student-2" })]);
+
+      await service.list();
+
+      expect(tx.stage.groupBy).toHaveBeenCalledWith({
+        by: ["studentId", "schoolYear", "semester", "mandatory"],
+        where: {
+          studentId: { in: ["student-1", "student-2"] },
+          status: { in: ["DRAFT", "PENDING"] },
+        },
+        _count: { _all: true },
+      });
+    });
+
+    it("excludes the request itself: a request alone on its tuple has 0 other live stages", async () => {
+      tx.stage.findMany.mockResolvedValue([pendingStage()]);
+      tx.stage.groupBy.mockResolvedValue([liveGroup({}, 1)]);
+
+      const [item] = await service.list();
+
+      expect(item!.otherLiveStageCount).toBe(0);
+    });
+
+    it("counts the other live stages sharing the exact tuple (e.g. a DRAFT and another PENDING → 2)", async () => {
+      tx.stage.findMany.mockResolvedValue([pendingStage()]);
+      tx.stage.groupBy.mockResolvedValue([liveGroup({}, 3)]);
+
+      const [item] = await service.list();
+
+      expect(item!.otherLiveStageCount).toBe(2);
+    });
+
+    it("ignores live stages on another tuple: other mandatory value, semester, school year, or student", async () => {
+      tx.stage.findMany.mockResolvedValue([pendingStage()]);
+      tx.stage.groupBy.mockResolvedValue([
+        liveGroup({}, 1),
+        liveGroup({ mandatory: false }, 4),
+        liveGroup({ semester: "S2" }, 4),
+        liveGroup({ schoolYear: "2027-2028" }, 4),
+        liveGroup({ studentId: "student-2" }, 4),
+      ]);
+
+      const [item] = await service.list();
+
+      expect(item!.otherLiveStageCount).toBe(0);
+    });
+
+    it("fails loudly, naming the stage, when a PENDING stage is missing from its own live group", async () => {
+      tx.stage.findMany.mockResolvedValue([pendingStage()]);
+      tx.stage.groupBy.mockResolvedValue([]);
+
+      await expect(service.list()).rejects.toThrow(
+        new InternalServerErrorException(
+          "PENDING stage stage-1 is missing from its own live tuple group",
+        ),
+      );
+    });
+
+    it("gives each listed request the count of its own tuple", async () => {
+      tx.stage.findMany.mockResolvedValue([
+        pendingStage({ id: "mandatory" }),
+        pendingStage({ id: "optional", mandatory: false }),
+      ]);
+      tx.stage.groupBy.mockResolvedValue([liveGroup({}, 2), liveGroup({ mandatory: false }, 1)]);
+
+      const list = await service.list();
+
+      expect(list.map((item) => [item.id, item.otherLiveStageCount])).toEqual([
+        ["mandatory", 1],
+        ["optional", 0],
+      ]);
     });
   });
 });
