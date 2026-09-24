@@ -726,7 +726,7 @@ describe("StageRequestsPage — issue #146", () => {
       expect(submit).toBeEnabled();
     });
 
-    it("shows the missing-information hint as static text above Précision, not a selectable reason with its own input", async () => {
+    it("shows 'Autre précision :' as static text above Précision, not a selectable reason with its own input", async () => {
       const user = userEvent.setup();
       getStageRequestsMock.mockResolvedValue([request({ referent })]);
       renderPage();
@@ -735,12 +735,10 @@ describe("StageRequestsPage — issue #146", () => {
       await user.click(within(row).getByRole("button", { name: "Refuser" }));
       const dialog = await screen.findByRole("dialog");
 
-      expect(
-        within(dialog).queryByLabelText("Il manque les informations suivantes :"),
-      ).not.toBeInTheDocument();
+      expect(within(dialog).queryByLabelText("Autre précision :")).not.toBeInTheDocument();
       expect(within(dialog).queryByLabelText("Informations manquantes")).not.toBeInTheDocument();
 
-      const hint = within(dialog).getByText("Il manque les informations suivantes :");
+      const hint = within(dialog).getByText("Autre précision :");
       const precisionField = within(dialog).getByLabelText("Précision (facultatif)");
       const hintPrecedesPrecision = Boolean(
         hint.compareDocumentPosition(precisionField) & Node.DOCUMENT_POSITION_FOLLOWING,

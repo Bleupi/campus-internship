@@ -16,7 +16,7 @@ import { ApiError } from "../../lib/api-client";
 import {
   buildRefusalReason,
   isRefusalReasonComplete,
-  MISSING_INFO_HINT,
+  PRECISION_HINT,
   REFUSAL_REASONS,
 } from "./refusal-reason";
 import { useRefuseStageRequest } from "./useRefuseStageRequest";
@@ -102,7 +102,7 @@ export function RefuseStageDialog({ request, onClose, onConflict }: RefuseStageD
           ))}
         </FormGroup>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-          {MISSING_INFO_HINT}
+          {PRECISION_HINT}
         </Typography>
         <TextField
           label="Précision (facultatif)"

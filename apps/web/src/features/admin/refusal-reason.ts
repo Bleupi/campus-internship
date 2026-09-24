@@ -7,11 +7,12 @@ export const REFUSAL_REASONS = [
   "Il y a deux projets de stage pour le même stage.",
 ] as const;
 
-// A static hint shown directly above the free-text "Précision" field — not
+// A static label shown directly above the free-text "Précision" field — not
 // a selectable reason and not its own input (QA feedback on #151, which
-// removed it from REFUSAL_REASONS): whatever is missing is written in
-// Précision like any other free-text detail.
-export const MISSING_INFO_HINT = "Il manque les informations suivantes :";
+// removed it from REFUSAL_REASONS). Matches buildRefusalReason()'s own
+// "Autre précision : …" line below, since that's exactly what this field
+// becomes once appended.
+export const PRECISION_HINT = "Autre précision :";
 
 // Builds refuseStageSchema's single `reason` string: each ticked reason as a
 // "- <reason>" bullet, then an optional trailing unbulleted
