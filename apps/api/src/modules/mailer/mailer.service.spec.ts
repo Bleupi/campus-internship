@@ -99,9 +99,9 @@ describe("MailerService — ADR-0026: Scaleway Transactional Email", () => {
   // #81): previously duplicated identically in AuthService.sendMail() and
   // AdminStudentsService.notifyStudent(); both now delegate here.
   describe("sendSafely() — shared catch-and-log policy", () => {
-    it("delegates to send() and logs the successful send via the caller's own Logger", async () => {
+    it("delegates to send() and resolves normally on success, without logging", async () => {
       fetchMock.mockResolvedValue({ ok: true, status: 202, text: async () => "" });
-      const logger = { log: jest.fn(), error: jest.fn() };
+      const logger = { error: jest.fn() };
 
       await expect(
         service.sendSafely(
@@ -110,14 +110,11 @@ describe("MailerService — ADR-0026: Scaleway Transactional Email", () => {
         ),
       ).resolves.toBeUndefined();
       expect(logger.error).not.toHaveBeenCalled();
-      expect(logger.log).toHaveBeenCalledTimes(1);
-      expect(logger.log.mock.calls[0][0]).toContain("etudiant@etu.u-paris.fr");
-      expect(logger.log.mock.calls[0][0]).toContain("Sujet");
     });
 
-    it("catches a send() failure and logs it via the caller's own Logger, without rejecting or logging a success", async () => {
+    it("catches a send() failure and logs it via the caller's own Logger, without rejecting", async () => {
       fetchMock.mockResolvedValue({ ok: false, status: 500, text: async () => "boom" });
-      const logger = { log: jest.fn(), error: jest.fn() };
+      const logger = { error: jest.fn() };
 
       await expect(
         service.sendSafely(
@@ -127,7 +124,6 @@ describe("MailerService — ADR-0026: Scaleway Transactional Email", () => {
       ).resolves.toBeUndefined();
       expect(logger.error).toHaveBeenCalledTimes(1);
       expect(logger.error.mock.calls[0][0]).toContain("etudiant@etu.u-paris.fr");
-      expect(logger.log).not.toHaveBeenCalled();
     });
   });
 });
