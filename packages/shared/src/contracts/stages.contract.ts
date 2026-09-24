@@ -134,6 +134,12 @@ export interface AdminStageRequestListItem {
   firstPeriod: StageDraftPeriodResponse | null;
   periodCount: number;
   referent: StageReferentResponse | null;
+  // Issue #149: how many *other* live (DRAFT/PENDING) stages of the same
+  // student share this request's referent tuple — i.e. what else a referent
+  // change on this request would also reassign (ADR-0014). Never counts
+  // decided stages nor the request itself; drives the impact confirmation
+  // without an extra call.
+  otherLiveStageCount: number;
 }
 
 export type AdminStageRequestListResponse = AdminStageRequestListItem[];
