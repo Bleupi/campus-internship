@@ -32,7 +32,9 @@ import { useAssignReferent } from "./useAssignReferent";
 import { useReferents } from "./useReferents";
 import { useStageRequests } from "./useStageRequests";
 
-const DETAIL_COLUMN_COUNT = 6;
+// The expanded detail row's colSpan is derived from this, so the two can
+// never drift apart (the last, unlabelled column holds the expand toggle).
+const COLUMNS = ["Étudiant", "Organisme", "Période", "Demande", "Référent", ""];
 
 type TabKey = "all" | "withoutReferent" | "ready";
 
@@ -187,12 +189,9 @@ export function StageRequestsPage() {
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell>Étudiant</TableCell>
-                    <TableCell>Organisme</TableCell>
-                    <TableCell>Période</TableCell>
-                    <TableCell>Demande</TableCell>
-                    <TableCell>Référent</TableCell>
-                    <TableCell />
+                    {COLUMNS.map((label, index) => (
+                      <TableCell key={index}>{label}</TableCell>
+                    ))}
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -255,7 +254,7 @@ export function StageRequestsPage() {
                         </TableRow>
                         {expanded && (
                           <TableRow>
-                            <TableCell sx={{ p: 0 }} colSpan={DETAIL_COLUMN_COUNT}>
+                            <TableCell sx={{ p: 0 }} colSpan={COLUMNS.length}>
                               <Box sx={{ px: 2 }}>
                                 <StageRequestDetail stageId={request.id} />
                               </Box>

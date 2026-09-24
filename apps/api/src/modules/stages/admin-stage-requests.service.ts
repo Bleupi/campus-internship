@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, InternalServerErrorException, NotFoundException } from "@nestjs/common";
 import type { AdminStageRequestDetailResponse, AdminStageRequestListResponse } from "shared";
 import { PrismaService } from "../../prisma/prisma.service";
 import { toReferentResponse } from "./referent-response";
@@ -66,7 +66,9 @@ export class AdminStageRequestsService {
       // allows all four to be null, so fail with a message that names the
       // stage rather than a bare TypeError.
       if (!submittedAt || !organism || !student.promotion || !service) {
-        throw new Error(
+        // CLAUDE.md §5: shaped like every other error this service raises,
+        // not a raw Error left for Nest's default (unshaped) 500 handler.
+        throw new InternalServerErrorException(
           `PENDING stage ${stage.id} has no submittedAt, organism, promotion, or service`,
         );
       }
@@ -107,24 +109,64 @@ export class AdminStageRequestsService {
   // a 404 here rather than showing live data that may already have drifted
   // from what was decided.
   async getById(id: string): Promise<AdminStageRequestDetailResponse> {
-    const stage = await this.prisma.stage.findUnique({
-      where: { id },
-      include: {
-        organism: true,
-        tutor: true,
-        periods: { orderBy: { startDate: "asc" } },
-        student: {
-          select: {
-            id: true,
-            promotion: true,
-            user: { select: { firstName: true, lastName: true, email: true } },
+    // One snapshot for both reads (same reasoning as list() above): the
+    // referent lookup depends on the stage's studentId/schoolYear/semester/
+    // mandatory, so a row deleted between the two statements must not leave
+    // a null relation to dereference.
+    const { stage, assignment } = await this.prisma.$transaction(
+      async (tx) => {
+        const stage = await tx.stage.findUnique({
+          where: { id },
+          include: {
+            organism: {
+              select: {
+                name: true,
+                structureType: true,
+                street: true,
+                postalCode: true,
+                city: true,
+              },
+            },
+            tutor: {
+              select: {
+                firstName: true,
+                lastName: true,
+                email: true,
+                jobTitle: true,
+                phone: true,
+                acceptsPhoneContact: true,
+              },
+            },
+            periods: { orderBy: { startDate: "asc" } },
+            student: {
+              select: {
+                id: true,
+                promotion: true,
+                user: { select: { firstName: true, lastName: true, email: true } },
+              },
+            },
           },
-        },
+        });
+        if (!stage || stage.status !== "PENDING") {
+          throw new NotFoundException("Demande de stage introuvable");
+        }
+        const assignment = await tx.referentAssignment.findUnique({
+          where: {
+            studentId_schoolYear_semester_mandatory: {
+              studentId: stage.studentId,
+              schoolYear: stage.schoolYear,
+              semester: stage.semester,
+              mandatory: stage.mandatory,
+            },
+          },
+          include: {
+            referent: { include: { user: { select: { firstName: true, lastName: true } } } },
+          },
+        });
+        return { stage, assignment };
       },
-    });
-    if (!stage || stage.status !== "PENDING") {
-      throw new NotFoundException("Demande de stage introuvable");
-    }
+      { isolationLevel: "RepeatableRead" },
+    );
     // A PENDING stage was submitted (submittedAt is set), its organism and
     // tutor were resolved at creation, its request was complete (BR-02:
     // service/projectType/motivation all non-blank), and its student's
@@ -142,22 +184,10 @@ export class AdminStageRequestsService {
       !projectType ||
       !motivation
     ) {
-      throw new Error(
+      throw new InternalServerErrorException(
         `PENDING stage ${stage.id} has no submittedAt, organism, tutor, promotion, service, projectType, or motivation`,
       );
     }
-
-    const assignment = await this.prisma.referentAssignment.findUnique({
-      where: {
-        studentId_schoolYear_semester_mandatory: {
-          studentId: stage.studentId,
-          schoolYear: stage.schoolYear,
-          semester: stage.semester,
-          mandatory: stage.mandatory,
-        },
-      },
-      include: { referent: { include: { user: { select: { firstName: true, lastName: true } } } } },
-    });
 
     return {
       id: stage.id,

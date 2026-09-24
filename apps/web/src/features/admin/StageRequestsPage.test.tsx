@@ -628,6 +628,41 @@ describe("StageRequestsPage — issue #146", () => {
       ).not.toBeInTheDocument();
     });
 
+    // Regression: `acceptsPhoneContact` is settable independently of `phone`
+    // (OrganismTutorForms.tsx has no cross-field constraint), so a tutor can
+    // legitimately have phone: null with acceptsPhoneContact: true — the
+    // phone-contact section must still hide, not show a hollow "Non renseigné"
+    // next to "Accepte d'être contacté par téléphone".
+    it("hides the phone and phone-contact lines even when acceptsPhoneContact is true but no phone is on file", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([
+        request({
+          id: "stage-1",
+          organism: { name: "Association Sportive", structureType: "Secteur Sanitaire" },
+        }),
+      ]);
+      getStageRequestDetailMock.mockResolvedValue(
+        detail({
+          tutor: {
+            firstName: "Marie",
+            lastName: "Curie",
+            email: "m.curie@example.org",
+            jobTitle: "Médecin",
+            phone: null,
+            acceptsPhoneContact: true,
+          },
+        }),
+      );
+      renderPage();
+
+      const row = (await screen.findByText("Alice Martin")).closest("tr")!;
+      await user.click(row);
+
+      await screen.findByText("Hôpital Cochin");
+      expect(screen.queryByText("Non renseigné")).not.toBeInTheDocument();
+      expect(screen.queryByText("Accepte d'être contacté par téléphone")).not.toBeInTheDocument();
+    });
+
     it("shows an error message when the detail cannot be loaded", async () => {
       const user = userEvent.setup();
       getStageRequestsMock.mockResolvedValue([
