@@ -2,13 +2,7 @@ import { Fragment, useState } from "react";
 import {
   Alert,
   Box,
-  Button,
   Chip,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
   IconButton,
   InputAdornment,
   Paper,
@@ -34,6 +28,7 @@ import TaskAltOutlinedIcon from "@mui/icons-material/TaskAltOutlined";
 import type { AdminStageRequestListItem, ReferentListItem } from "shared";
 import { formatPeriodRange, mandatoryLabel } from "../stages/format-summary";
 import { AddReferentDialog } from "./AddReferentDialog";
+import { ReferentChangeImpactDialog } from "./ReferentChangeImpactDialog";
 import { RefuseStageDialog, type RefusingRequest } from "./RefuseStageDialog";
 import { ReferentSelect } from "./ReferentSelect";
 import { StageRequestDetail } from "./StageRequestDetail";
@@ -88,14 +83,6 @@ function formatFirstPeriod(request: AdminStageRequestListItem): string {
   if (!request.firstPeriod) return "Aucune période";
   const range = formatPeriodRange(request.firstPeriod);
   return request.periodCount > 1 ? `${range} (+${request.periodCount - 1})` : range;
-}
-
-// Issue #149: "s'applique aussi à N autre(s) demande(s) en cours de l'étudiant X".
-function impactMessage(request: AdminStageRequestListItem): string {
-  const count = request.otherLiveStageCount;
-  const plural = count > 1 ? "s" : "";
-  const { firstName, lastName } = request.student;
-  return `Ce changement s'applique aussi à ${count} autre${plural} demande${plural} en cours de l'étudiant ${firstName} ${lastName}.`;
 }
 
 type PendingAssignment = { request: AdminStageRequestListItem; referent: ReferentListItem };
@@ -338,24 +325,11 @@ export function StageRequestsPage() {
         />
       )}
 
-      <Dialog
-        open={pendingAssignment !== null}
-        onClose={() => setPendingAssignment(null)}
-        aria-labelledby="impact-dialog-title"
-      >
-        <DialogTitle id="impact-dialog-title">Changer le référent</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            {pendingAssignment && impactMessage(pendingAssignment.request)}
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPendingAssignment(null)}>Annuler</Button>
-          <Button onClick={confirmPendingAssignment} variant="contained" autoFocus>
-            Confirmer
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ReferentChangeImpactDialog
+        request={pendingAssignment?.request ?? null}
+        onCancel={() => setPendingAssignment(null)}
+        onConfirm={confirmPendingAssignment}
+      />
       <RefuseStageDialog
         request={refusing}
         onClose={() => setRefusing(null)}
