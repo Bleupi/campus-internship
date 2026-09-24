@@ -17,7 +17,8 @@ export function formatStageKind(mandatory: boolean) {
   return mandatory ? "Stage obligatoire" : "Stage facultatif";
 }
 
-// A frozen stage carries no organism name until it is read from its snapshot.
+// The API reads the name from the live organism or the snapshot, by status
+// (BR-08). It is null only when a decided stage's snapshot was unreadable.
 export function organismLabel(stage: StageListItemResponse) {
   return stage.organismName ?? "Organisme indisponible";
 }

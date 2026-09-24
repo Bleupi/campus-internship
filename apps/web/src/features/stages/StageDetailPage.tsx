@@ -98,6 +98,9 @@ export function StageDetailPage() {
             {stage.submittedAt && (
               <RecapField label="Date de soumission">{formatDate(stage.submittedAt)}</RecapField>
             )}
+            {stage.decidedAt && (
+              <RecapField label="Date de décision">{formatDate(stage.decidedAt)}</RecapField>
+            )}
             <RecapField label="Service">{stage.service?.trim() || "Non renseigné"}</RecapField>
             <RecapField label="Type de handicap concerné">
               {stage.projectType?.trim() || "Non renseigné"}

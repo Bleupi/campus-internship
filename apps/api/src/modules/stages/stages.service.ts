@@ -5,7 +5,6 @@ import {
   InternalServerErrorException,
   Logger,
   NotFoundException,
-  NotImplementedException,
 } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import {
@@ -25,6 +24,7 @@ import {
 import { PrismaService } from "../../prisma/prisma.service";
 import { MailerService } from "../mailer/mailer.service";
 import { toReferentResponse } from "./referent-response";
+import { parseStageSnapshot, type StageSnapshot } from "./stage-snapshot.schema";
 
 type Tx = Prisma.TransactionClient;
 
@@ -39,6 +39,12 @@ interface EditableFlags {
 // (reload the draft) from a frozen row (create a new one).
 function stageConflict(code: StageConflictCode, message: string): ConflictException {
   return new ConflictException({ statusCode: 409, error: "Conflict", message, code });
+}
+
+// A stage the admin validated or refused: read from its snapshot, never from
+// its live relations (ADR-0003, BR-08).
+function isDecided(stage: { status: string }): boolean {
+  return stage.status === "VALIDATED" || stage.status === "REFUSED";
 }
 
 // A stage with the single start time it is ranked by in the list.
@@ -256,12 +262,8 @@ export class StagesService {
       throw new NotFoundException("Demande de stage introuvable");
     }
 
-    if (stage.status === "VALIDATED" || stage.status === "REFUSED") {
-      // The frozen-snapshot branch is deliberately stubbed: nothing writes a
-      // snapshot yet (validate/refuse are later issues), so there is no
-      // schema to parse it with. Reading the live relations here instead
-      // would violate BR-08.
-      throw new NotImplementedException("Lecture du snapshot non implémentée");
+    if (isDecided(stage)) {
+      return this.toDecidedResponse(stage, this.readSnapshot(stage));
     }
 
     const assignment = await this.prisma.referentAssignment.findUnique({
@@ -279,8 +281,76 @@ export class StagesService {
     return {
       ...this.toResponse(stage, await this.loadEditable(this.prisma, stage)),
       submittedAt: stage.submittedAt?.toISOString() ?? null,
+      decidedAt: null,
       refusalReason: stage.refusalReason,
       referent: assignment && toReferentResponse(assignment.referent),
+    };
+  }
+
+  // Null when a decided stage's snapshot is missing, of an unknown version or
+  // unparseable (ADR-0033): corrupt data, logged with the stage id, and never
+  // papered over with the live rows (BR-08). The caller decides how loud to be.
+  private tryReadSnapshot(stage: {
+    id: string;
+    snapshot: unknown;
+    snapshotVersion: number | null;
+  }): StageSnapshot | null {
+    try {
+      return parseStageSnapshot(stage.snapshot, stage.snapshotVersion);
+    } catch (error) {
+      this.logger.error(
+        `Stage ${stage.id} is decided but its snapshot is unreadable`,
+        error instanceof Error ? error.stack : error,
+      );
+      return null;
+    }
+  }
+
+  // The detail of one stage cannot be shown without its snapshot: a 500.
+  private readSnapshot(stage: {
+    id: string;
+    snapshot: unknown;
+    snapshotVersion: number | null;
+  }): StageSnapshot {
+    const snapshot = this.tryReadSnapshot(stage);
+    if (!snapshot) {
+      throw new InternalServerErrorException("Impossible de lire cette demande de stage.");
+    }
+    return snapshot;
+  }
+
+  // Picked field by field, not spread: the snapshot also freezes the deciding
+  // admin and the student's promotion, which are not the student's to read.
+  // What stays a live column of the row (id, status, version, submission date,
+  // refusal reason) is not in the snapshot (ADR-0033).
+  private toDecidedResponse(
+    stage: {
+      id: string;
+      status: StageDetailResponse["status"];
+      version: number;
+      submittedAt: Date | null;
+      refusalReason: string | null;
+    },
+    snapshot: StageSnapshot,
+  ): StageDetailResponse {
+    return {
+      id: stage.id,
+      status: stage.status,
+      version: stage.version,
+      schoolYear: snapshot.schoolYear,
+      semester: snapshot.semester,
+      mandatory: snapshot.mandatory,
+      service: snapshot.service,
+      projectType: snapshot.projectType,
+      motivation: snapshot.motivation,
+      // A decided stage is read-only.
+      organism: { ...snapshot.organism, editable: false },
+      tutor: { ...snapshot.tutor, editable: false },
+      periods: snapshot.periods,
+      referent: snapshot.referent,
+      submittedAt: stage.submittedAt?.toISOString() ?? null,
+      decidedAt: snapshot.decidedAt,
+      refusalReason: stage.refusalReason,
     };
   }
 
@@ -419,21 +489,41 @@ export class StagesService {
     ];
   }
 
+  // BR-08: a live stage is read from its live rows, a decided one from its
+  // snapshot. An unreadable snapshot still lists the row, without what only
+  // the snapshot could give: one corrupt stage must not blank the student's
+  // whole list, and the live relations are not a fallback (ADR-0033).
   private toListItem(
     stage: Prisma.StageGetPayload<{
       include: { periods: true; organism: { select: { name: true } } };
     }>,
   ): StageListItemResponse {
-    const live = stage.status === "DRAFT" || stage.status === "PENDING";
-    return {
+    const base = {
       id: stage.id,
       status: stage.status,
-      schoolYear: stage.schoolYear,
-      semester: stage.semester,
-      mandatory: stage.mandatory,
-      organismName: live ? (stage.organism?.name ?? null) : null,
       submittedAt: stage.submittedAt?.toISOString() ?? null,
-      periods: stage.periods.map((period) => this.toPeriodResponse(period)),
+    };
+    if (!isDecided(stage)) {
+      return {
+        ...base,
+        schoolYear: stage.schoolYear,
+        semester: stage.semester,
+        mandatory: stage.mandatory,
+        organismName: stage.organism?.name ?? null,
+        periods: stage.periods.map((period) => this.toPeriodResponse(period)),
+      };
+    }
+
+    const snapshot = this.tryReadSnapshot(stage);
+    return {
+      ...base,
+      // Columns of the stage row itself, set before the decision and never
+      // written after it: safe when the snapshot cannot be read.
+      schoolYear: snapshot?.schoolYear ?? stage.schoolYear,
+      semester: snapshot?.semester ?? stage.semester,
+      mandatory: snapshot?.mandatory ?? stage.mandatory,
+      organismName: snapshot?.organism.name ?? null,
+      periods: snapshot?.periods ?? [],
     };
   }
 

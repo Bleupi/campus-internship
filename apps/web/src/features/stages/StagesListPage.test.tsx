@@ -136,7 +136,18 @@ describe("StagesListPage (issue #114)", () => {
       expect(rows[0]).toHaveTextContent("01/10/2025 → 15/10/2025 (+1)");
     });
 
-    it("shows a placeholder instead of an organism name for a frozen stage (no live read, BR-08)", async () => {
+    it("BR-08: shows a decided stage's organism name, as the API read it from its snapshot", async () => {
+      listStagesMock.mockResolvedValue([
+        stageItem({ status: "REFUSED", organismName: "Hôpital Cochin" }),
+      ]);
+      renderPage();
+
+      const rows = await dataRows();
+      expect(rows[0]).toHaveTextContent("Hôpital Cochin");
+      expect(screen.queryByText("Organisme indisponible")).not.toBeInTheDocument();
+    });
+
+    it("BR-08: shows a placeholder when a decided stage's snapshot could not be read (null organism name)", async () => {
       listStagesMock.mockResolvedValue([stageItem({ status: "VALIDATED", organismName: null })]);
       renderPage();
 
