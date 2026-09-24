@@ -19,6 +19,7 @@ import {
   type StageDraftPeriodResponse,
   type StageDraftResponse,
   type StageListItemResponse,
+  type StageStatus,
   type UpdateStageDraftRequest,
 } from "shared";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -43,8 +44,15 @@ function stageConflict(code: StageConflictCode, message: string): ConflictExcept
 
 // A stage the admin validated or refused: read from its snapshot, never from
 // its live relations (ADR-0003, BR-08).
-function isDecided(stage: { status: string }): boolean {
+function isDecided(stage: { status: StageStatus }): boolean {
   return stage.status === "VALIDATED" || stage.status === "REFUSED";
+}
+
+// What reading a decided stage's snapshot needs from its row.
+interface SnapshotSource {
+  id: string;
+  snapshot: unknown;
+  snapshotVersion: number | null;
 }
 
 // A stage with the single start time it is ranked by in the list.
@@ -290,11 +298,7 @@ export class StagesService {
   // Null when a decided stage's snapshot is missing, of an unknown version or
   // unparseable (ADR-0033): corrupt data, logged with the stage id, and never
   // papered over with the live rows (BR-08). The caller decides how loud to be.
-  private tryReadSnapshot(stage: {
-    id: string;
-    snapshot: unknown;
-    snapshotVersion: number | null;
-  }): StageSnapshot | null {
+  private tryReadSnapshot(stage: SnapshotSource): StageSnapshot | null {
     try {
       return parseStageSnapshot(stage.snapshot, stage.snapshotVersion);
     } catch (error) {
@@ -307,11 +311,7 @@ export class StagesService {
   }
 
   // The detail of one stage cannot be shown without its snapshot: a 500.
-  private readSnapshot(stage: {
-    id: string;
-    snapshot: unknown;
-    snapshotVersion: number | null;
-  }): StageSnapshot {
+  private readSnapshot(stage: SnapshotSource): StageSnapshot {
     const snapshot = this.tryReadSnapshot(stage);
     if (!snapshot) {
       throw new InternalServerErrorException("Impossible de lire cette demande de stage.");

@@ -129,6 +129,9 @@ describe("StagesService", () => {
     service = module.get(StagesService);
   });
 
+  // Undoes the Logger spies even when an assertion fails before the end of a test.
+  afterEach(() => jest.restoreAllMocks());
+
   it("throws NotFoundException when the caller has no student profile", async () => {
     prisma.studentProfile.findUnique.mockResolvedValue(null);
 
@@ -524,7 +527,6 @@ describe("StagesService", () => {
       // No fallback to the live organism or periods.
       expect(result[1]).toMatchObject({ organismName: null, periods: [] });
       expect(logError).toHaveBeenCalledWith(expect.stringContaining("broken"), expect.anything());
-      logError.mockRestore();
     });
 
     it("serialises dates as ISO strings", async () => {
@@ -678,7 +680,6 @@ describe("StagesService", () => {
             expect.stringContaining("stage-1"),
             expect.anything(),
           );
-          logError.mockRestore();
         },
       );
     });
