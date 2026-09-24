@@ -13,6 +13,7 @@ const getReferentsMock = vi.fn();
 const assignReferentMock = vi.fn();
 const createReferentMock = vi.fn();
 const refuseStageRequestMock = vi.fn();
+const validateStageRequestMock = vi.fn();
 
 vi.mock("./api", () => ({
   getStageRequests: (...args: unknown[]) => getStageRequestsMock(...args),
@@ -21,6 +22,7 @@ vi.mock("./api", () => ({
   assignReferent: (...args: unknown[]) => assignReferentMock(...args),
   createReferent: (...args: unknown[]) => createReferentMock(...args),
   refuseStageRequest: (...args: unknown[]) => refuseStageRequestMock(...args),
+  validateStageRequest: (...args: unknown[]) => validateStageRequestMock(...args),
 }));
 
 vi.mock("../organisms/api", () => ({
@@ -130,6 +132,7 @@ describe("StageRequestsPage — issue #146", () => {
     assignReferentMock.mockReset();
     createReferentMock.mockReset();
     refuseStageRequestMock.mockReset();
+    validateStageRequestMock.mockReset();
     getStructureTypesMock.mockResolvedValue(STRUCTURE_TYPES);
     getReferentsMock.mockResolvedValue([referent]);
   });
@@ -897,6 +900,67 @@ describe("StageRequestsPage — issue #146", () => {
         await screen.findByText("Cette demande a été modifiée entre-temps. Rechargez la page."),
       ).toBeInTheDocument();
       await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    });
+  });
+
+  describe("Validate a request — issue #152", () => {
+    it("disables the validate button, with a hint, while the request has no referent", async () => {
+      getStageRequestsMock.mockResolvedValue([request({ referent: null })]);
+      renderPage();
+
+      const row = (await screen.findByText("Alice Martin")).closest("tr")!;
+      expect(within(row).getByRole("button", { name: "Valider" })).toBeDisabled();
+    });
+
+    it("validates on a single click, with no confirmation step", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([request({ referent, version: 3 })]);
+      validateStageRequestMock.mockResolvedValue({
+        id: "stage-1",
+        status: "VALIDATED",
+        decidedAt: "2026-09-24T10:00:00.000Z",
+      });
+      renderPage();
+
+      const row = (await screen.findByText("Alice Martin")).closest("tr")!;
+      const validateButton = within(row).getByRole("button", { name: "Valider" });
+      expect(validateButton).toBeEnabled();
+      await user.click(validateButton);
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      await waitFor(() =>
+        expect(validateStageRequestMock).toHaveBeenCalledWith("stage-1", { version: 3 }),
+      );
+      // Clicking the row's validate button must not also toggle the expand row.
+      expect(getStageRequestDetailMock).not.toHaveBeenCalled();
+    });
+
+    it("BR-09: shows a reload toast on a 409 conflict", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([request({ referent })]);
+      validateStageRequestMock.mockRejectedValue(new ApiError(409, "conflict"));
+      renderPage();
+
+      const row = (await screen.findByText("Alice Martin")).closest("tr")!;
+      await user.click(within(row).getByRole("button", { name: "Valider" }));
+
+      expect(
+        await screen.findByText("Cette demande a été modifiée entre-temps. Rechargez la page."),
+      ).toBeInTheDocument();
+    });
+
+    it("shows an inline error on a non-conflict failure", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([request({ referent })]);
+      validateStageRequestMock.mockRejectedValue(new Error("boom"));
+      renderPage();
+
+      const row = (await screen.findByText("Alice Martin")).closest("tr")!;
+      await user.click(within(row).getByRole("button", { name: "Valider" }));
+
+      expect(
+        await screen.findByText("Impossible de valider la demande, merci de réessayer."),
+      ).toBeInTheDocument();
     });
   });
 });

@@ -150,7 +150,13 @@ describe("AdminStageRequestsService.refuse — issue #151", () => {
           mandatory: true,
         },
       },
-      include: { referent: { include: { user: { select: { firstName: true, lastName: true } } } } },
+      // Shared with validate() (issue #152's findAssignedReferentOrThrow):
+      // email is always selected, even though refuse() itself never uses it.
+      include: {
+        referent: {
+          include: { user: { select: { firstName: true, lastName: true, email: true } } },
+        },
+      },
     });
   });
 
@@ -421,5 +427,212 @@ describe("AdminStageRequestsService.list — issue #149 (ADR-0014)", () => {
       ["mandatory", 1],
       ["optional", 0],
     ]);
+  });
+});
+
+const REFERENT_EMAIL = "referent@univ.fr";
+
+function validateAssignmentRow(overrides: Record<string, unknown> = {}) {
+  return {
+    referent: {
+      id: "referent-1",
+      user: { firstName: "Réf", lastName: "Erent", email: REFERENT_EMAIL },
+    },
+    ...overrides,
+  };
+}
+
+describe("AdminStageRequestsService.validate — issue #152", () => {
+  let service: AdminStageRequestsService;
+  let prisma: {
+    stage: { findUnique: jest.Mock; updateMany: jest.Mock };
+    referentAssignment: { findUnique: jest.Mock };
+    $transaction: jest.Mock;
+  };
+  let mailerService: { sendSafely: jest.Mock };
+
+  beforeEach(async () => {
+    prisma = {
+      stage: {
+        findUnique: jest.fn().mockResolvedValue(stageRow()),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      referentAssignment: { findUnique: jest.fn().mockResolvedValue(validateAssignmentRow()) },
+      $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(prisma)),
+    };
+    mailerService = { sendSafely: jest.fn().mockResolvedValue(undefined) };
+
+    const module = await Test.createTestingModule({
+      providers: [
+        AdminStageRequestsService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: MailerService, useValue: mailerService },
+      ],
+    }).compile();
+
+    service = module.get(AdminStageRequestsService);
+  });
+
+  it("404s when the stage does not exist", async () => {
+    prisma.stage.findUnique.mockResolvedValue(null);
+
+    await expect(service.validate(STAGE_ID, { version: 0 }, ADMIN)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(prisma.stage.updateMany).not.toHaveBeenCalled();
+  });
+
+  it.each(["DRAFT", "VALIDATED", "REFUSED"])(
+    "rejects with a conflict when the stage is %s, not PENDING",
+    async (status) => {
+      prisma.stage.findUnique.mockResolvedValue(stageRow({ status }));
+
+      await expect(service.validate(STAGE_ID, { version: 0 }, ADMIN)).rejects.toMatchObject({
+        response: expect.objectContaining({ code: "STAGE_NOT_PENDING" }),
+      });
+      expect(prisma.stage.updateMany).not.toHaveBeenCalled();
+    },
+  );
+
+  it("BR-03: rejects with a conflict when no referent is assigned for the stage's exact tuple", async () => {
+    prisma.referentAssignment.findUnique.mockResolvedValue(null);
+
+    await expect(service.validate(STAGE_ID, { version: 0 }, ADMIN)).rejects.toMatchObject({
+      response: expect.objectContaining({ code: "STAGE_NO_REFERENT" }),
+    });
+    expect(prisma.stage.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("BR-03: looks up the referent by the stage's exact (student, schoolYear, semester, mandatory) tuple", async () => {
+    await service.validate(STAGE_ID, { version: 0 }, ADMIN);
+
+    expect(prisma.referentAssignment.findUnique).toHaveBeenCalledWith({
+      where: {
+        studentId_schoolYear_semester_mandatory: {
+          studentId: "profile-1",
+          schoolYear: "2025-2026",
+          semester: "S1",
+          mandatory: true,
+        },
+      },
+      include: {
+        referent: {
+          include: { user: { select: { firstName: true, lastName: true, email: true } } },
+        },
+      },
+    });
+  });
+
+  describe("BR-09: optimistic locking", () => {
+    it("writes conditionally on the version it was given, and bumps it", async () => {
+      await service.validate(STAGE_ID, { version: 3 }, ADMIN);
+
+      expect(prisma.stage.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: STAGE_ID, status: "PENDING", version: 3 },
+          data: expect.objectContaining({ status: "VALIDATED", version: { increment: 1 } }),
+        }),
+      );
+    });
+
+    it("rejects with a version-conflict code when the write matches zero rows (stale version)", async () => {
+      prisma.stage.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(service.validate(STAGE_ID, { version: 0 }, ADMIN)).rejects.toMatchObject({
+        response: expect.objectContaining({ code: "STAGE_VERSION_CONFLICT" }),
+      });
+      expect(mailerService.sendSafely).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("BR-08: snapshot construction (ADR-0033)", () => {
+    it("freezes the same snapshot shape as refusal, with the non-null referent and the student's promotion at decision time", async () => {
+      await service.validate(STAGE_ID, { version: 0 }, ADMIN);
+
+      const { data } = prisma.stage.updateMany.mock.calls[0][0];
+      expect(data.status).toBe("VALIDATED");
+      expect(data.refusalReason).toBeUndefined();
+      expect(data.snapshotVersion).toBe(1);
+      expect(data.decidedAt).toBeInstanceOf(Date);
+      expect(data.snapshot).toEqual({
+        organism: organism(),
+        tutor: tutor(),
+        service: "Cardiologie",
+        projectType: "Handicap moteur",
+        motivation: "Motivation détaillée.",
+        schoolYear: "2025-2026",
+        semester: "S1",
+        mandatory: true,
+        periods: [
+          {
+            id: "period-1",
+            startDate: "2025-10-01T00:00:00.000Z",
+            endDate: "2025-10-15T00:00:00.000Z",
+          },
+        ],
+        referent: { id: "referent-1", firstName: "Réf", lastName: "Erent" },
+        promotion: "L2",
+        decidedAt: data.decidedAt.toISOString(),
+        decidedBy: { ...ADMIN, title: "responsable de stages L2 et L3 APA-S" },
+      });
+    });
+
+    it("throws instead of writing when a PENDING invariant is somehow violated (missing service)", async () => {
+      prisma.stage.findUnique.mockResolvedValue(stageRow({ service: null }));
+
+      await expect(service.validate(STAGE_ID, { version: 0 }, ADMIN)).rejects.toThrow(
+        /has no submittedAt, organism, tutor, promotion, service/,
+      );
+      expect(prisma.stage.updateMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("BR-07/BR-11: validation email", () => {
+    it("cc's only the referent, visibly, when no personal address is on file", async () => {
+      await service.validate(STAGE_ID, { version: 0 }, ADMIN);
+
+      expect(mailerService.sendSafely).toHaveBeenCalledTimes(1);
+      const input = mailerService.sendSafely.mock.calls[0][0];
+      expect(input.to).toEqual({ email: UNIVERSITY_EMAIL });
+      expect(input.cc).toEqual([{ email: REFERENT_EMAIL }]);
+    });
+
+    it("cc's both the personal address and the referent, visibly, when a personal address is on file", async () => {
+      prisma.stage.findUnique.mockResolvedValue(
+        stageRow({ student: student({ personalEmail: PERSONAL_EMAIL }) }),
+      );
+
+      await service.validate(STAGE_ID, { version: 0 }, ADMIN);
+
+      const input = mailerService.sendSafely.mock.calls[0][0];
+      expect(input.to).toEqual({ email: UNIVERSITY_EMAIL });
+      expect(input.cc).toEqual([{ email: PERSONAL_EMAIL }, { email: REFERENT_EMAIL }]);
+    });
+
+    it("names the acting admin as NOM Prénom, <function> in the body, and mentions the organism", async () => {
+      await service.validate(STAGE_ID, { version: 0 }, ADMIN);
+
+      const input = mailerService.sendSafely.mock.calls[0][0];
+      expect(input.subject).toBe("Votre demande de stage a été validée");
+      expect(input.text).toContain("MARTIN Jean, responsable de stages L2 et L3 APA-S");
+      expect(input.text).toContain("Hôpital Cochin");
+    });
+
+    it("signs the email with NOM Prénom alone (no function in the signature)", async () => {
+      await service.validate(STAGE_ID, { version: 0 }, ADMIN);
+
+      const input = mailerService.sendSafely.mock.calls[0][0];
+      expect(input.text).toMatch(/Cordialement,\nMARTIN Jean$/);
+    });
+  });
+
+  it("returns the validated stage's id, status, and decidedAt", async () => {
+    const result = await service.validate(STAGE_ID, { version: 0 }, ADMIN);
+
+    expect(result).toEqual({
+      id: STAGE_ID,
+      status: "VALIDATED",
+      decidedAt: expect.any(String),
+    });
   });
 });

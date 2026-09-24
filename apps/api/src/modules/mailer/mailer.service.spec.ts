@@ -66,6 +66,37 @@ describe("MailerService — ADR-0026: Scaleway Transactional Email", () => {
     });
   });
 
+  it("sends every recipient in a cc array (issue #152: personal address + referent, both visible)", async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 202, text: async () => "" });
+
+    await service.send({
+      to: { email: "etudiant@etu.u-paris.fr" },
+      cc: [{ email: "perso@example.com" }, { email: "referent@univ.fr" }],
+      subject: "Votre demande de stage a été validée",
+      text: "Texte",
+    });
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init.body).cc).toEqual([
+      { email: "perso@example.com" },
+      { email: "referent@univ.fr" },
+    ]);
+  });
+
+  it("omits cc entirely when given an empty cc array", async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 202, text: async () => "" });
+
+    await service.send({
+      to: { email: "etudiant@etu.u-paris.fr" },
+      cc: [],
+      subject: "Votre profil a été validé",
+      text: "Votre certificat d'assurance a été validé.",
+    });
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init.body).cc).toBeUndefined();
+  });
+
   it("omits cc entirely when no cc recipient is given", async () => {
     fetchMock.mockResolvedValue({ ok: true, status: 202, text: async () => "" });
 
