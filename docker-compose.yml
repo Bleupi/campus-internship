@@ -14,12 +14,13 @@ services:
       - postgres-data:/var/lib/postgresql/data
 
   minio:
-    # quay.io, not Docker Hub: MinIO pulled its images from Docker Hub in
-    # September 2026 (Docker Hub now 401s "pull access denied" for
-    # minio/minio, which reads like a credentials issue but the repo is
-    # simply gone). quay.io/minio/minio is MinIO's current official
-    # distribution — same tags, no version change.
-    image: quay.io/minio/minio:latest
+    # Chainguard's MinIO build, not MinIO's own images: MinIO removed
+    # minio/minio from Docker Hub, then locked quay.io/minio/minio too, in
+    # September 2026 (both now 401 — reads like a credentials issue but the
+    # images are simply no longer public). cgr.dev/chainguard/minio is a
+    # free, daily-rebuilt build of the same binary (same `server` CLI and
+    # env vars); only `latest` is free. It runs as nonroot (uid 65532).
+    image: cgr.dev/chainguard/minio:latest
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
