@@ -13,6 +13,8 @@ const filterReferents = createFilterOptions<ReferentListItem>();
 // referents, sorted by last name (no workload hint, #144). Issue #150: the
 // last option, always offered whatever is typed, opens the "add a referent"
 // form (prototype-derived, prototype/admin-stage-requests's ReferentSelect).
+// No openOnFocus: MUI refocuses the input right after a pick (and the dialog
+// hands focus back on close), which would reopen the list behind the form.
 export function ReferentSelect({
   referents,
   value,
@@ -35,7 +37,6 @@ export function ReferentSelect({
       value={value}
       disabled={disabled}
       loading={loading}
-      openOnFocus
       getOptionLabel={(option) =>
         isAddOption(option) ? "" : `${option.firstName} ${option.lastName}`
       }
@@ -45,7 +46,7 @@ export function ReferentSelect({
         const { key, ...rest } = props as typeof props & { key: string };
         return isAddOption(option) ? (
           <Box component="li" key={key} {...rest} sx={{ fontWeight: 600, color: "primary.main" }}>
-            + Ajouter un référent…
+            Ajouter un référent
           </Box>
         ) : (
           <li key={key} {...rest}>

@@ -380,7 +380,7 @@ describe("StageRequestsPage — issue #146", () => {
     async function openAddDialog(user: ReturnType<typeof userEvent.setup>) {
       const row = (await screen.findByText("Alice Martin")).closest("tr")!;
       await user.click(within(row).getByRole("combobox"));
-      await user.click(await screen.findByRole("option", { name: "+ Ajouter un référent…" }));
+      await user.click(await screen.findByRole("option", { name: "Ajouter un référent" }));
       return screen.findByRole("dialog", { name: "Ajouter un référent" });
     }
 
@@ -396,6 +396,28 @@ describe("StageRequestsPage — issue #146", () => {
       expect(within(dialog).getByLabelText("Nom")).toBeInTheDocument();
       expect(within(dialog).getByLabelText("Email")).toBeInTheDocument();
       expect(assignReferentMock).not.toHaveBeenCalled();
+    });
+
+    it("closes the picker's dropdown once the 'add a referent' form is open", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([request({ referent: null })]);
+      renderPage();
+
+      await openAddDialog(user);
+
+      expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    });
+
+    it("keeps the picker's dropdown closed when the 'add a referent' form is cancelled", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([request({ referent: null })]);
+      renderPage();
+
+      const dialog = await openAddDialog(user);
+      await user.click(within(dialog).getByRole("button", { name: "Annuler" }));
+
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
     });
 
     it("validates the form against the shared schema: nothing is sent while it is invalid", async () => {
