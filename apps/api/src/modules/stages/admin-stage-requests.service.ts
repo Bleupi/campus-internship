@@ -292,7 +292,7 @@ export class AdminStageRequestsService {
     };
   }
 
-  // Shared by refuse() and validate() (issues #151/#152): the exact-tuple
+  // Shared by refuseStage() and validateStage() (issues #151/#152): the exact-tuple
   // fetch, not-found/not-PENDING checks and referent assignment lookup are
   // identical for both decisions — only the target status, whether a
   // `reason` exists, and the notification differ. Extracted after both
@@ -324,12 +324,12 @@ export class AdminStageRequestsService {
     return stage;
   }
 
-  // BR-03: the referent frozen into the snapshot (and, for validate(),
+  // BR-03: the referent frozen into the snapshot (and, for validateStage(),
   // cc'd on the email) is the one assigned for the stage's exact (student,
   // schoolYear, semester, mandatory) tuple — a referent assigned for the
   // other `mandatory` value never satisfies it. Always selects the
-  // referent's email: refuse() doesn't use it, but selecting one extra
-  // column is cheaper than a second query shape for validate().
+  // referent's email: refuseStage() doesn't use it, but selecting one extra
+  // column is cheaper than a second query shape for validateStage().
   private async findAssignedReferentOrThrow(
     stage: { studentId: string; schoolYear: string; semester: "S1" | "S2"; mandatory: boolean },
     noReferentMessage: string,
@@ -360,7 +360,7 @@ export class AdminStageRequestsService {
   // exists at decision time (decidedAt, decidedBy, promotion). Parsed here
   // too (not just assumed), so a snapshot this write can't read back fails
   // at write time instead of freezing a corrupt document. Shared by
-  // refuse() and validate(): identical shape either way (BR-08).
+  // refuseStage() and validateStage(): identical shape either way (BR-08).
   private buildDecisionSnapshot(params: {
     stage: { schoolYear: string; semester: "S1" | "S2"; mandatory: boolean };
     service: string;
@@ -416,7 +416,7 @@ export class AdminStageRequestsService {
   // Issue #151 (BR-03, BR-08, BR-09): PENDING -> REFUSED. Freezes an
   // immutable snapshot, requires the referent assigned for the stage's exact
   // tuple, and matches the version it was read at before writing.
-  async refuse(
+  async refuseStage(
     id: string,
     dto: RefuseStageRequest,
     admin: ActingAdmin,
@@ -491,10 +491,10 @@ export class AdminStageRequestsService {
   }
 
   // Issue #152 (BR-03, BR-08, BR-09): PENDING -> VALIDATED. Same snapshot
-  // shape and preconditions as refuse() above (ADR-0033) — the only
+  // shape and preconditions as refuseStage() above (ADR-0033) — the only
   // differences are the target status, no `reason`, and the notification
   // email additionally cc'ing the referent (BR-07).
-  async validate(
+  async validateStage(
     id: string,
     dto: ValidateStageRequest,
     admin: ActingAdmin,
@@ -508,7 +508,7 @@ export class AdminStageRequestsService {
       "Un référent doit être assigné avant de valider cette demande",
     );
 
-    // Same invariant as refuse() above: a PENDING stage was submitted, its
+    // Same invariant as refuseStage() above: a PENDING stage was submitted, its
     // organism/tutor were resolved, its request was complete (BR-02), and
     // its student's profile was VALID at submission (promotion set,
     // students.service.ts, never cleared afterward).

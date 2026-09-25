@@ -20,6 +20,14 @@ export interface EmailRecipient {
   name?: string;
 }
 
+// Normalizes SendEmailInput.cc's three accepted shapes (absent, one
+// recipient, several) into a plain array, so send() itself only deals with
+// one shape.
+function normalizeCc(cc: SendEmailInput["cc"]): EmailRecipient[] {
+  if (cc === undefined) return [];
+  return Array.isArray(cc) ? cc : [cc];
+}
+
 export interface SendEmailInput {
   to: EmailRecipient;
   // A single recipient for the common case (personal-address cc), or several
@@ -59,7 +67,7 @@ export class MailerService {
   }
 
   async send(input: SendEmailInput): Promise<void> {
-    const cc = input.cc === undefined ? [] : Array.isArray(input.cc) ? input.cc : [input.cc];
+    const cc = normalizeCc(input.cc);
     const response = await fetch(SCALEWAY_TEM_ENDPOINT, {
       method: "POST",
       headers: {

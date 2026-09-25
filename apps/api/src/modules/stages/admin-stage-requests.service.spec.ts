@@ -112,7 +112,7 @@ describe("AdminStageRequestsService.refuse — issue #151", () => {
     prisma.stage.findUnique.mockResolvedValue(null);
 
     await expect(
-      service.refuse(STAGE_ID, { version: 0, reason: "Motif" }, ADMIN),
+      service.refuseStage(STAGE_ID, { version: 0, reason: "Motif" }, ADMIN),
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(prisma.stage.updateMany).not.toHaveBeenCalled();
   });
@@ -123,7 +123,7 @@ describe("AdminStageRequestsService.refuse — issue #151", () => {
       prisma.stage.findUnique.mockResolvedValue(stageRow({ status }));
 
       await expect(
-        service.refuse(STAGE_ID, { version: 0, reason: "Motif" }, ADMIN),
+        service.refuseStage(STAGE_ID, { version: 0, reason: "Motif" }, ADMIN),
       ).rejects.toMatchObject({ response: expect.objectContaining({ code: "STAGE_NOT_PENDING" }) });
       expect(prisma.stage.updateMany).not.toHaveBeenCalled();
     },
@@ -133,13 +133,13 @@ describe("AdminStageRequestsService.refuse — issue #151", () => {
     prisma.referentAssignment.findUnique.mockResolvedValue(null);
 
     await expect(
-      service.refuse(STAGE_ID, { version: 0, reason: "Motif" }, ADMIN),
+      service.refuseStage(STAGE_ID, { version: 0, reason: "Motif" }, ADMIN),
     ).rejects.toMatchObject({ response: expect.objectContaining({ code: "STAGE_NO_REFERENT" }) });
     expect(prisma.stage.updateMany).not.toHaveBeenCalled();
   });
 
   it("BR-03: looks up the referent by the stage's exact (student, schoolYear, semester, mandatory) tuple", async () => {
-    await service.refuse(STAGE_ID, { version: 0, reason: "Motif" }, ADMIN);
+    await service.refuseStage(STAGE_ID, { version: 0, reason: "Motif" }, ADMIN);
 
     expect(prisma.referentAssignment.findUnique).toHaveBeenCalledWith({
       where: {
@@ -150,8 +150,8 @@ describe("AdminStageRequestsService.refuse — issue #151", () => {
           mandatory: true,
         },
       },
-      // Shared with validate() (issue #152's findAssignedReferentOrThrow):
-      // email is always selected, even though refuse() itself never uses it.
+      // Shared with validateStage() (issue #152's findAssignedReferentOrThrow):
+      // email is always selected, even though refuseStage() itself never uses it.
       include: {
         referent: {
           include: { user: { select: { firstName: true, lastName: true, email: true } } },
@@ -162,7 +162,7 @@ describe("AdminStageRequestsService.refuse — issue #151", () => {
 
   describe("BR-09: optimistic locking", () => {
     it("writes conditionally on the version it was given, and bumps it", async () => {
-      await service.refuse(STAGE_ID, { version: 3, reason: "Motif" }, ADMIN);
+      await service.refuseStage(STAGE_ID, { version: 3, reason: "Motif" }, ADMIN);
 
       expect(prisma.stage.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -176,7 +176,7 @@ describe("AdminStageRequestsService.refuse — issue #151", () => {
       prisma.stage.updateMany.mockResolvedValue({ count: 0 });
 
       await expect(
-        service.refuse(STAGE_ID, { version: 0, reason: "Motif" }, ADMIN),
+        service.refuseStage(STAGE_ID, { version: 0, reason: "Motif" }, ADMIN),
       ).rejects.toMatchObject({
         response: expect.objectContaining({ code: "STAGE_VERSION_CONFLICT" }),
       });
@@ -186,7 +186,7 @@ describe("AdminStageRequestsService.refuse — issue #151", () => {
 
   describe("BR-08: snapshot construction (ADR-0033)", () => {
     it("freezes a snapshot with the non-null referent and the student's promotion at decision time", async () => {
-      await service.refuse(STAGE_ID, { version: 0, reason: "Adresse incomplète" }, ADMIN);
+      await service.refuseStage(STAGE_ID, { version: 0, reason: "Adresse incomplète" }, ADMIN);
 
       const { data } = prisma.stage.updateMany.mock.calls[0][0];
       expect(data.status).toBe("REFUSED");
@@ -217,7 +217,7 @@ describe("AdminStageRequestsService.refuse — issue #151", () => {
     });
 
     it("ADR-0033: never duplicates refusalReason or submittedAt inside the snapshot — they stay live Stage columns", async () => {
-      await service.refuse(STAGE_ID, { version: 0, reason: "Adresse incomplète" }, ADMIN);
+      await service.refuseStage(STAGE_ID, { version: 0, reason: "Adresse incomplète" }, ADMIN);
 
       const { data } = prisma.stage.updateMany.mock.calls[0][0];
       expect(data.snapshot).not.toHaveProperty("refusalReason");
@@ -229,7 +229,7 @@ describe("AdminStageRequestsService.refuse — issue #151", () => {
       prisma.stage.findUnique.mockResolvedValue(stageRow({ service: null }));
 
       await expect(
-        service.refuse(STAGE_ID, { version: 0, reason: "Motif" }, ADMIN),
+        service.refuseStage(STAGE_ID, { version: 0, reason: "Motif" }, ADMIN),
       ).rejects.toThrow(/has no submittedAt, organism, tutor, promotion, service/);
       expect(prisma.stage.updateMany).not.toHaveBeenCalled();
     });
@@ -237,7 +237,7 @@ describe("AdminStageRequestsService.refuse — issue #151", () => {
 
   describe("BR-07/BR-11: refusal email", () => {
     it("emails the university address only, no cc, when no personal address is on file", async () => {
-      await service.refuse(STAGE_ID, { version: 0, reason: "Motif" }, ADMIN);
+      await service.refuseStage(STAGE_ID, { version: 0, reason: "Motif" }, ADMIN);
 
       expect(mailerService.sendSafely).toHaveBeenCalledTimes(1);
       const input = mailerService.sendSafely.mock.calls[0][0];
@@ -250,7 +250,7 @@ describe("AdminStageRequestsService.refuse — issue #151", () => {
         stageRow({ student: student({ personalEmail: PERSONAL_EMAIL }) }),
       );
 
-      await service.refuse(STAGE_ID, { version: 0, reason: "Motif" }, ADMIN);
+      await service.refuseStage(STAGE_ID, { version: 0, reason: "Motif" }, ADMIN);
 
       const input = mailerService.sendSafely.mock.calls[0][0];
       expect(input.to).toEqual({ email: UNIVERSITY_EMAIL });
@@ -258,7 +258,7 @@ describe("AdminStageRequestsService.refuse — issue #151", () => {
     });
 
     it("names the acting admin as NOM Prénom, <function> in the body, and includes the refusal reason", async () => {
-      await service.refuse(STAGE_ID, { version: 0, reason: "Adresse incomplète" }, ADMIN);
+      await service.refuseStage(STAGE_ID, { version: 0, reason: "Adresse incomplète" }, ADMIN);
 
       const input = mailerService.sendSafely.mock.calls[0][0];
       expect(input.text).toContain("MARTIN Jean, responsable de stages L2 et L3 APA-S");
@@ -266,7 +266,7 @@ describe("AdminStageRequestsService.refuse — issue #151", () => {
     });
 
     it("signs the email with NOM Prénom alone (no function in the signature)", async () => {
-      await service.refuse(STAGE_ID, { version: 0, reason: "Motif" }, ADMIN);
+      await service.refuseStage(STAGE_ID, { version: 0, reason: "Motif" }, ADMIN);
 
       const input = mailerService.sendSafely.mock.calls[0][0];
       expect(input.text).toMatch(/Cordialement,\nMARTIN Jean$/);
@@ -274,7 +274,7 @@ describe("AdminStageRequestsService.refuse — issue #151", () => {
   });
 
   it("returns the refused stage's id, status, and decidedAt", async () => {
-    const result = await service.refuse(STAGE_ID, { version: 0, reason: "Motif" }, ADMIN);
+    const result = await service.refuseStage(STAGE_ID, { version: 0, reason: "Motif" }, ADMIN);
 
     expect(result).toEqual({
       id: STAGE_ID,
@@ -476,7 +476,7 @@ describe("AdminStageRequestsService.validate — issue #152", () => {
   it("404s when the stage does not exist", async () => {
     prisma.stage.findUnique.mockResolvedValue(null);
 
-    await expect(service.validate(STAGE_ID, { version: 0 }, ADMIN)).rejects.toBeInstanceOf(
+    await expect(service.validateStage(STAGE_ID, { version: 0 }, ADMIN)).rejects.toBeInstanceOf(
       NotFoundException,
     );
     expect(prisma.stage.updateMany).not.toHaveBeenCalled();
@@ -487,7 +487,7 @@ describe("AdminStageRequestsService.validate — issue #152", () => {
     async (status) => {
       prisma.stage.findUnique.mockResolvedValue(stageRow({ status }));
 
-      await expect(service.validate(STAGE_ID, { version: 0 }, ADMIN)).rejects.toMatchObject({
+      await expect(service.validateStage(STAGE_ID, { version: 0 }, ADMIN)).rejects.toMatchObject({
         response: expect.objectContaining({ code: "STAGE_NOT_PENDING" }),
       });
       expect(prisma.stage.updateMany).not.toHaveBeenCalled();
@@ -497,14 +497,14 @@ describe("AdminStageRequestsService.validate — issue #152", () => {
   it("BR-03: rejects with a conflict when no referent is assigned for the stage's exact tuple", async () => {
     prisma.referentAssignment.findUnique.mockResolvedValue(null);
 
-    await expect(service.validate(STAGE_ID, { version: 0 }, ADMIN)).rejects.toMatchObject({
+    await expect(service.validateStage(STAGE_ID, { version: 0 }, ADMIN)).rejects.toMatchObject({
       response: expect.objectContaining({ code: "STAGE_NO_REFERENT" }),
     });
     expect(prisma.stage.updateMany).not.toHaveBeenCalled();
   });
 
   it("BR-03: looks up the referent by the stage's exact (student, schoolYear, semester, mandatory) tuple", async () => {
-    await service.validate(STAGE_ID, { version: 0 }, ADMIN);
+    await service.validateStage(STAGE_ID, { version: 0 }, ADMIN);
 
     expect(prisma.referentAssignment.findUnique).toHaveBeenCalledWith({
       where: {
@@ -525,7 +525,7 @@ describe("AdminStageRequestsService.validate — issue #152", () => {
 
   describe("BR-09: optimistic locking", () => {
     it("writes conditionally on the version it was given, and bumps it", async () => {
-      await service.validate(STAGE_ID, { version: 3 }, ADMIN);
+      await service.validateStage(STAGE_ID, { version: 3 }, ADMIN);
 
       expect(prisma.stage.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -538,7 +538,7 @@ describe("AdminStageRequestsService.validate — issue #152", () => {
     it("rejects with a version-conflict code when the write matches zero rows (stale version)", async () => {
       prisma.stage.updateMany.mockResolvedValue({ count: 0 });
 
-      await expect(service.validate(STAGE_ID, { version: 0 }, ADMIN)).rejects.toMatchObject({
+      await expect(service.validateStage(STAGE_ID, { version: 0 }, ADMIN)).rejects.toMatchObject({
         response: expect.objectContaining({ code: "STAGE_VERSION_CONFLICT" }),
       });
       expect(mailerService.sendSafely).not.toHaveBeenCalled();
@@ -547,7 +547,7 @@ describe("AdminStageRequestsService.validate — issue #152", () => {
 
   describe("BR-08: snapshot construction (ADR-0033)", () => {
     it("freezes the same snapshot shape as refusal, with the non-null referent and the student's promotion at decision time", async () => {
-      await service.validate(STAGE_ID, { version: 0 }, ADMIN);
+      await service.validateStage(STAGE_ID, { version: 0 }, ADMIN);
 
       const { data } = prisma.stage.updateMany.mock.calls[0][0];
       expect(data.status).toBe("VALIDATED");
@@ -580,7 +580,7 @@ describe("AdminStageRequestsService.validate — issue #152", () => {
     it("throws instead of writing when a PENDING invariant is somehow violated (missing service)", async () => {
       prisma.stage.findUnique.mockResolvedValue(stageRow({ service: null }));
 
-      await expect(service.validate(STAGE_ID, { version: 0 }, ADMIN)).rejects.toThrow(
+      await expect(service.validateStage(STAGE_ID, { version: 0 }, ADMIN)).rejects.toThrow(
         /has no submittedAt, organism, tutor, promotion, service/,
       );
       expect(prisma.stage.updateMany).not.toHaveBeenCalled();
@@ -589,7 +589,7 @@ describe("AdminStageRequestsService.validate — issue #152", () => {
 
   describe("BR-07/BR-11: validation email", () => {
     it("cc's only the referent, visibly, when no personal address is on file", async () => {
-      await service.validate(STAGE_ID, { version: 0 }, ADMIN);
+      await service.validateStage(STAGE_ID, { version: 0 }, ADMIN);
 
       expect(mailerService.sendSafely).toHaveBeenCalledTimes(1);
       const input = mailerService.sendSafely.mock.calls[0][0];
@@ -602,7 +602,7 @@ describe("AdminStageRequestsService.validate — issue #152", () => {
         stageRow({ student: student({ personalEmail: PERSONAL_EMAIL }) }),
       );
 
-      await service.validate(STAGE_ID, { version: 0 }, ADMIN);
+      await service.validateStage(STAGE_ID, { version: 0 }, ADMIN);
 
       const input = mailerService.sendSafely.mock.calls[0][0];
       expect(input.to).toEqual({ email: UNIVERSITY_EMAIL });
@@ -610,7 +610,7 @@ describe("AdminStageRequestsService.validate — issue #152", () => {
     });
 
     it("names the acting admin as NOM Prénom, <function> in the body, and mentions the organism", async () => {
-      await service.validate(STAGE_ID, { version: 0 }, ADMIN);
+      await service.validateStage(STAGE_ID, { version: 0 }, ADMIN);
 
       const input = mailerService.sendSafely.mock.calls[0][0];
       expect(input.subject).toBe("Votre demande de stage a été validée");
@@ -619,7 +619,7 @@ describe("AdminStageRequestsService.validate — issue #152", () => {
     });
 
     it("signs the email with NOM Prénom alone (no function in the signature)", async () => {
-      await service.validate(STAGE_ID, { version: 0 }, ADMIN);
+      await service.validateStage(STAGE_ID, { version: 0 }, ADMIN);
 
       const input = mailerService.sendSafely.mock.calls[0][0];
       expect(input.text).toMatch(/Cordialement,\nMARTIN Jean$/);
@@ -627,7 +627,7 @@ describe("AdminStageRequestsService.validate — issue #152", () => {
   });
 
   it("returns the validated stage's id, status, and decidedAt", async () => {
-    const result = await service.validate(STAGE_ID, { version: 0 }, ADMIN);
+    const result = await service.validateStage(STAGE_ID, { version: 0 }, ADMIN);
 
     expect(result).toEqual({
       id: STAGE_ID,

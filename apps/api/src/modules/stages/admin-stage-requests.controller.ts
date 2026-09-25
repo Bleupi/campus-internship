@@ -39,21 +39,21 @@ export class AdminStageRequestsController {
 
   // Issue #151 (BR-03, BR-08, BR-09): PENDING -> REFUSED.
   @Patch(":id/refuse")
-  refuse(
+  refuseStage(
     @Param("id") id: string,
     @Body(new ZodValidationPipe(refuseStageSchema)) dto: RefuseStageDto,
     @Req() req: Request,
   ) {
-    return this.adminStageRequestsService.refuse(id, dto, currentAdmin(req));
+    return this.adminStageRequestsService.refuseStage(id, dto, currentAdmin(req));
   }
 
   // Issue #152 (BR-03, BR-08, BR-09): PENDING -> VALIDATED.
   @Patch(":id/validate")
-  validate(
+  validateStage(
     @Param("id") id: string,
     @Body(new ZodValidationPipe(validateStageSchema)) dto: ValidateStageDto,
     @Req() req: Request,
   ) {
-    return this.adminStageRequestsService.validate(id, dto, currentAdmin(req));
+    return this.adminStageRequestsService.validateStage(id, dto, currentAdmin(req));
   }
 }

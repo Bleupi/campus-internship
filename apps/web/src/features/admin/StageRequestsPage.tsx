@@ -21,13 +21,11 @@ import {
   Typography,
 } from "@mui/material";
 import BlockOutlinedIcon from "@mui/icons-material/BlockOutlined";
-import CheckCircleOutlinedIcon from "@mui/icons-material/CheckCircleOutlined";
 import ExpandLessOutlinedIcon from "@mui/icons-material/ExpandLessOutlined";
 import ExpandMoreOutlinedIcon from "@mui/icons-material/ExpandMoreOutlined";
 import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
 import TaskAltOutlinedIcon from "@mui/icons-material/TaskAltOutlined";
 import type { AdminStageRequestListItem, ReferentListItem } from "shared";
-import { ApiError } from "../../lib/api-client";
 import { formatPeriodRange, mandatoryLabel } from "../stages/format-summary";
 import { AddReferentDialog } from "./AddReferentDialog";
 import { ReferentChangeImpactDialog } from "./ReferentChangeImpactDialog";
@@ -38,14 +36,13 @@ import { StructureTypeLabel } from "./StructureTypeLabel";
 import { useAssignReferent } from "./useAssignReferent";
 import { useReferents } from "./useReferents";
 import { useStageRequests } from "./useStageRequests";
-import { useValidateStageRequest } from "./useValidateStageRequest";
+import { ValidateStageButton } from "./ValidateStageButton";
 
 // The expanded detail row's colSpan is derived from this, so the two can
 // never drift apart (the last, unlabelled column holds the expand toggle).
 const COLUMNS = ["Étudiant", "Organisme", "Période", "Demande", "Référent", ""];
 const CONFLICT_TOAST_MESSAGE = "Cette demande a été modifiée entre-temps. Rechargez la page.";
 const NO_REFERENT_HINT_REFUSE = "Assignez d'abord un référent pour pouvoir refuser cette demande";
-const NO_REFERENT_HINT_VALIDATE = "Assignez d'abord un référent pour pouvoir valider cette demande";
 
 type TabKey = "all" | "withoutReferent" | "ready";
 
@@ -128,7 +125,6 @@ export function StageRequestsPage() {
   // student's other live requests. The picker stays on the current referent
   // meanwhile (it is controlled by the list data), so cancelling needs no undo.
   const [pendingAssignment, setPendingAssignment] = useState<PendingAssignment | null>(null);
-  const validateStageRequest = useValidateStageRequest();
   const [validateError, setValidateError] = useState(false);
 
   // Issue #148: single assignment on the request's exact tuple (ADR-0014).
@@ -154,22 +150,6 @@ export function StageRequestsPage() {
     if (pendingAssignment) applyAssignment(pendingAssignment);
     setPendingAssignment(null);
   };
-
-  // Issue #152: single click, no confirmation step. A 409 (stale version, or
-  // the request left PENDING in the meantime) shows the same reload toast as
-  // a refusal conflict; any other failure surfaces as an inline alert.
-  async function handleValidate(request: AdminStageRequestListItem) {
-    setValidateError(false);
-    try {
-      await validateStageRequest.mutateAsync({ id: request.id, version: request.version });
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 409) {
-        setToast(CONFLICT_TOAST_MESSAGE);
-      } else {
-        setValidateError(true);
-      }
-    }
-  }
 
   if (isLoading) {
     return <Typography sx={{ color: "text.secondary" }}>Chargement…</Typography>;
@@ -301,29 +281,12 @@ export function StageRequestsPage() {
                             onClick={(event) => event.stopPropagation()}
                           >
                             <Stack direction="row" spacing={0.5}>
-                              <Tooltip
-                                title={hasReferent(request) ? "Valider" : NO_REFERENT_HINT_VALIDATE}
-                              >
-                                <span>
-                                  <IconButton
-                                    size="small"
-                                    color="success"
-                                    aria-label="Valider"
-                                    // One shared mutation for the whole table (like
-                                    // assignReferent above): disabling on isPending
-                                    // alone, rather than per-row on `variables.id`,
-                                    // avoids a race where a second click's variables
-                                    // overwrite the first and re-enable its button
-                                    // while that first call is still in flight.
-                                    disabled={
-                                      !hasReferent(request) || validateStageRequest.isPending
-                                    }
-                                    onClick={() => handleValidate(request)}
-                                  >
-                                    <CheckCircleOutlinedIcon fontSize="small" />
-                                  </IconButton>
-                                </span>
-                              </Tooltip>
+                              <ValidateStageButton
+                                request={request}
+                                hasReferent={hasReferent(request)}
+                                onConflict={() => setToast(CONFLICT_TOAST_MESSAGE)}
+                                onErrorChange={setValidateError}
+                              />
                               <Tooltip
                                 title={hasReferent(request) ? "Refuser" : NO_REFERENT_HINT_REFUSE}
                               >
