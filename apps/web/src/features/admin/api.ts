@@ -10,6 +10,8 @@ import type {
   ReferentListResponse,
   RefuseStageRequest,
   RefuseStageResponse,
+  ValidateStageRequest,
+  ValidateStageResponse,
 } from "shared";
 import { apiClient } from "../../lib/api-client";
 
@@ -69,4 +71,9 @@ export function createReferent(payload: CreateReferentRequest) {
 // Issue #151 (BR-03, BR-08, BR-09): PENDING -> REFUSED.
 export function refuseStageRequest(id: string, payload: RefuseStageRequest) {
   return apiClient.patch<RefuseStageResponse>(`/admin/stage-requests/${id}/refuse`, payload);
+}
+
+// Issue #152 (BR-03, BR-08, BR-09): PENDING -> VALIDATED.
+export function validateStageRequest(id: string, payload: ValidateStageRequest) {
+  return apiClient.patch<ValidateStageResponse>(`/admin/stage-requests/${id}/validate`, payload);
 }

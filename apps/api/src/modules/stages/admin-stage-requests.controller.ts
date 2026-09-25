@@ -1,11 +1,12 @@
 import { Body, Controller, Get, Param, Patch, Req, UseGuards } from "@nestjs/common";
 import type { Request } from "express";
-import { refuseStageSchema, type AuthUser } from "shared";
+import { refuseStageSchema, validateStageSchema, type AuthUser } from "shared";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
 import { AdminStageRequestsService } from "./admin-stage-requests.service";
 import type { RefuseStageDto } from "./dto/refuse-stage.dto";
+import type { ValidateStageDto } from "./dto/validate-stage.dto";
 
 // req.user is populated by JwtStrategy.validate() (see jwt.strategy.ts),
 // shaped like AuthUser. BR-11's refusal email names whichever admin actually
@@ -38,11 +39,21 @@ export class AdminStageRequestsController {
 
   // Issue #151 (BR-03, BR-08, BR-09): PENDING -> REFUSED.
   @Patch(":id/refuse")
-  refuse(
+  refuseStage(
     @Param("id") id: string,
     @Body(new ZodValidationPipe(refuseStageSchema)) dto: RefuseStageDto,
     @Req() req: Request,
   ) {
-    return this.adminStageRequestsService.refuse(id, dto, currentAdmin(req));
+    return this.adminStageRequestsService.refuseStage(id, dto, currentAdmin(req));
+  }
+
+  // Issue #152 (BR-03, BR-08, BR-09): PENDING -> VALIDATED.
+  @Patch(":id/validate")
+  validateStage(
+    @Param("id") id: string,
+    @Body(new ZodValidationPipe(validateStageSchema)) dto: ValidateStageDto,
+    @Req() req: Request,
+  ) {
+    return this.adminStageRequestsService.validateStage(id, dto, currentAdmin(req));
   }
 }

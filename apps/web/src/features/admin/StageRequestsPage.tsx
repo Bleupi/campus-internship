@@ -36,12 +36,13 @@ import { StructureTypeLabel } from "./StructureTypeLabel";
 import { useAssignReferent } from "./useAssignReferent";
 import { useReferents } from "./useReferents";
 import { useStageRequests } from "./useStageRequests";
+import { ValidateStageButton } from "./ValidateStageButton";
 
 // The expanded detail row's colSpan is derived from this, so the two can
 // never drift apart (the last, unlabelled column holds the expand toggle).
 const COLUMNS = ["Étudiant", "Organisme", "Période", "Demande", "Référent", ""];
 const CONFLICT_TOAST_MESSAGE = "Cette demande a été modifiée entre-temps. Rechargez la page.";
-const NO_REFERENT_HINT = "Assignez d'abord un référent pour pouvoir refuser cette demande";
+const NO_REFERENT_HINT_REFUSE = "Assignez d'abord un référent pour pouvoir refuser cette demande";
 
 type TabKey = "all" | "withoutReferent" | "ready";
 
@@ -124,6 +125,7 @@ export function StageRequestsPage() {
   // student's other live requests. The picker stays on the current referent
   // meanwhile (it is controlled by the list data), so cancelling needs no undo.
   const [pendingAssignment, setPendingAssignment] = useState<PendingAssignment | null>(null);
+  const [validateError, setValidateError] = useState(false);
 
   // Issue #148: single assignment on the request's exact tuple (ADR-0014).
   const applyAssignment = ({ request, referent }: PendingAssignment) =>
@@ -173,6 +175,12 @@ export function StageRequestsPage() {
       {assignReferent.isError && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => assignReferent.reset()}>
           Impossible d'assigner le référent, merci de réessayer.
+        </Alert>
+      )}
+
+      {validateError && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setValidateError(false)}>
+          Impossible de valider la demande, merci de réessayer.
         </Alert>
       )}
 
@@ -269,24 +277,34 @@ export function StageRequestsPage() {
                             />
                           </TableCell>
                           <TableCell
-                            sx={{ width: 40 }}
+                            sx={{ width: 80 }}
                             onClick={(event) => event.stopPropagation()}
                           >
-                            <Tooltip title={hasReferent(request) ? "Refuser" : NO_REFERENT_HINT}>
-                              <span>
-                                <IconButton
-                                  size="small"
-                                  color="error"
-                                  aria-label="Refuser"
-                                  disabled={!hasReferent(request)}
-                                  onClick={() =>
-                                    setRefusing({ id: request.id, version: request.version })
-                                  }
-                                >
-                                  <BlockOutlinedIcon fontSize="small" />
-                                </IconButton>
-                              </span>
-                            </Tooltip>
+                            <Stack direction="row" spacing={0.5}>
+                              <ValidateStageButton
+                                request={request}
+                                hasReferent={hasReferent(request)}
+                                onConflict={() => setToast(CONFLICT_TOAST_MESSAGE)}
+                                onErrorChange={setValidateError}
+                              />
+                              <Tooltip
+                                title={hasReferent(request) ? "Refuser" : NO_REFERENT_HINT_REFUSE}
+                              >
+                                <span>
+                                  <IconButton
+                                    size="small"
+                                    color="error"
+                                    aria-label="Refuser"
+                                    disabled={!hasReferent(request)}
+                                    onClick={() =>
+                                      setRefusing({ id: request.id, version: request.version })
+                                    }
+                                  >
+                                    <BlockOutlinedIcon fontSize="small" />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                            </Stack>
                           </TableCell>
                           <TableCell sx={{ width: 40 }}>
                             <IconButton

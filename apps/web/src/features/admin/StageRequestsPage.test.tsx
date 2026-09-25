@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { focusManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../../lib/api-client";
@@ -13,6 +13,7 @@ const getReferentsMock = vi.fn();
 const assignReferentMock = vi.fn();
 const createReferentMock = vi.fn();
 const refuseStageRequestMock = vi.fn();
+const validateStageRequestMock = vi.fn();
 
 vi.mock("./api", () => ({
   getStageRequests: (...args: unknown[]) => getStageRequestsMock(...args),
@@ -21,6 +22,7 @@ vi.mock("./api", () => ({
   assignReferent: (...args: unknown[]) => assignReferentMock(...args),
   createReferent: (...args: unknown[]) => createReferentMock(...args),
   refuseStageRequest: (...args: unknown[]) => refuseStageRequestMock(...args),
+  validateStageRequest: (...args: unknown[]) => validateStageRequestMock(...args),
 }));
 
 vi.mock("../organisms/api", () => ({
@@ -130,6 +132,7 @@ describe("StageRequestsPage — issue #146", () => {
     assignReferentMock.mockReset();
     createReferentMock.mockReset();
     refuseStageRequestMock.mockReset();
+    validateStageRequestMock.mockReset();
     getStructureTypesMock.mockResolvedValue(STRUCTURE_TYPES);
     getReferentsMock.mockResolvedValue([referent]);
   });
@@ -897,6 +900,93 @@ describe("StageRequestsPage — issue #146", () => {
         await screen.findByText("Cette demande a été modifiée entre-temps. Rechargez la page."),
       ).toBeInTheDocument();
       await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    });
+  });
+
+  describe("Validate a request — issue #152", () => {
+    it("disables the validate button, with a hint, while the request has no referent", async () => {
+      getStageRequestsMock.mockResolvedValue([request({ referent: null })]);
+      renderPage();
+
+      const row = (await screen.findByText("Alice Martin")).closest("tr")!;
+      expect(within(row).getByRole("button", { name: "Valider" })).toBeDisabled();
+    });
+
+    it("validates on a single click, with no confirmation step", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([request({ referent, version: 3 })]);
+      validateStageRequestMock.mockResolvedValue({
+        id: "stage-1",
+        status: "VALIDATED",
+        decidedAt: "2026-09-24T10:00:00.000Z",
+      });
+      renderPage();
+
+      const row = (await screen.findByText("Alice Martin")).closest("tr")!;
+      const validateButton = within(row).getByRole("button", { name: "Valider" });
+      expect(validateButton).toBeEnabled();
+      await user.click(validateButton);
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      await waitFor(() =>
+        expect(validateStageRequestMock).toHaveBeenCalledWith("stage-1", { version: 3 }),
+      );
+      // Clicking the row's validate button must not also toggle the expand row.
+      expect(getStageRequestDetailMock).not.toHaveBeenCalled();
+    });
+
+    it("BR-09: shows a reload toast on a 409 conflict", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([request({ referent })]);
+      validateStageRequestMock.mockRejectedValue(new ApiError(409, "conflict"));
+      renderPage();
+
+      const row = (await screen.findByText("Alice Martin")).closest("tr")!;
+      await user.click(within(row).getByRole("button", { name: "Valider" }));
+
+      expect(
+        await screen.findByText("Cette demande a été modifiée entre-temps. Rechargez la page."),
+      ).toBeInTheDocument();
+    });
+
+    it("shows an inline error on a non-conflict failure", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([request({ referent })]);
+      validateStageRequestMock.mockRejectedValue(new Error("boom"));
+      renderPage();
+
+      const row = (await screen.findByText("Alice Martin")).closest("tr")!;
+      await user.click(within(row).getByRole("button", { name: "Valider" }));
+
+      expect(
+        await screen.findByText("Impossible de valider la demande, merci de réessayer."),
+      ).toBeInTheDocument();
+    });
+  });
+
+  describe("BR-09: the version stays what the admin read, not whatever a background refetch last synced", () => {
+    it("does not refetch the list on window refocus, so a version already read can't be silently replaced before a decision", async () => {
+      getStageRequestsMock.mockResolvedValue([request({ referent, version: 1 })]);
+      renderPage();
+
+      await screen.findByText("Alice Martin");
+      expect(getStageRequestsMock).toHaveBeenCalledTimes(1);
+
+      // Mirrors the PR #170 QA repro: the admin switches away (e.g. to a DB
+      // tool) and back to the tab. TanStack Query's default
+      // refetchOnWindowFocus would silently pull a newer version into the
+      // cache right here, before the admin ever clicks Valider/Refuser —
+      // defeating BR-09's "unchanged since read" guarantee without any
+      // visible sign to the admin that the row moved.
+      try {
+        focusManager.setFocused(false);
+        focusManager.setFocused(true);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(getStageRequestsMock).toHaveBeenCalledTimes(1);
+      } finally {
+        focusManager.setFocused(undefined);
+      }
     });
   });
 });

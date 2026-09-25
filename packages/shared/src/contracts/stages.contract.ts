@@ -3,6 +3,7 @@ import type { Promotion, Semester, StageStatus } from "../enums";
 import type { createStageDraftSchema } from "../schemas/create-stage-draft.schema";
 import type { refuseStageSchema } from "../schemas/refuse-stage.schema";
 import type { updateStageDraftSchema } from "../schemas/update-stage-draft.schema";
+import type { validateStageSchema } from "../schemas/validate-stage.schema";
 
 export type CreateStageDraftRequest = z.infer<typeof createStageDraftSchema>;
 export type UpdateStageDraftRequest = z.infer<typeof updateStageDraftSchema>;
@@ -204,5 +205,15 @@ export type RefuseStageRequest = z.infer<typeof refuseStageSchema>;
 export interface RefuseStageResponse {
   id: string;
   status: "REFUSED";
+  decidedAt: string;
+}
+
+// Issue #152 (BR-08, BR-09): the wire request/response for validating a
+// stage. Same frozen-snapshot shape as refusal (ADR-0033), but no `reason`.
+export type ValidateStageRequest = z.infer<typeof validateStageSchema>;
+
+export interface ValidateStageResponse {
+  id: string;
+  status: "VALIDATED";
   decidedAt: string;
 }
