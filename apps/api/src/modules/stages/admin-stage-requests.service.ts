@@ -7,6 +7,7 @@ import {
 } from "@nestjs/common";
 import {
   STAGE_CONFLICT_CODES,
+  type AdminPreviousMandatoryStage,
   type AdminStageRequestDetailResponse,
   type AdminStageRequestListResponse,
   type RefuseStageRequest,
@@ -175,7 +176,7 @@ export class AdminStageRequestsService {
     // referent lookup depends on the stage's studentId/schoolYear/semester/
     // mandatory, so a row deleted between the two statements must not leave
     // a null relation to dereference.
-    const { stage, assignment } = await this.prisma.$transaction(
+    const { stage, assignment, previousValidatedMandatoryStages } = await this.prisma.$transaction(
       async (tx) => {
         const stage = await tx.stage.findUnique({
           where: { id },
@@ -225,7 +226,15 @@ export class AdminStageRequestsService {
             referent: { include: { user: { select: { firstName: true, lastName: true } } } },
           },
         });
-        return { stage, assignment };
+        // Issue #154: the student's own previously VALIDATED mandatory
+        // stages, most recent decision first, so the admin can check the
+        // student isn't repeating a placement.
+        const previousValidatedMandatoryStages = await tx.stage.findMany({
+          where: { studentId: stage.studentId, mandatory: true, status: "VALIDATED" },
+          select: { id: true, snapshot: true, snapshotVersion: true },
+          orderBy: { decidedAt: "desc" },
+        });
+        return { stage, assignment, previousValidatedMandatoryStages };
       },
       { isolationLevel: "RepeatableRead" },
     );
@@ -289,7 +298,45 @@ export class AdminStageRequestsService {
         endDate: period.endDate.toISOString(),
       })),
       referent: assignment ? toReferentResponse(assignment.referent) : null,
+      previousMandatoryStages: previousValidatedMandatoryStages.flatMap((row) => {
+        const previous = this.toPreviousMandatoryStage(row);
+        return previous ? [previous] : [];
+      }),
     };
+  }
+
+  // Issue #154 / ADR-0033: unlike the detail read above (a corrupt snapshot
+  // there is a 500, since it *is* the document being viewed), a stage
+  // appearing in this secondary list is skipped and logged rather than
+  // failing the whole request it's attached to — same precedent as list()'s
+  // own snapshot handling for GET /stages.
+  private toPreviousMandatoryStage(row: {
+    id: string;
+    snapshot: unknown;
+    snapshotVersion: number | null;
+  }): AdminPreviousMandatoryStage | null {
+    try {
+      const snapshot = parseStageSnapshot(row.snapshot, row.snapshotVersion);
+      // BR-02: service is only ever null on an incomplete DRAFT, and a
+      // VALIDATED stage was submitted complete — a null here means the
+      // snapshot is corrupt, not that the field is legitimately absent.
+      if (snapshot.service === null) {
+        throw new Error("snapshot.service is null on a VALIDATED stage");
+      }
+      return {
+        schoolYear: snapshot.schoolYear,
+        semester: snapshot.semester,
+        promotion: snapshot.promotion,
+        organism: { name: snapshot.organism.name, structureType: snapshot.organism.structureType },
+        service: snapshot.service,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Unreadable snapshot on VALIDATED stage ${row.id} while listing previous mandatory stages`,
+        error instanceof Error ? error.stack : undefined,
+      );
+      return null;
+    }
   }
 
   // Shared by refuseStage() and validateStage() (issues #151/#152): the exact-tuple
