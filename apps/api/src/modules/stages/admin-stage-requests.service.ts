@@ -293,11 +293,11 @@ export class AdminStageRequestsService {
   }
 
   // Shared by refuseStage() and validateStage() (issues #151/#152): the exact-tuple
-  // fetch, not-found/not-PENDING checks and referent assignment lookup are
-  // identical for both decisions — only the target status, whether a
-  // `reason` exists, and the notification differ. Extracted after both
-  // writers existed side by side (review follow-up on issue #152), not
-  // built ahead of a second real need.
+  // fetch, not-found/not-PENDING checks, the PENDING-completeness invariant
+  // and referent assignment lookup are identical for both decisions — only
+  // the target status, whether a `reason` exists, and the notification
+  // differ. Extracted after both writers existed side by side (review
+  // follow-up on issue #152), not built ahead of a second real need.
   private async findPendingStageOrThrow(id: string, notPendingMessage: string) {
     const stage = await this.prisma.stage.findUnique({
       where: { id },
@@ -321,7 +321,38 @@ export class AdminStageRequestsService {
     if (stage.status !== "PENDING") {
       throw stageConflict(STAGE_CONFLICT_CODES.NOT_PENDING, notPendingMessage);
     }
-    return stage;
+
+    // Same invariant as getById() above, restated: a PENDING stage was
+    // submitted, its organism/tutor were resolved, its request was complete
+    // (BR-02), and its student's profile was VALID at submission (promotion
+    // set, students.service.ts, never cleared afterward). The schema allows
+    // all of these to be null, so fail with a message that names the stage
+    // rather than a downstream TypeError in refuseStage()/validateStage().
+    const { submittedAt, organism, tutor, student, service, projectType, motivation } = stage;
+    if (
+      !submittedAt ||
+      !organism ||
+      !tutor ||
+      !student.promotion ||
+      !service ||
+      !projectType ||
+      !motivation
+    ) {
+      throw new Error(
+        `PENDING stage ${stage.id} has no submittedAt, organism, tutor, promotion, service, projectType, or motivation`,
+      );
+    }
+
+    return {
+      ...stage,
+      submittedAt,
+      organism,
+      tutor,
+      service,
+      projectType,
+      motivation,
+      student: { ...student, promotion: student.promotion },
+    };
   }
 
   // BR-03: the referent frozen into the snapshot (and, for validateStage(),
@@ -429,25 +460,7 @@ export class AdminStageRequestsService {
       stage,
       "Un référent doit être assigné avant de refuser cette demande",
     );
-
-    // Same invariant as getById() above, restated: a PENDING stage was
-    // submitted, its organism/tutor were resolved, its request was complete
-    // (BR-02), and its student's profile was VALID at submission (promotion
-    // set, students.service.ts, never cleared afterward).
-    const { submittedAt, organism, tutor, student, service, projectType, motivation } = stage;
-    if (
-      !submittedAt ||
-      !organism ||
-      !tutor ||
-      !student.promotion ||
-      !service ||
-      !projectType ||
-      !motivation
-    ) {
-      throw new Error(
-        `PENDING stage ${stage.id} has no submittedAt, organism, tutor, promotion, service, projectType, or motivation`,
-      );
-    }
+    const { organism, tutor, student, service, projectType, motivation } = stage;
 
     const referent = toReferentResponse(assignment.referent);
     const decidedAt = new Date();
@@ -507,25 +520,7 @@ export class AdminStageRequestsService {
       stage,
       "Un référent doit être assigné avant de valider cette demande",
     );
-
-    // Same invariant as refuseStage() above: a PENDING stage was submitted, its
-    // organism/tutor were resolved, its request was complete (BR-02), and
-    // its student's profile was VALID at submission (promotion set,
-    // students.service.ts, never cleared afterward).
-    const { submittedAt, organism, tutor, student, service, projectType, motivation } = stage;
-    if (
-      !submittedAt ||
-      !organism ||
-      !tutor ||
-      !student.promotion ||
-      !service ||
-      !projectType ||
-      !motivation
-    ) {
-      throw new Error(
-        `PENDING stage ${stage.id} has no submittedAt, organism, tutor, promotion, service, projectType, or motivation`,
-      );
-    }
+    const { organism, tutor, student, service, projectType, motivation } = stage;
 
     const referent = toReferentResponse(assignment.referent);
     const decidedAt = new Date();
