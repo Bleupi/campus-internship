@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { focusManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../../lib/api-client";
@@ -897,6 +897,31 @@ describe("StageRequestsPage — issue #146", () => {
         await screen.findByText("Cette demande a été modifiée entre-temps. Rechargez la page."),
       ).toBeInTheDocument();
       await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    });
+  });
+
+  describe("BR-09: the version stays what the admin read, not whatever a background refetch last synced", () => {
+    it("does not refetch the list on window refocus, so a version already read can't be silently replaced before a decision", async () => {
+      getStageRequestsMock.mockResolvedValue([request({ referent, version: 1 })]);
+      renderPage();
+
+      await screen.findByText("Alice Martin");
+      expect(getStageRequestsMock).toHaveBeenCalledTimes(1);
+
+      // The admin switches away (e.g. to a DB tool) and back to the tab.
+      // TanStack Query's default refetchOnWindowFocus would silently pull a
+      // newer version into the cache right here, before the admin ever
+      // clicks Valider/Refuser — defeating BR-09's "unchanged since read"
+      // guarantee without any visible sign to the admin that the row moved.
+      try {
+        focusManager.setFocused(false);
+        focusManager.setFocused(true);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(getStageRequestsMock).toHaveBeenCalledTimes(1);
+      } finally {
+        focusManager.setFocused(undefined);
+      }
     });
   });
 });
