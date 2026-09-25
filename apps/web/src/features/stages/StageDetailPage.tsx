@@ -13,7 +13,7 @@ import {
 import { SEMESTER_LABELS, formatStageKind } from "./stage-labels";
 import { StageStatusChip } from "./StageStatusChip";
 import { DraftActionsSection } from "./DraftActionsSection";
-import { DuplicateStageAction } from "./DuplicateStageAction";
+import { StageDuplicateSection } from "./StageDuplicateSection";
 import { RecapField, RecapSection, SecondaryLine } from "./StageSummaryParts";
 import { useStage } from "./useStage";
 
@@ -112,7 +112,7 @@ export function StageDetailPage() {
           </RecapSection>
 
           {stage.status === "DRAFT" && <DraftActionsSection stage={stage} />}
-          <DuplicateStageAction stageId={stage.id} />
+          <StageDuplicateSection stageId={stage.id} />
         </>
       )}
     </Stack>

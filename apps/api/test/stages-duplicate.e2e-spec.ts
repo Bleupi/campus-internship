@@ -106,6 +106,7 @@ describe("Stage duplication (e2e, issue #117)", () => {
         status: "REFUSED",
         submittedAt: new Date("2025-09-15"),
         refusalReason: "Dates incompatibles",
+        decidedAt: new Date("2025-09-20"),
         snapshot: { organism: { name: "Hôpital Cochin" } },
         snapshotVersion: 1,
         version: 4,
@@ -145,6 +146,7 @@ describe("Stage duplication (e2e, issue #117)", () => {
       semester: source.semester,
       submittedAt: null,
       refusalReason: null,
+      decidedAt: null,
       snapshot: null,
       snapshotVersion: null,
     });
@@ -169,7 +171,17 @@ describe("Stage duplication (e2e, issue #117)", () => {
     async (status) => {
       const cookie = await signup();
       const sourceId = await createDraft(cookie);
-      await prisma.stage.update({ where: { id: sourceId }, data: { status } });
+      // A consistent row for its status: the admin queue lists every PENDING
+      // stage in the shared e2e database, and a PENDING one without a
+      // submission date would break that suite when run concurrently.
+      await prisma.stage.update({
+        where: { id: sourceId },
+        data: {
+          status,
+          ...(status !== "DRAFT" && { submittedAt: new Date("2099-01-05T09:00:00.000Z") }),
+          ...(status === "VALIDATED" && { decidedAt: new Date("2099-01-06T09:00:00.000Z") }),
+        },
+      });
 
       const response = await request(app.getHttpServer())
         .post(`/stages/${sourceId}/duplicate`)

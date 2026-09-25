@@ -8,7 +8,7 @@ import { useDuplicateStage } from "./useDuplicateStage";
 // Offered on every status: a refused request is duplicated to be corrected and
 // resubmitted, but any other one can seed a new request too. The student lands
 // on the new draft, the copy they will want to work on next.
-export function DuplicateStageAction({ stageId }: { stageId: string }) {
+export function StageDuplicateSection({ stageId }: { stageId: string }) {
   const navigate = useNavigate();
   const duplicate = useDuplicateStage();
 

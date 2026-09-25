@@ -1205,12 +1205,13 @@ describe("StagesService", () => {
       },
     );
 
-    it("never copies the submission date, refusal reason, snapshot, snapshot version or version", async () => {
+    it("never copies the submission date, refusal reason, decision date, snapshot, snapshot version or version", async () => {
       prisma.stage.findFirst.mockResolvedValue(
         source({
           status: "REFUSED",
           submittedAt: new Date("2025-09-01"),
           refusalReason: "Dates incompatibles",
+          decidedAt: new Date("2025-09-20"),
           snapshot: { organism: { name: "Hôpital Cochin" } },
           snapshotVersion: 1,
         }),
@@ -1222,6 +1223,7 @@ describe("StagesService", () => {
       for (const field of [
         "submittedAt",
         "refusalReason",
+        "decidedAt",
         "snapshot",
         "snapshotVersion",
         "version",
