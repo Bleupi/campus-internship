@@ -18,6 +18,7 @@
     "format:check": "prettier --check .",
     "typecheck": "pnpm -r --if-present run typecheck",
     "test": "pnpm -r --if-present run test",
+    "test:all": "pnpm test && pnpm --filter api run test:e2e",
     "secrets:scan": "gitleaks detect --redact --config .gitleaks.toml",
     "changeset": "changeset",
     "prepare": "husky"

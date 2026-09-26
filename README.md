@@ -34,8 +34,9 @@ pnpm dev                    # runs apps/api and apps/web in parallel
 | `pnpm lint` / `pnpm lint:fix` | ESLint across the monorepo |
 | `pnpm format` / `pnpm format:check` | Prettier across the monorepo |
 | `pnpm typecheck` | `tsc --noEmit` in every workspace |
-| `pnpm -r test` | Run every workspace's test suite |
+| `pnpm -r test` | Run every workspace's unit test suite (no e2e) |
 | `pnpm --filter api run test:e2e` | API e2e tests, on the dedicated `_test` database and `-test` bucket (created on first run, ADR-0030) |
+| `pnpm test:all` | Unit tests, then API e2e tests (needs `docker compose up -d`) |
 | `pnpm secrets:scan` | Full-history gitleaks scan |
 | `pnpm --filter api exec prisma migrate dev` | Apply/create a Prisma migration |
 | `pnpm changeset` | Record a behaviour-changing change for release notes |
