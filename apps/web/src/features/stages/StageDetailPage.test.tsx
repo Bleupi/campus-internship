@@ -9,9 +9,11 @@ import { StageDetailPage } from "./StageDetailPage";
 
 const getStageMock = vi.fn();
 const submitStageMock = vi.fn();
+const duplicateStageMock = vi.fn();
 vi.mock("./api", () => ({
   getStage: (...args: unknown[]) => getStageMock(...args),
   submitStage: (...args: unknown[]) => submitStageMock(...args),
+  duplicateStage: (...args: unknown[]) => duplicateStageMock(...args),
 }));
 
 const getProfileMock = vi.fn();
@@ -334,4 +336,54 @@ describe("StageDetailPage submission (issue #115)", () => {
       expect(screen.queryByRole("button", { name: /^soumettre/i })).not.toBeInTheDocument();
     },
   );
+
+  describe("duplicating (issue #117)", () => {
+    it.each(["DRAFT", "PENDING", "VALIDATED", "REFUSED"] as const)(
+      "offers 'Dupliquer' on a %s stage",
+      async (status) => {
+        getStageMock.mockResolvedValue(stageDetail({ status }));
+        renderPage();
+
+        expect(
+          await screen.findByRole("button", { name: "Dupliquer la demande de stage" }),
+        ).toBeEnabled();
+      },
+    );
+
+    it("duplicates the stage, then opens the new draft", async () => {
+      const user = userEvent.setup();
+      getStageMock.mockImplementation((id: string) =>
+        Promise.resolve(
+          id === "copy-1"
+            ? stageDetail({ id: "copy-1", status: "DRAFT", service: "Copie" })
+            : stageDetail({ status: "REFUSED", refusalReason: "Dates incompatibles" }),
+        ),
+      );
+      duplicateStageMock.mockResolvedValue({ id: "copy-1" });
+      renderPage();
+
+      await user.click(
+        await screen.findByRole("button", { name: "Dupliquer la demande de stage" }),
+      );
+
+      expect(duplicateStageMock).toHaveBeenCalledWith("stage-1");
+      expect(await screen.findByText("Copie")).toBeInTheDocument();
+      expect(getStageMock).toHaveBeenCalledWith("copy-1");
+      expect(screen.getByText("Brouillon")).toBeInTheDocument();
+    });
+
+    it("shows a French error and stays on the request when the duplication fails", async () => {
+      const user = userEvent.setup();
+      getStageMock.mockResolvedValue(stageDetail({ status: "PENDING" }));
+      duplicateStageMock.mockRejectedValue(new ApiError(500, "boom"));
+      renderPage();
+
+      await user.click(
+        await screen.findByRole("button", { name: "Dupliquer la demande de stage" }),
+      );
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/n'a pas pu être dupliquée/i);
+      expect(screen.getByText("Hôpital Cochin")).toBeInTheDocument();
+    });
+  });
 });

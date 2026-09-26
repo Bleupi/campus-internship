@@ -44,6 +44,11 @@ export class StagesController {
     return this.stagesService.submit(currentUserId(req), id);
   }
 
+  @Post(":id/duplicate")
+  duplicate(@Param("id") id: string, @Req() req: Request) {
+    return this.stagesService.duplicate(currentUserId(req), id);
+  }
+
   @Patch(":id")
   updateDraft(
     @Param("id") id: string,

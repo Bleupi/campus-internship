@@ -4,9 +4,11 @@ import AddOutlinedIcon from "@mui/icons-material/AddOutlined";
 import { Link, useSearchParams } from "react-router-dom";
 import { listStagesQuerySchema, type ListStagesQuery } from "shared";
 import { ROUTES } from "../../routes";
+import { describeDuplicateError } from "./duplicate-error-message";
 import { StageAccordionItem } from "./StageAccordionItem";
 import { StagesFilters } from "./StagesFilters";
 import { StagesTable } from "./StagesTable";
+import { useDuplicateStage } from "./useDuplicateStage";
 import { useStages } from "./useStages";
 
 // The URL is the source of truth for filter/sort, so the browser's back button
@@ -35,6 +37,10 @@ export function StagesListPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const query = parseQuery(searchParams);
   const { data: stages, isPending, isError } = useStages(query);
+  // One mutation for the whole list, shared by the desktop table and the mobile
+  // accordion: the student stays on the list and the copy appears in the refetch.
+  const duplicate = useDuplicateStage();
+  const handleDuplicate = (stageId: string) => duplicate.mutate(stageId);
 
   const updateQuery = (next: ListStagesQuery) => setSearchParams(toSearchParams(next));
 
@@ -48,6 +54,7 @@ export function StagesListPage() {
 
       {isPending && <LinearProgress />}
       {isError && <Alert severity="error">Impossible de charger vos demandes de stage.</Alert>}
+      {duplicate.error && <Alert severity="error">{describeDuplicateError(duplicate.error)}</Alert>}
       {stages?.length === 0 && (
         <Typography color="text.secondary">Aucune demande de stage.</Typography>
       )}
@@ -56,11 +63,20 @@ export function StagesListPage() {
         (isMobile ? (
           <Stack spacing={1}>
             {stages.map((stage) => (
-              <StageAccordionItem key={stage.id} stage={stage} />
+              <StageAccordionItem
+                key={stage.id}
+                stage={stage}
+                onDuplicate={handleDuplicate}
+                duplicating={duplicate.isPending}
+              />
             ))}
           </Stack>
         ) : (
-          <StagesTable stages={stages} />
+          <StagesTable
+            stages={stages}
+            onDuplicate={handleDuplicate}
+            duplicating={duplicate.isPending}
+          />
         ))}
 
       {/* Always last, whatever the list holds, so the call to action never moves. */}

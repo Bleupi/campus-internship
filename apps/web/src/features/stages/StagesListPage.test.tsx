@@ -8,8 +8,10 @@ import { setMatchMedia } from "../../test/setup";
 import { StagesListPage } from "./StagesListPage";
 
 const listStagesMock = vi.fn();
+const duplicateStageMock = vi.fn();
 vi.mock("./api", () => ({
   listStages: (...args: unknown[]) => listStagesMock(...args),
+  duplicateStage: (...args: unknown[]) => duplicateStageMock(...args),
 }));
 
 function stageItem(overrides: Partial<StageListItemResponse> = {}): StageListItemResponse {
@@ -141,6 +143,54 @@ describe("StagesListPage (issue #114)", () => {
       expect(await screen.findByText("Organisme indisponible")).toBeInTheDocument();
     });
 
+    it("gives every row a 'Dupliquer' icon button, whatever its status (issue #117)", async () => {
+      listStagesMock.mockResolvedValue(
+        (["DRAFT", "PENDING", "VALIDATED", "REFUSED"] as const).map((status) =>
+          stageItem({ id: `${status}-1`, status }),
+        ),
+      );
+      renderPage();
+
+      const rows = await dataRows();
+      expect(rows).toHaveLength(4);
+      for (const row of rows) {
+        expect(within(row).getByRole("button", { name: "Dupliquer la demande" })).toBeEnabled();
+        expect(within(row).queryByText(/^dupliquer/i)).not.toBeInTheDocument();
+      }
+    });
+
+    it("duplicates the row's request, and the new draft shows up in the list without leaving it (issue #117)", async () => {
+      const user = userEvent.setup();
+      const refused = stageItem({ id: "refused-1", status: "REFUSED" });
+      listStagesMock.mockResolvedValueOnce([refused]);
+      listStagesMock.mockResolvedValue([
+        stageItem({ id: "copy-1", status: "DRAFT", organismName: "Copie de Cochin" }),
+        refused,
+      ]);
+      duplicateStageMock.mockResolvedValue({ id: "copy-1" });
+      renderPage();
+
+      const rows = await dataRows();
+      await user.click(within(rows[0]!).getByRole("button", { name: "Dupliquer la demande" }));
+
+      expect(duplicateStageMock).toHaveBeenCalledWith("refused-1");
+      expect(await screen.findByText("Copie de Cochin")).toBeInTheDocument();
+      expect(await dataRows()).toHaveLength(2);
+      expect(screen.getByTestId("location")).toHaveTextContent(/^\/stages/);
+    });
+
+    it("says so when the duplication fails, and keeps the list (issue #117)", async () => {
+      const user = userEvent.setup();
+      duplicateStageMock.mockRejectedValue(new Error("boom"));
+      renderPage();
+
+      const rows = await dataRows();
+      await user.click(within(rows[0]!).getByRole("button", { name: "Dupliquer la demande" }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/n'a pas pu être dupliquée/i);
+      expect(await dataRows()).toHaveLength(2);
+    });
+
     it("shows an empty state instead of a table when there is no request", async () => {
       listStagesMock.mockResolvedValue([]);
       renderPage();
@@ -217,6 +267,55 @@ describe("StagesListPage (issue #114)", () => {
 
       await screen.findByRole("link", { name: "Voir le détail" });
       expect(screen.queryByRole("link", { name: "Modifier" })).toBeNull();
+    });
+  });
+
+  describe("mobile duplicate button (issue #117)", () => {
+    beforeEach(() => setMatchMedia(true));
+
+    it.each(["DRAFT", "PENDING", "VALIDATED", "REFUSED"] as const)(
+      "reveals a labelled 'Dupliquer' button on an expanded %s request",
+      async (status) => {
+        const user = userEvent.setup();
+        listStagesMock.mockResolvedValue([stageItem({ id: `${status}-1`, status })]);
+        renderPage();
+
+        await user.click(await screen.findByRole("button", { name: /hôpital cochin/i }));
+
+        const duplicate = await screen.findByRole("button", { name: "Dupliquer" });
+        expect(duplicate).toBeEnabled();
+        expect(within(duplicate).getByText("Dupliquer")).toBeVisible();
+      },
+    );
+
+    it("duplicates the request, and the new draft shows up in the list without leaving it", async () => {
+      const user = userEvent.setup();
+      const refused = stageItem({ id: "refused-1", status: "REFUSED" });
+      listStagesMock.mockResolvedValueOnce([refused]);
+      listStagesMock.mockResolvedValue([
+        stageItem({ id: "copy-1", status: "DRAFT", organismName: "Copie de Cochin" }),
+        refused,
+      ]);
+      duplicateStageMock.mockResolvedValue({ id: "copy-1" });
+      renderPage();
+
+      await user.click(await screen.findByRole("button", { name: /hôpital cochin/i }));
+      await user.click(await screen.findByRole("button", { name: "Dupliquer" }));
+
+      expect(duplicateStageMock).toHaveBeenCalledWith("refused-1");
+      expect(await screen.findByText("Copie de Cochin")).toBeInTheDocument();
+      expect(screen.getByTestId("location")).toHaveTextContent(/^\/stages/);
+    });
+
+    it("says so when the duplication fails", async () => {
+      const user = userEvent.setup();
+      duplicateStageMock.mockRejectedValue(new Error("boom"));
+      renderPage();
+
+      await user.click(await screen.findByRole("button", { name: /hôpital cochin/i }));
+      await user.click(await screen.findByRole("button", { name: "Dupliquer" }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/n'a pas pu être dupliquée/i);
     });
   });
 

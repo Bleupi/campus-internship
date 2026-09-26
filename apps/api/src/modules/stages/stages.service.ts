@@ -173,6 +173,54 @@ export class StagesService {
     return this.getById(userId, stageId);
   }
 
+  // Issue #117: a brand-new DRAFT copied from any of the student's own requests,
+  // whatever its status (typically a refused one, corrected and resubmitted).
+  // Copies only the wizard content: the copy starts a fresh life, so the
+  // submission date, refusal reason, snapshot and version are left to their
+  // defaults instead of being carried over. The referent is derived from the
+  // (schoolYear, semester, mandatory) tuple, so it follows without being copied
+  // (ADR-0003, BR-03).
+  async duplicate(userId: string, sourceId: string): Promise<StageDraftResponse> {
+    // Ownership is part of the lookup: another student's stage is a 404.
+    const source = await this.prisma.stage.findFirst({
+      where: { id: sourceId, student: { userId } },
+      include: { periods: true },
+    });
+    if (!source) {
+      throw new NotFoundException("Demande de stage introuvable");
+    }
+
+    // The source's organism/tutor are copied by FK, not from its snapshot: the
+    // snapshot only exists for display. Both rows are shared, so the copy leaves
+    // them exactly as frozen (or not) as the source did (ADR-0032).
+    const stage = await this.prisma.stage.create({
+      data: {
+        status: "DRAFT",
+        studentId: source.studentId,
+        parentStageId: source.id,
+        organismId: source.organismId,
+        tutorId: source.tutorId,
+        schoolYear: source.schoolYear,
+        // BR-04b: derived from the periods on every write that touches them, so
+        // the copy never inherits a stored value it could not have computed itself.
+        semester: deriveSemester(source.periods),
+        mandatory: source.mandatory,
+        service: source.service,
+        projectType: source.projectType,
+        motivation: source.motivation,
+        periods: {
+          create: source.periods.map((period) => ({
+            startDate: period.startDate,
+            endDate: period.endDate,
+          })),
+        },
+      },
+      include: { periods: true, organism: true, tutor: true },
+    });
+
+    return this.toResponse(stage, await this.loadEditable(this.prisma, stage));
+  }
+
   // Issue #114. Scoped by the caller's own student profile, so a student can
   // never list someone else's stages whatever the query says.
   async list(userId: string, query: ListStagesQuery): Promise<StageListItemResponse[]> {
