@@ -229,6 +229,21 @@ describe("StageDetailPage (issue #114)", () => {
     expect(alert).toHaveTextContent("Période hors année scolaire.");
   });
 
+  it("keeps each refusal reason on its own line instead of collapsing them (QA feedback on #171)", async () => {
+    getStageMock.mockResolvedValue(
+      stageDetail({
+        status: "REFUSED",
+        refusalReason:
+          "- L'adresse de l'organisme est incomplète.\n- Le tuteur n'est pas enseignant en APA.",
+      }),
+    );
+    renderPage();
+
+    const alert = await screen.findByRole("alert");
+    const reasonBlock = within(alert).getByText(/incomplète/);
+    expect(reasonBlock).toHaveStyle({ whiteSpace: "pre-line" });
+  });
+
   it.each(["DRAFT", "PENDING", "VALIDATED"] as const)(
     "shows no refusal reason for a %s stage",
     async (status) => {

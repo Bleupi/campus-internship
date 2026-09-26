@@ -1,4 +1,4 @@
-import { Alert, AlertTitle, Button, LinearProgress, Stack, Typography } from "@mui/material";
+import { Alert, AlertTitle, Box, Button, LinearProgress, Stack, Typography } from "@mui/material";
 import ArrowBackOutlinedIcon from "@mui/icons-material/ArrowBackOutlined";
 import { Link, useLocation, useParams } from "react-router-dom";
 import type { StageDetailResponse } from "shared";
@@ -66,9 +66,11 @@ export function StageDetailPage() {
           </Stack>
 
           {stage.status === "REFUSED" && stage.refusalReason && (
-            <Alert severity="error" variant="filled">
+            <Alert severity="warning">
               <AlertTitle>Demande refusée</AlertTitle>
-              {stage.refusalReason}
+              <Box component="div" sx={{ whiteSpace: "pre-line" }}>
+                {stage.refusalReason}
+              </Box>
             </Alert>
           )}
 
