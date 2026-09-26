@@ -27,3 +27,18 @@ export function readTestTargets(env: NodeJS.ProcessEnv = process.env): TestTarge
 
   return { databaseUrl, databaseName, bucket };
 }
+
+// Each Jest worker gets its own clone of the test database (ADR-0034), so two
+// spec files running at the same time never read or delete each other's rows.
+// The name keeps the "_test" suffix the guard above checks: campus_test ->
+// campus_w1_test. JEST_WORKER_ID runs from 1 to maxWorkers.
+export function workerDatabaseName(databaseName: string, workerId: number): string {
+  return databaseName.replace(/_test$/, `_w${workerId}_test`);
+}
+
+export function workerDatabaseUrl(databaseUrl: string, workerId: number): string {
+  const url = new URL(databaseUrl);
+  const databaseName = decodeURIComponent(url.pathname.slice(1));
+  url.pathname = `/${workerDatabaseName(databaseName, workerId)}`;
+  return url.toString();
+}
