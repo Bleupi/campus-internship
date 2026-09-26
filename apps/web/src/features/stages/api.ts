@@ -1,6 +1,7 @@
 import type {
   CreateStageDraftRequest,
   CreateStageDraftResponse,
+  DuplicateStageResponse,
   ListStagesQuery,
   StageDetailResponse,
   StageListItemResponse,
@@ -32,4 +33,9 @@ export function submitStage(id: string) {
 
 export function updateStageDraft(id: string, payload: UpdateStageDraftRequest) {
   return apiClient.patch<UpdateStageDraftResponse>(`/stages/${encodeURIComponent(id)}`, payload);
+}
+
+// Bodyless on the server, like submitStage.
+export function duplicateStage(id: string) {
+  return apiClient.post<DuplicateStageResponse>(`/stages/${encodeURIComponent(id)}/duplicate`, {});
 }

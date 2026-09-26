@@ -10,6 +10,7 @@ import {
 } from "@mui/material";
 import type { StageListItemResponse } from "shared";
 import { StageDetailLink } from "./StageDetailLink";
+import { StageDuplicateButton } from "./StageDuplicateButton";
 import { StageEditLink } from "./StageEditLink";
 import { mandatoryLabel } from "./format-summary";
 import { SEMESTER_LABELS, formatFirstPeriod, organismLabel } from "./stage-labels";
@@ -17,8 +18,17 @@ import { StageStatusChip } from "./StageStatusChip";
 
 // Desktop layout (chosen prototype, variant A's table): the location first,
 // then status, first period, semester and kind, with the row's actions in the
-// last column. Never expanded: the eye button opens the full page, and a DRAFT also gets a pen.
-export function StagesTable({ stages }: { stages: StageListItemResponse[] }) {
+// last column. Never expanded: the eye button opens the full page, a DRAFT also
+// gets a pen, and every status can be duplicated in place.
+export function StagesTable({
+  stages,
+  onDuplicate,
+  duplicating,
+}: {
+  stages: StageListItemResponse[];
+  onDuplicate: (stageId: string) => void;
+  duplicating: boolean;
+}) {
   return (
     <TableContainer component={Paper} variant="outlined">
       <Table size="small">
@@ -49,6 +59,10 @@ export function StagesTable({ stages }: { stages: StageListItemResponse[] }) {
               <TableCell>{mandatoryLabel(stage.mandatory)}</TableCell>
               <TableCell align="right">
                 {stage.status === "DRAFT" && <StageEditLink stageId={stage.id} />}
+                <StageDuplicateButton
+                  disabled={duplicating}
+                  onDuplicate={() => onDuplicate(stage.id)}
+                />
                 <StageDetailLink stageId={stage.id} />
               </TableCell>
             </TableRow>
