@@ -1,6 +1,6 @@
 # ADR-0030 — E2E tests run against a dedicated database and bucket
 
-- Status: Accepted
+- Status: Accepted, amended by ADR-0034 (one database per Jest worker, cloned from this one)
 - Date: 2026-09-19
 - Deciders: project owner
 - Related: ADR-0021 (bucket auto-provisioned outside production), ADR-0022 (CI services), ADR-0029 (feature flag the e2e suite has to switch on)
