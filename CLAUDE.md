@@ -181,7 +181,8 @@ Consumed via the workspace protocol (`workspace:*`), never via relative paths re
 | Variables / functions | camelCase | `computeSemester()` |
 | Nest DTO files | `*.dto.ts` | `create-stage.dto.ts` |
 | Nest guards/pipes/interceptors | `*.guard.ts`, `*.pipe.ts`, `*.interceptor.ts` | `roles.guard.ts` |
-| Jest specs (api) | `*.spec.ts`, colocated | `stages.service.spec.ts` |
+| Jest specs (api) | `*.spec.ts`, colocated; a long service spec splits by method as `<file>.<method>.spec.ts` | `stages.service.spec.ts`, `stages.service.submit.spec.ts` |
+| Shared unit-test fixtures (api) | `*.spec-helpers.ts`, colocated, excluded from the build and coverage | `stages.service.spec-helpers.ts` |
 | Vitest specs (web) | `*.test.tsx`, colocated, matching the file under test's base name | `StageForm.test.tsx`, `api-client.test.ts` |
 | Prisma models | PascalCase | `HostOrganism` |
 | Prisma fields | camelCase | `profileYear` |
