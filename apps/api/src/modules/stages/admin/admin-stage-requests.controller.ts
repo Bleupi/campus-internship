@@ -1,9 +1,9 @@
 import { Body, Controller, Get, Param, Patch, Req, UseGuards } from "@nestjs/common";
 import type { Request } from "express";
 import { refuseStageSchema, validateStageSchema, type AuthUser } from "shared";
-import { Roles } from "../../common/decorators/roles.decorator";
-import { RolesGuard } from "../../common/guards/roles.guard";
-import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
+import { Roles } from "../../../common/decorators/roles.decorator";
+import { RolesGuard } from "../../../common/guards/roles.guard";
+import { ZodValidationPipe } from "../../../common/pipes/zod-validation.pipe";
 import { AdminStageRequestsService } from "./admin-stage-requests.service";
 import type { RefuseStageDto } from "./dto/refuse-stage.dto";
 import type { ValidateStageDto } from "./dto/validate-stage.dto";

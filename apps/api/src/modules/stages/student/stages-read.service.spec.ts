@@ -1,5 +1,5 @@
 import { InternalServerErrorException, Logger, NotFoundException } from "@nestjs/common";
-import { snapshotV1 } from "../../../test/helpers/stage-snapshot";
+import { snapshotV1 } from "../../../../test/helpers/stage-snapshot";
 import type { StagesService } from "./stages.service";
 import {
   PROFILE_ID,

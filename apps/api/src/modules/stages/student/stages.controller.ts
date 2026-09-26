@@ -8,9 +8,9 @@ import {
   type UpdateStageDraftRequest,
 } from "shared";
 import type { Request } from "express";
-import { Roles } from "../../common/decorators/roles.decorator";
-import { RolesGuard } from "../../common/guards/roles.guard";
-import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
+import { Roles } from "../../../common/decorators/roles.decorator";
+import { RolesGuard } from "../../../common/guards/roles.guard";
+import { ZodValidationPipe } from "../../../common/pipes/zod-validation.pipe";
 import { StagesService } from "./stages.service";
 
 function currentUserId(req: Request): string {

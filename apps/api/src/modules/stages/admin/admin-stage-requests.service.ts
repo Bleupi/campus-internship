@@ -21,12 +21,12 @@ import {
   adminDisplayName,
   composeStudentEmail,
   type ActingAdmin as AdminNameAndFunction,
-} from "../../common/admin-email.util";
-import { PrismaService } from "../../prisma/prisma.service";
-import type { EmailRecipient } from "../mailer/mailer.service";
-import { MailerService } from "../mailer/mailer.service";
-import { toReferentResponse } from "./referent-response";
-import { CURRENT_STAGE_SNAPSHOT_VERSION, parseStageSnapshot } from "./stage-snapshot.schema";
+} from "../../../common/admin-email.util";
+import { PrismaService } from "../../../prisma/prisma.service";
+import type { EmailRecipient } from "../../mailer/mailer.service";
+import { MailerService } from "../../mailer/mailer.service";
+import { toReferentResponse } from "../referent-response";
+import { CURRENT_STAGE_SNAPSHOT_VERSION, parseStageSnapshot } from "../stage-snapshot.schema";
 
 // This writer also freezes the admin's id into the snapshot (BR-08's
 // decidedBy), which admin-email.util.ts's shared ActingAdmin (used purely

@@ -22,10 +22,10 @@ import {
   type StageStatus,
   type UpdateStageDraftRequest,
 } from "shared";
-import { PrismaService } from "../../prisma/prisma.service";
-import { MailerService } from "../mailer/mailer.service";
-import { toReferentResponse } from "./referent-response";
-import { parseStageSnapshot, type StageSnapshot } from "./stage-snapshot.schema";
+import { PrismaService } from "../../../prisma/prisma.service";
+import { MailerService } from "../../mailer/mailer.service";
+import { toReferentResponse } from "../referent-response";
+import { parseStageSnapshot, type StageSnapshot } from "../stage-snapshot.schema";
 
 type Tx = Prisma.TransactionClient;
 

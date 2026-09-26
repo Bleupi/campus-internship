@@ -1,10 +1,10 @@
 import { Test } from "@nestjs/testing";
 import type { CreateStageDraftRequest } from "shared";
-import { PrismaService } from "../../prisma/prisma.service";
-import { MailerService } from "../mailer/mailer.service";
+import { PrismaService } from "../../../prisma/prisma.service";
+import { MailerService } from "../../mailer/mailer.service";
 import { StagesService } from "./stages.service";
 
-// Shared by the stages.service.*.spec.ts files, split by service method. Not a
+// Shared by the stages-<method>.service.spec.ts files, split by service method. Not a
 // spec itself (no test in it), and excluded from the production build.
 
 export const USER_ID = "user-1";

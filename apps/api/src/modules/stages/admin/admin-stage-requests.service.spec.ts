@@ -1,7 +1,7 @@
 import { InternalServerErrorException, NotFoundException } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
-import { PrismaService } from "../../prisma/prisma.service";
-import { MailerService } from "../mailer/mailer.service";
+import { PrismaService } from "../../../prisma/prisma.service";
+import { MailerService } from "../../mailer/mailer.service";
 import { AdminStageRequestsService } from "./admin-stage-requests.service";
 
 const STAGE_ID = "stage-1";
