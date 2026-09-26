@@ -1,24 +1,36 @@
-import { IconButton, Tooltip } from "@mui/material";
+import { Button, IconButton, Tooltip } from "@mui/material";
 import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
 
-// The desktop table's compact actions column keeps a bare icon, like
-// StageDetailLink and StageEditLink. Unlike them it is offered on every status.
+const LABEL = "Dupliquer la demande";
+
+// Offered on every status, unlike StageEditLink. `labelled` is for the mobile
+// accordion, like StageDetailLink; the desktop table's compact actions column
+// keeps the bare icon.
 export function StageDuplicateButton({
   onDuplicate,
   disabled,
+  labelled = false,
 }: {
   onDuplicate: () => void;
   disabled: boolean;
+  labelled?: boolean;
 }) {
-  const label = "Dupliquer la demande";
+  if (labelled) {
+    return (
+      <Button size="small" disabled={disabled} onClick={onDuplicate}>
+        Dupliquer
+      </Button>
+    );
+  }
+
   return (
-    <Tooltip title={label}>
+    <Tooltip title={LABEL}>
       {/* The span keeps the tooltip working while the button is disabled. */}
       <span>
         <IconButton
           size="small"
           color="primary"
-          aria-label={label}
+          aria-label={LABEL}
           disabled={disabled}
           onClick={onDuplicate}
         >

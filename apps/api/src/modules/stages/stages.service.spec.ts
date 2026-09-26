@@ -1117,7 +1117,7 @@ describe("StagesService", () => {
     });
   });
 
-  describe("duplicate (issue #117)", () => {
+  describe("duplicate stage (issue #117)", () => {
     const SOURCE_PERIODS = [
       { id: "period-a", startDate: new Date("2025-10-01"), endDate: new Date("2025-10-15") },
       { id: "period-b", startDate: new Date("2025-11-03"), endDate: new Date("2025-11-14") },
@@ -1191,6 +1191,62 @@ describe("StagesService", () => {
       await service.duplicate(USER_ID, "source-1");
 
       expect(prisma.stage.create.mock.calls[0][0].data.semester).toBe("S1");
+    });
+
+    // Duplication never checks dates against today: it copies the periods as
+    // they are, and the student corrects them in the new draft. Whether the
+    // copy can then be submitted is the submission gate's call (BR-02 +
+    // previous-year rule in getSubmissionBlockers), not duplicate's.
+    describe("BR-01 / BR-04b: sources dated outside the current school year", () => {
+      afterEach(() => jest.useRealTimers());
+
+      it("copies a stage from last school year as is: its periods, its past school year and its re-derived semester", async () => {
+        jest.useFakeTimers({
+          now: new Date("2026-09-26T10:00:00.000Z"),
+          doNotFake: ["nextTick", "setImmediate"],
+        });
+        const lastYear = [
+          { id: "period-a", startDate: new Date("2026-02-02"), endDate: new Date("2026-03-13") },
+        ];
+        prisma.stage.findFirst.mockResolvedValue(
+          source({ status: "REFUSED", schoolYear: "2025-2026", semester: "S2", periods: lastYear }),
+        );
+
+        await service.duplicate(USER_ID, "source-1");
+
+        const { data } = prisma.stage.create.mock.calls[0][0];
+        expect(data).toMatchObject({ status: "DRAFT", schoolYear: "2025-2026", semester: "S2" });
+        expect(data.periods.create).toEqual([
+          { startDate: lastYear[0]!.startDate, endDate: lastYear[0]!.endDate },
+        ]);
+      });
+
+      it.each([
+        { label: "S1", start: "2027-10-04", end: "2027-10-29", semester: "S1" },
+        { label: "S2", start: "2028-03-06", end: "2028-04-14", semester: "S2" },
+        {
+          label: "last day before the next school year",
+          start: "2028-08-01",
+          end: "2028-08-31T23:59:59.999Z",
+          semester: "S2",
+        },
+      ])(
+        "copies a draft dated after September 2027 ($label) as is, in its future school year",
+        async ({ start, end, semester }) => {
+          const future = [{ id: "period-a", startDate: new Date(start), endDate: new Date(end) }];
+          prisma.stage.findFirst.mockResolvedValue(
+            source({ status: "DRAFT", schoolYear: "2027-2028", semester, periods: future }),
+          );
+
+          await service.duplicate(USER_ID, "source-1");
+
+          const { data } = prisma.stage.create.mock.calls[0][0];
+          expect(data).toMatchObject({ status: "DRAFT", schoolYear: "2027-2028", semester });
+          expect(data.periods.create).toEqual([
+            { startDate: future[0]!.startDate, endDate: future[0]!.endDate },
+          ]);
+        },
+      );
     });
 
     it.each(["DRAFT", "PENDING", "VALIDATED", "REFUSED"])(

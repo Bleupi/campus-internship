@@ -270,6 +270,55 @@ describe("StagesListPage (issue #114)", () => {
     });
   });
 
+  describe("mobile duplicate button (issue #117)", () => {
+    beforeEach(() => setMatchMedia(true));
+
+    it.each(["DRAFT", "PENDING", "VALIDATED", "REFUSED"] as const)(
+      "reveals a labelled 'Dupliquer' button on an expanded %s request",
+      async (status) => {
+        const user = userEvent.setup();
+        listStagesMock.mockResolvedValue([stageItem({ id: `${status}-1`, status })]);
+        renderPage();
+
+        await user.click(await screen.findByRole("button", { name: /hôpital cochin/i }));
+
+        const duplicate = await screen.findByRole("button", { name: "Dupliquer" });
+        expect(duplicate).toBeEnabled();
+        expect(within(duplicate).getByText("Dupliquer")).toBeVisible();
+      },
+    );
+
+    it("duplicates the request, and the new draft shows up in the list without leaving it", async () => {
+      const user = userEvent.setup();
+      const refused = stageItem({ id: "refused-1", status: "REFUSED" });
+      listStagesMock.mockResolvedValueOnce([refused]);
+      listStagesMock.mockResolvedValue([
+        stageItem({ id: "copy-1", status: "DRAFT", organismName: "Copie de Cochin" }),
+        refused,
+      ]);
+      duplicateStageMock.mockResolvedValue({ id: "copy-1" });
+      renderPage();
+
+      await user.click(await screen.findByRole("button", { name: /hôpital cochin/i }));
+      await user.click(await screen.findByRole("button", { name: "Dupliquer" }));
+
+      expect(duplicateStageMock).toHaveBeenCalledWith("refused-1");
+      expect(await screen.findByText("Copie de Cochin")).toBeInTheDocument();
+      expect(screen.getByTestId("location")).toHaveTextContent(/^\/stages/);
+    });
+
+    it("says so when the duplication fails", async () => {
+      const user = userEvent.setup();
+      duplicateStageMock.mockRejectedValue(new Error("boom"));
+      renderPage();
+
+      await user.click(await screen.findByRole("button", { name: /hôpital cochin/i }));
+      await user.click(await screen.findByRole("button", { name: "Dupliquer" }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/n'a pas pu être dupliquée/i);
+    });
+  });
+
   describe("filters and sort", () => {
     it("groups status, semester and sort together, as dropdowns, above the list", async () => {
       renderPage();

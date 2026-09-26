@@ -12,6 +12,11 @@ export function StageDuplicateSection({ stageId }: { stageId: string }) {
   const navigate = useNavigate();
   const duplicate = useDuplicateStage();
 
+  const handleDuplicate = () =>
+    duplicate.mutate(stageId, {
+      onSuccess: (copy) => navigate(stageDetailPath(copy.id)),
+    });
+
   return (
     <Stack spacing={1.5}>
       {duplicate.error && <Alert severity="error">{describeDuplicateError(duplicate.error)}</Alert>}
@@ -19,11 +24,7 @@ export function StageDuplicateSection({ stageId }: { stageId: string }) {
         variant="outlined"
         startIcon={<ContentCopyOutlinedIcon />}
         disabled={duplicate.isPending}
-        onClick={() =>
-          duplicate.mutate(stageId, {
-            onSuccess: (copy) => navigate(stageDetailPath(copy.id)),
-          })
-        }
+        onClick={handleDuplicate}
         aria-label="Dupliquer la demande de stage"
         sx={{ alignSelf: { sm: "flex-start" } }}
       >

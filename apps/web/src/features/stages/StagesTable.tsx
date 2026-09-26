@@ -1,5 +1,4 @@
 import {
-  Alert,
   Paper,
   Table,
   TableBody,
@@ -10,66 +9,66 @@ import {
   Typography,
 } from "@mui/material";
 import type { StageListItemResponse } from "shared";
-import { describeDuplicateError } from "./duplicate-error-message";
 import { StageDetailLink } from "./StageDetailLink";
 import { StageDuplicateButton } from "./StageDuplicateButton";
 import { StageEditLink } from "./StageEditLink";
 import { mandatoryLabel } from "./format-summary";
 import { SEMESTER_LABELS, formatFirstPeriod, organismLabel } from "./stage-labels";
 import { StageStatusChip } from "./StageStatusChip";
-import { useDuplicateStage } from "./useDuplicateStage";
 
 // Desktop layout (chosen prototype, variant A's table): the location first,
 // then status, first period, semester and kind, with the row's actions in the
 // last column. Never expanded: the eye button opens the full page, a DRAFT also
-// gets a pen, and every status can be duplicated in place: the copy appears in
-// the refetched list.
-export function StagesTable({ stages }: { stages: StageListItemResponse[] }) {
-  const duplicate = useDuplicateStage();
-
+// gets a pen, and every status can be duplicated in place.
+export function StagesTable({
+  stages,
+  onDuplicate,
+  duplicating,
+}: {
+  stages: StageListItemResponse[];
+  onDuplicate: (stageId: string) => void;
+  duplicating: boolean;
+}) {
   return (
-    <>
-      {duplicate.error && <Alert severity="error">{describeDuplicateError(duplicate.error)}</Alert>}
-      <TableContainer component={Paper} variant="outlined">
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Organisme</TableCell>
-              <TableCell>Statut</TableCell>
-              <TableCell>Période</TableCell>
-              <TableCell>Semestre</TableCell>
-              <TableCell>Type</TableCell>
-              <TableCell align="right">Actions</TableCell>
+    <TableContainer component={Paper} variant="outlined">
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            <TableCell>Organisme</TableCell>
+            <TableCell>Statut</TableCell>
+            <TableCell>Période</TableCell>
+            <TableCell>Semestre</TableCell>
+            <TableCell>Type</TableCell>
+            <TableCell align="right">Actions</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {stages.map((stage) => (
+            <TableRow key={stage.id} hover>
+              <TableCell sx={{ fontWeight: 700 }}>{organismLabel(stage)}</TableCell>
+              <TableCell>
+                <StageStatusChip status={stage.status} />
+              </TableCell>
+              <TableCell sx={{ whiteSpace: "nowrap" }}>{formatFirstPeriod(stage)}</TableCell>
+              <TableCell sx={{ whiteSpace: "nowrap" }}>
+                {SEMESTER_LABELS[stage.semester]}
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                  {stage.schoolYear}
+                </Typography>
+              </TableCell>
+              <TableCell>{mandatoryLabel(stage.mandatory)}</TableCell>
+              <TableCell align="right">
+                {stage.status === "DRAFT" && <StageEditLink stageId={stage.id} />}
+                <StageDuplicateButton
+                  disabled={duplicating}
+                  onDuplicate={() => onDuplicate(stage.id)}
+                />
+                <StageDetailLink stageId={stage.id} />
+              </TableCell>
             </TableRow>
-          </TableHead>
-          <TableBody>
-            {stages.map((stage) => (
-              <TableRow key={stage.id} hover>
-                <TableCell sx={{ fontWeight: 700 }}>{organismLabel(stage)}</TableCell>
-                <TableCell>
-                  <StageStatusChip status={stage.status} />
-                </TableCell>
-                <TableCell sx={{ whiteSpace: "nowrap" }}>{formatFirstPeriod(stage)}</TableCell>
-                <TableCell sx={{ whiteSpace: "nowrap" }}>
-                  {SEMESTER_LABELS[stage.semester]}
-                  <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-                    {stage.schoolYear}
-                  </Typography>
-                </TableCell>
-                <TableCell>{mandatoryLabel(stage.mandatory)}</TableCell>
-                <TableCell align="right">
-                  {stage.status === "DRAFT" && <StageEditLink stageId={stage.id} />}
-                  <StageDuplicateButton
-                    disabled={duplicate.isPending}
-                    onDuplicate={() => duplicate.mutate(stage.id)}
-                  />
-                  <StageDetailLink stageId={stage.id} />
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
-    </>
+          ))}
+        </TableBody>
+      </Table>
+    </TableContainer>
   );
 }
