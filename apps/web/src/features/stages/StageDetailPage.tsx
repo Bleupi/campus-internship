@@ -1,4 +1,4 @@
-import { Alert, AlertTitle, Button, LinearProgress, Stack, Typography } from "@mui/material";
+import { Alert, AlertTitle, Box, Button, LinearProgress, Stack, Typography } from "@mui/material";
 import ArrowBackOutlinedIcon from "@mui/icons-material/ArrowBackOutlined";
 import { Link, useLocation, useParams } from "react-router-dom";
 import type { StageDetailResponse } from "shared";
@@ -66,9 +66,11 @@ export function StageDetailPage() {
           </Stack>
 
           {stage.status === "REFUSED" && stage.refusalReason && (
-            <Alert severity="error" variant="filled">
+            <Alert severity="error">
               <AlertTitle>Demande refusée</AlertTitle>
-              {stage.refusalReason}
+              <Box component="div" sx={{ whiteSpace: "pre-line" }}>
+                {stage.refusalReason}
+              </Box>
             </Alert>
           )}
 
@@ -97,6 +99,9 @@ export function StageDetailPage() {
             <RecapField label="Type de stage">{formatStageKind(stage.mandatory)}</RecapField>
             {stage.submittedAt && (
               <RecapField label="Date de soumission">{formatDate(stage.submittedAt)}</RecapField>
+            )}
+            {stage.decidedAt && (
+              <RecapField label="Date de décision">{formatDate(stage.decidedAt)}</RecapField>
             )}
             <RecapField label="Service">{stage.service?.trim() || "Non renseigné"}</RecapField>
             <RecapField label="Type de handicap concerné">

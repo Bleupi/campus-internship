@@ -87,6 +87,8 @@ export interface StageReferentResponse {
 // (null when none exists yet), for VALIDATED/REFUSED it comes from the snapshot.
 export interface StageDetailResponse extends StageDraftResponse {
   submittedAt: string | null;
+  // When the admin validated or refused it (ADR-0033), null while live.
+  decidedAt: string | null;
   refusalReason: string | null;
   referent: StageReferentResponse | null;
 }
@@ -97,8 +99,9 @@ export interface StageListItemResponse {
   schoolYear: string;
   semester: Semester;
   mandatory: boolean;
-  // Read from the live organism, so only present while DRAFT/PENDING — a
-  // frozen stage's display source is its snapshot (ADR-0003, BR-08).
+  // From the live organism while DRAFT/PENDING, from the snapshot once
+  // decided (ADR-0003, BR-08). Null only when a decided stage's snapshot is
+  // unreadable: the live organism is never a fallback.
   organismName: string | null;
   submittedAt: string | null;
   periods: StageDraftPeriodResponse[];

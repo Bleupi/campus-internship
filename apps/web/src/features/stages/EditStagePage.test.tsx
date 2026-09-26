@@ -71,6 +71,7 @@ function draft(overrides: Partial<StageDetailResponse> = {}): StageDetailRespons
       { id: "p1", startDate: "2025-10-01T00:00:00.000Z", endDate: "2025-10-15T00:00:00.000Z" },
     ],
     submittedAt: null,
+    decidedAt: null,
     refusalReason: null,
     referent: null,
     ...overrides,

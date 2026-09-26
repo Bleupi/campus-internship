@@ -2,12 +2,13 @@ import {
   BadRequestException,
   ConflictException,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
-  NotImplementedException,
 } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import type { CreateStageDraftRequest, UpdateStageDraftRequest } from "shared";
 import { PrismaService } from "../../prisma/prisma.service";
+import { snapshotV1 } from "../../../test/helpers/stage-snapshot";
 import { MailerService } from "../mailer/mailer.service";
 import { StagesService } from "./stages.service";
 
@@ -127,6 +128,9 @@ describe("StagesService", () => {
 
     service = module.get(StagesService);
   });
+
+  // Undoes the Logger spies even when an assertion fails before the end of a test.
+  afterEach(() => jest.restoreAllMocks());
 
   it("throws NotFoundException when the caller has no student profile", async () => {
     prisma.studentProfile.findUnique.mockResolvedValue(null);
@@ -485,16 +489,44 @@ describe("StagesService", () => {
       ]);
     });
 
-    it("shows the organism name for a live stage but never reads it for a frozen one (BR-08)", async () => {
+    it("BR-08: reads a live stage from its live rows and a decided one from its snapshot", async () => {
       prisma.stage.findMany.mockResolvedValue([
         listRow("live", { status: "PENDING" }),
-        listRow("frozen", { status: "VALIDATED" }),
+        // The live rows were edited after the decision: the list must not follow.
+        listRow("frozen", {
+          status: "VALIDATED",
+          organism: { name: "Renommé depuis la validation" },
+          periods: [periodRow("live-p", "2026-03-01", "2026-03-15")],
+          snapshotVersion: 1,
+          snapshot: snapshotV1({ schoolYear: "2024-2025", semester: "S2", mandatory: false }),
+        }),
       ]);
 
       const result = await service.list(USER_ID, { sort: "submittedAt" });
 
       expect(result.find((stage) => stage.id === "live")!.organismName).toBe("Hôpital Cochin");
-      expect(result.find((stage) => stage.id === "frozen")!.organismName).toBeNull();
+      expect(result.find((stage) => stage.id === "frozen")).toMatchObject({
+        organismName: "Hôpital Cochin",
+        schoolYear: "2024-2025",
+        semester: "S2",
+        mandatory: false,
+        periods: [{ id: "p1", startDate: "2025-10-01T00:00:00.000Z" }],
+      });
+    });
+
+    it("BR-08: lists a decided stage whose snapshot is unreadable without its organism or periods, logs it, and keeps the other rows", async () => {
+      const logError = jest.spyOn(Logger.prototype, "error").mockImplementation(() => undefined);
+      prisma.stage.findMany.mockResolvedValue([
+        listRow("live", { status: "PENDING" }),
+        listRow("broken", { status: "REFUSED", snapshotVersion: null, snapshot: null }),
+      ]);
+
+      const result = await service.list(USER_ID, { sort: "submittedAt" });
+
+      expect(result.map((stage) => stage.id)).toEqual(["live", "broken"]);
+      // No fallback to the live organism or periods.
+      expect(result[1]).toMatchObject({ organismName: null, periods: [] });
+      expect(logError).toHaveBeenCalledWith(expect.stringContaining("broken"), expect.anything());
     });
 
     it("serialises dates as ISO strings", async () => {
@@ -559,19 +591,98 @@ describe("StagesService", () => {
 
       expect(result.referent).toBeNull();
       expect(result.submittedAt).toBe("2025-09-01T00:00:00.000Z");
+      // Only a decided stage has a decision date.
+      expect(result.decidedAt).toBeNull();
     });
 
-    it.each(["VALIDATED", "REFUSED"])(
-      "does not assemble a %s stage from live relations: it is served from its snapshot, not implemented yet",
-      async (status) => {
-        prisma.stage.findFirst.mockResolvedValue(stageRow({ studentId: PROFILE_ID, status }));
+    describe("BR-08: a decided stage is served from its frozen snapshot", () => {
+      // The live rows were edited after the decision, and the referent was
+      // reassigned: none of it may reach the response.
+      const decidedRow = (overrides: Record<string, unknown> = {}) =>
+        stageRow({
+          studentId: PROFILE_ID,
+          status: "VALIDATED",
+          version: 3,
+          organism: organismRow({ name: "Renommé depuis la validation" }),
+          tutor: tutorRow({ lastName: "Renommée" }),
+          submittedAt: new Date("2025-09-01T08:00:00Z"),
+          refusalReason: null,
+          snapshotVersion: 1,
+          snapshot: snapshotV1(),
+          ...overrides,
+        });
 
-        await expect(service.getById(USER_ID, "stage-1")).rejects.toBeInstanceOf(
-          NotImplementedException,
-        );
+      it("BR-08: returns the snapshot in the live detail shape, read-only, never the live relations", async () => {
+        prisma.stage.findFirst.mockResolvedValue(decidedRow());
+        prisma.referentAssignment.findUnique.mockResolvedValue({
+          referent: { id: "ref-2", user: { firstName: "Autre", lastName: "Référent" } },
+        });
+
+        const result = await service.getById(USER_ID, "stage-1");
+
+        expect(result).toEqual({
+          id: "stage-1",
+          status: "VALIDATED",
+          version: 3,
+          schoolYear: "2025-2026",
+          semester: "S1",
+          mandatory: true,
+          service: "Cardiologie",
+          projectType: "Handicap moteur",
+          motivation: "Découvrir le milieu hospitalier",
+          organism: { ...snapshotV1().organism, editable: false },
+          tutor: { ...snapshotV1().tutor, editable: false },
+          periods: snapshotV1().periods,
+          referent: { id: "ref-1", firstName: "Jean", lastName: "Valjean" },
+          submittedAt: "2025-09-01T08:00:00.000Z",
+          decidedAt: "2025-09-10T09:30:00.000Z",
+          refusalReason: null,
+        });
+        // The referent is the frozen one, not re-derived from the assignment.
         expect(prisma.referentAssignment.findUnique).not.toHaveBeenCalled();
-      },
-    );
+      });
+
+      it("BR-08: does not expose the deciding admin or the student's promotion", async () => {
+        prisma.stage.findFirst.mockResolvedValue(decidedRow());
+
+        const result = await service.getById(USER_ID, "stage-1");
+
+        expect(result).not.toHaveProperty("decidedBy");
+        expect(result).not.toHaveProperty("promotion");
+      });
+
+      it("BR-08: carries a REFUSED stage's refusal reason from its live column", async () => {
+        prisma.stage.findFirst.mockResolvedValue(
+          decidedRow({ status: "REFUSED", refusalReason: "Dates incompatibles" }),
+        );
+
+        const result = await service.getById(USER_ID, "stage-1");
+
+        expect(result).toMatchObject({ status: "REFUSED", refusalReason: "Dates incompatibles" });
+      });
+
+      it.each([
+        ["missing", { snapshotVersion: null, snapshot: null }],
+        ["of an unknown version", { snapshotVersion: 99, snapshot: snapshotV1() }],
+        ["unparseable", { snapshotVersion: 1, snapshot: { schoolYear: "not a year" } }],
+      ])(
+        "BR-08: answers 500, never the live rows, when the snapshot is %s",
+        async (_case, overrides) => {
+          const logError = jest
+            .spyOn(Logger.prototype, "error")
+            .mockImplementation(() => undefined);
+          prisma.stage.findFirst.mockResolvedValue(decidedRow(overrides));
+
+          await expect(service.getById(USER_ID, "stage-1")).rejects.toBeInstanceOf(
+            InternalServerErrorException,
+          );
+          expect(logError).toHaveBeenCalledWith(
+            expect.stringContaining("stage-1"),
+            expect.anything(),
+          );
+        },
+      );
+    });
   });
   // Issue #115. The service reads the draft twice: once to gate it, then again
   // through getById() to answer with the fresh detail.

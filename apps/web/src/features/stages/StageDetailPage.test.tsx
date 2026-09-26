@@ -56,6 +56,7 @@ function stageDetail(overrides: Partial<StageDetailResponse> = {}): StageDetailR
       { id: "p2", startDate: "2025-11-03T00:00:00.000Z", endDate: "2025-11-07T00:00:00.000Z" },
     ],
     submittedAt: null,
+    decidedAt: null,
     refusalReason: null,
     referent: null,
     ...overrides,
@@ -186,6 +187,38 @@ describe("StageDetailPage (issue #114)", () => {
     expect(screen.queryByText("Date de soumission")).not.toBeInTheDocument();
   });
 
+  it("BR-08: shows a decided stage in full, as the API read it from its snapshot, with its decision date", async () => {
+    getStageMock.mockResolvedValue(
+      stageDetail({
+        status: "VALIDATED",
+        organism: { ...stageDetail().organism, editable: false },
+        tutor: { ...stageDetail().tutor, editable: false },
+        submittedAt: "2025-09-01T08:00:00.000Z",
+        decidedAt: "2025-09-10T09:30:00.000Z",
+        referent: { id: "ref-1", firstName: "Jean", lastName: "Valjean" },
+      }),
+    );
+    renderPage();
+
+    expect(await screen.findByText("Hôpital Cochin")).toBeInTheDocument();
+    expect(screen.getByText("Marie Curie (Médecin)")).toBeInTheDocument();
+    expect(screen.getByText("Période 2")).toBeInTheDocument();
+    expect(screen.getByText("Jean Valjean")).toBeInTheDocument();
+    expect(screen.getByText("Date de décision")).toBeInTheDocument();
+    expect(screen.getByText("10/09/2025")).toBeInTheDocument();
+    // A decided stage is read-only.
+    expect(screen.queryByRole("link", { name: /modifier/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Soumettre" })).not.toBeInTheDocument();
+  });
+
+  it("shows no decision date for a live stage", async () => {
+    getStageMock.mockResolvedValue(stageDetail({ status: "PENDING" }));
+    renderPage();
+
+    await screen.findByText("Hôpital Cochin");
+    expect(screen.queryByText("Date de décision")).not.toBeInTheDocument();
+  });
+
   it("shows the refusal reason prominently for a REFUSED stage", async () => {
     getStageMock.mockResolvedValue(
       stageDetail({ status: "REFUSED", refusalReason: "Période hors année scolaire." }),
@@ -194,6 +227,21 @@ describe("StageDetailPage (issue #114)", () => {
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Période hors année scolaire.");
+  });
+
+  it("keeps each refusal reason on its own line instead of collapsing them (QA feedback on #171)", async () => {
+    getStageMock.mockResolvedValue(
+      stageDetail({
+        status: "REFUSED",
+        refusalReason:
+          "- L'adresse de l'organisme est incomplète.\n- Le tuteur n'est pas enseignant en APA.",
+      }),
+    );
+    renderPage();
+
+    const alert = await screen.findByRole("alert");
+    const reasonBlock = within(alert).getByText(/incomplète/);
+    expect(reasonBlock).toHaveStyle({ whiteSpace: "pre-line" });
   });
 
   it.each(["DRAFT", "PENDING", "VALIDATED"] as const)(
