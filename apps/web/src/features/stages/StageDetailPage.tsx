@@ -66,7 +66,7 @@ export function StageDetailPage() {
           </Stack>
 
           {stage.status === "REFUSED" && stage.refusalReason && (
-            <Alert severity="warning">
+            <Alert severity="error">
               <AlertTitle>Demande refusée</AlertTitle>
               <Box component="div" sx={{ whiteSpace: "pre-line" }}>
                 {stage.refusalReason}
