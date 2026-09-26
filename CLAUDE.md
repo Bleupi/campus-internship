@@ -64,13 +64,15 @@ One Nest module per business domain, not per technical layer:
 
 ```
 apps/api/src/modules/
-  auth/
-  students/
-  referents/
-  stages/
-  organisms/        # HostOrganism + Tutor
-  admin/             # AdminSetting, OrganismStructureType, CSV export
-  files/
+  auth/             # signup, login, refresh, password reset (JWT)
+  students/         # StudentProfile
+  referents/        # ReferentProfile, ReferentAssignment (+ the admin's referent management)
+  stages/           # Stage requests: student/ and admin/ sides (see below)
+  organisms/        # HostOrganism + Tutor, OrganismStructureType
+  admin/            # admin review of student profiles + certificate queue; AdminSetting and the CSV export are not built yet
+  files/            # S3 object storage (provider only, no controller)
+  mailer/           # outgoing email (provider only, no controller)
+  health/           # liveness endpoint
 ```
 
 Each module follows the standard Nest shape:
@@ -144,7 +146,7 @@ apps/web/src/features/
 
 Each feature owns its components, hooks, and API-calling functions. Shared, truly cross-feature UI (buttons, layout shell, form primitives) lives in `apps/web/src/components/`.
 
-When a feature folder gets hard to scan, split it into sub-folders named after the action they serve, as a bare verb (`list/`, `detail/`, `edit/`, `submit/`, `duplicate/`), never after a file type (`components/`, `hooks/`, `helpers/`). A file lives in the sub-folder of its only consumer; a file used by several sub-folders stays at the feature root (`api.ts`, `query-keys.ts`, shared display parts). A sub-folder's entry points (its pages) sit at its root, and what they alone use nests below them by responsibility (`edit/save/`, `edit/wizard/steps/`).
+When a feature folder gets hard to scan, split it into sub-folders named after the action they serve, as a bare verb (`list/`, `detail/`, `edit/`, `submit/`, `duplicate/`, `login/`), followed by its object when the verb alone would be ambiguous (`review-stages/`, `review-certificates/`, `assign-referent/`, `reset-password/`), never after a file type (`components/`, `hooks/`, `helpers/`). A file lives in the sub-folder of its only consumer; a file used by several sub-folders stays at the feature root (`api.ts`, `query-keys.ts`, shared display parts). A sub-folder's entry points (its pages) sit at its root, and what they alone use nests below them by responsibility (`edit/save/`, `edit/wizard/steps/`).
 
 ### Forms
 
