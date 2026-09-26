@@ -10,6 +10,7 @@ import { PrismaService } from "../src/prisma/prisma.service";
 import { seedAdminAndLogin } from "./helpers/admin";
 import { purgeE2eData } from "./helpers/cleanup";
 import { cookieHeader, cookieMap, requireCookie } from "./helpers/cookies";
+import { snapshotV1 } from "./helpers/stage-snapshot";
 
 type StageOverrides = {
   status?: "DRAFT" | "PENDING" | "VALIDATED" | "REFUSED";
@@ -123,7 +124,50 @@ function createStageRequestHelpers(
     });
   }
 
-  return { signupStudent, seedReferent, seedStage };
+  // Issue #154: a previously VALIDATED mandatory stage, seeded directly with
+  // a frozen snapshot rather than through the real validate flow (same
+  // shortcut as helpers/stage-snapshot.ts was built for) — findById() only
+  // ever reads these from the snapshot, never the live row.
+  async function seedValidatedMandatoryStage(
+    studentId: string,
+    overrides: {
+      schoolYear?: string;
+      semester?: "S1" | "S2";
+      decidedAt?: Date;
+      organismName?: string;
+      structureType?: string;
+      service?: string;
+      promotion?: string;
+    } = {},
+  ) {
+    const pending = await seedStage(studentId, { mandatory: true });
+    const organismName = overrides.organismName ?? pending.organism!.name;
+    return prisma.stage.update({
+      where: { id: pending.id },
+      data: {
+        status: "VALIDATED",
+        snapshotVersion: 1,
+        decidedAt: overrides.decidedAt ?? new Date("2099-06-01T00:00:00.000Z"),
+        snapshot: snapshotV1({
+          schoolYear: overrides.schoolYear ?? "2099-2100",
+          semester: overrides.semester ?? "S1",
+          mandatory: true,
+          service: overrides.service ?? "Service de test",
+          organism: {
+            id: pending.organismId,
+            name: organismName,
+            structureType: overrides.structureType ?? "Secteur Sanitaire",
+            city: "Paris",
+            postalCode: "75014",
+            street: "1 rue Test",
+          },
+          promotion: overrides.promotion ?? "L2",
+        }),
+      },
+    });
+  }
+
+  return { signupStudent, seedReferent, seedStage, seedValidatedMandatoryStage };
 }
 
 // Issue #146: GET /admin/stage-requests, the admin "Demandes à traiter" list.
@@ -369,6 +413,9 @@ describe("Admin stage request detail (e2e) — issue #147", () => {
   let signupStudent: ReturnType<typeof createStageRequestHelpers>["signupStudent"];
   let seedReferent: ReturnType<typeof createStageRequestHelpers>["seedReferent"];
   let seedStage: ReturnType<typeof createStageRequestHelpers>["seedStage"];
+  let seedValidatedMandatoryStage: ReturnType<
+    typeof createStageRequestHelpers
+  >["seedValidatedMandatoryStage"];
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -378,14 +425,15 @@ describe("Admin stage request detail (e2e) — issue #147", () => {
     prisma = moduleRef.get(PrismaService);
 
     adminCookie = await seedAdminAndLogin(app, prisma, createdUserEmails);
-    ({ signupStudent, seedReferent, seedStage } = createStageRequestHelpers(
-      app,
-      prisma,
-      "admin-stage-request-detail",
-      createdUserEmails,
-      createdReferentEmails,
-      createdOrganismIds,
-    ));
+    ({ signupStudent, seedReferent, seedStage, seedValidatedMandatoryStage } =
+      createStageRequestHelpers(
+        app,
+        prisma,
+        "admin-stage-request-detail",
+        createdUserEmails,
+        createdReferentEmails,
+        createdOrganismIds,
+      ));
   });
 
   afterAll(async () => {
@@ -469,6 +517,7 @@ describe("Admin stage request detail (e2e) — issue #147", () => {
         },
       ],
       referent: { id: referent.id, firstName: "Réf", lastName: "Assigné" },
+      previousMandatoryStages: [],
     });
   });
 
@@ -547,6 +596,97 @@ describe("Admin stage request detail (e2e) — issue #147", () => {
       .set("Cookie", cookieHeader({ access_token: student.token }))
       .expect(403);
     await request(app.getHttpServer()).get(`/admin/stage-requests/${stage.id}`).expect(401);
+  });
+
+  it("issue #154: lists only the student's VALIDATED mandatory stages, most recent decision first, excluding optional/refused/pending/draft and other students' stages", async () => {
+    const student = await signupStudent("Historique");
+    const otherStudent = await signupStudent("Autre");
+    const current = await seedStage(student.profileId);
+
+    await seedValidatedMandatoryStage(student.profileId, {
+      schoolYear: "2097-2098",
+      decidedAt: new Date("2097-06-01T00:00:00.000Z"),
+      organismName: "Ancien Hôpital",
+      service: "Ancien service",
+      promotion: "L2",
+    });
+    await seedValidatedMandatoryStage(student.profileId, {
+      schoolYear: "2098-2099",
+      decidedAt: new Date("2098-06-01T00:00:00.000Z"),
+      organismName: "Hôpital récent",
+      service: "Service récent",
+      promotion: "L3",
+    });
+    // None of these should ever appear.
+    await seedValidatedMandatoryStage(otherStudent.profileId);
+    await seedStage(student.profileId, { mandatory: false, status: "VALIDATED" });
+    await seedStage(student.profileId, { mandatory: true, status: "REFUSED" });
+    await seedStage(student.profileId, { mandatory: true, status: "PENDING" });
+    await seedStage(student.profileId, { mandatory: true, status: "DRAFT" });
+
+    const response = await request(app.getHttpServer())
+      .get(`/admin/stage-requests/${current.id}`)
+      .set("Cookie", adminCookie)
+      .expect(200);
+
+    const body = response.body as AdminStageRequestDetailResponse;
+    expect(body.previousMandatoryStages).toEqual([
+      {
+        schoolYear: "2098-2099",
+        semester: "S1",
+        promotion: "L3",
+        organism: { name: "Hôpital récent", structureType: "Secteur Sanitaire" },
+        service: "Service récent",
+      },
+      {
+        schoolYear: "2097-2098",
+        semester: "S1",
+        promotion: "L2",
+        organism: { name: "Ancien Hôpital", structureType: "Secteur Sanitaire" },
+        service: "Ancien service",
+      },
+    ]);
+  });
+
+  it("issue #154: returns an empty array when the student has no previous validated mandatory stage", async () => {
+    const student = await signupStudent("Sanshistorique");
+    const current = await seedStage(student.profileId);
+
+    const response = await request(app.getHttpServer())
+      .get(`/admin/stage-requests/${current.id}`)
+      .set("Cookie", adminCookie)
+      .expect(200);
+
+    expect((response.body as AdminStageRequestDetailResponse).previousMandatoryStages).toEqual([]);
+  });
+
+  it("BR-08 (issue #154): previous stages are read from the frozen snapshot, unaffected by later edits to the organism or the student's promotion", async () => {
+    const student = await signupStudent("Snapshot");
+    const current = await seedStage(student.profileId);
+    const validated = await seedValidatedMandatoryStage(student.profileId, {
+      organismName: "Nom au moment de la décision",
+      promotion: "L2",
+    });
+
+    // Edit what's live after the fact.
+    const liveSnapshot = validated.snapshot as { organism: { id: string } };
+    await prisma.hostOrganism.update({
+      where: { id: liveSnapshot.organism.id },
+      data: { name: "Nom modifié depuis" },
+    });
+    await prisma.studentProfile.update({
+      where: { id: student.profileId },
+      data: { promotion: "L3" },
+    });
+
+    const response = await request(app.getHttpServer())
+      .get(`/admin/stage-requests/${current.id}`)
+      .set("Cookie", adminCookie)
+      .expect(200);
+
+    const [previous] = (response.body as AdminStageRequestDetailResponse).previousMandatoryStages;
+    expect(previous?.organism.name).toBe("Nom au moment de la décision");
+    expect(previous?.promotion).toBe("L2");
   });
 });
 

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Alert, LinearProgress, Stack, Typography } from "@mui/material";
+import type { AdminPreviousMandatoryStage } from "shared";
 import {
   formatDate,
   formatPeriodRange,
@@ -7,6 +8,7 @@ import {
   mandatoryLabel,
 } from "../stages/format-summary";
 import { RecapField, SecondaryLine } from "../stages/StageSummaryParts";
+import { StructureTypeLabel } from "./StructureTypeLabel";
 import { useStageRequestDetail } from "./useStageRequestDetail";
 
 const NOT_PROVIDED = "Non renseigné";
@@ -29,6 +31,41 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
         {children}
       </Stack>
     </Stack>
+  );
+}
+
+// Issue #154: one row of the student's history of previously VALIDATED
+// mandatory stages, read from each stage's frozen snapshot (BR-08) — so a
+// later edit to the live organism or the student's current promotion never
+// changes what is shown here.
+function PreviousMandatoryStageRow({ stage }: { stage: AdminPreviousMandatoryStage }) {
+  return (
+    <RecapField
+      label={`${stage.promotion} · ${stage.semester} · ${stage.schoolYear}`}
+      labelVariant="body2"
+    >
+      <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
+        <StructureTypeLabel structureType={stage.organism.structureType} />
+        <Typography component="span" variant="body1">
+          {stage.organism.name}
+        </Typography>
+      </Stack>
+      <SecondaryLine>{stage.service}</SecondaryLine>
+    </RecapField>
+  );
+}
+
+function PreviousMandatoryStagesSection({ stages }: { stages: AdminPreviousMandatoryStage[] }) {
+  return (
+    <Section title="Stages obligatoires précédents">
+      {stages.length === 0 ? (
+        <Typography variant="body2" color="text.secondary">
+          Aucun stage obligatoire validé pour le moment.
+        </Typography>
+      ) : (
+        stages.map((stage, index) => <PreviousMandatoryStageRow key={index} stage={stage} />)
+      )}
+    </Section>
   );
 }
 
@@ -67,6 +104,7 @@ export function StageRequestDetail({ stageId }: { stageId: string }) {
             {`${mandatoryLabel(detail.mandatory)} · ${detail.semester} · soumise le ${formatDate(detail.submittedAt)}`}
           </RecapField>
         </Section>
+        <PreviousMandatoryStagesSection stages={detail.previousMandatoryStages} />
       </Column>
 
       <Column>

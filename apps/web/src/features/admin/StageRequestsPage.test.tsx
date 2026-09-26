@@ -104,6 +104,7 @@ function detail(overrides: Record<string, unknown> = {}) {
       },
     ],
     referent: null,
+    previousMandatoryStages: [],
     ...overrides,
   };
 }
@@ -795,6 +796,54 @@ describe("StageRequestsPage — issue #146", () => {
       expect(await screen.findByRole("alert")).toHaveTextContent(
         /impossible de charger le détail/i,
       );
+    });
+
+    it("issue #154: shows an empty state when the student has no previous validated mandatory stage", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([
+        request({ organism: { name: "Association Sportive", structureType: "Secteur Sanitaire" } }),
+      ]);
+      getStageRequestDetailMock.mockResolvedValue(detail());
+      renderPage();
+
+      const row = (await screen.findByText("Alice Martin")).closest("tr")!;
+      await user.click(row);
+
+      await screen.findByText("Hôpital Cochin");
+      expect(
+        screen.getByText("Aucun stage obligatoire validé pour le moment."),
+      ).toBeInTheDocument();
+    });
+
+    it("issue #154: shows the student's previous validated mandatory stages with promotion, semester, school year, structure type and organism/service", async () => {
+      const user = userEvent.setup();
+      getStageRequestsMock.mockResolvedValue([
+        request({ organism: { name: "Association Sportive", structureType: "Secteur Sanitaire" } }),
+      ]);
+      getStageRequestDetailMock.mockResolvedValue(
+        detail({
+          previousMandatoryStages: [
+            {
+              schoolYear: "2025-2026",
+              semester: "S1",
+              promotion: "L2",
+              organism: { name: "Hôpital Saint-Louis", structureType: "Secteur Sanitaire" },
+              service: "Service de neurologie",
+            },
+          ],
+        }),
+      );
+      renderPage();
+
+      const row = (await screen.findByText("Alice Martin")).closest("tr")!;
+      await user.click(row);
+
+      expect(await screen.findByText("Hôpital Saint-Louis")).toBeInTheDocument();
+      expect(screen.getByText("L2 · S1 · 2025-2026")).toBeInTheDocument();
+      expect(screen.getByText("Service de neurologie")).toBeInTheDocument();
+      expect(
+        screen.queryByText("Aucun stage obligatoire validé pour le moment."),
+      ).not.toBeInTheDocument();
     });
   });
 

@@ -167,6 +167,22 @@ export interface AdminStageRequestTutorDetail {
   acceptsPhoneContact: boolean;
 }
 
+// Issue #154: one of the student's own previously VALIDATED **mandatory**
+// stages, read from its frozen snapshot (ADR-0033, BR-08) — so a later edit
+// to the live organism or the student's promotion never changes what is
+// shown here. `promotion` is the student's promotion at decision time, not
+// their current one.
+export interface AdminPreviousMandatoryStage {
+  schoolYear: string;
+  semester: Semester;
+  promotion: Promotion;
+  organism: {
+    name: string;
+    structureType: string;
+  };
+  service: string;
+}
+
 export interface AdminStageRequestDetailResponse {
   id: string;
   version: number;
@@ -193,6 +209,8 @@ export interface AdminStageRequestDetailResponse {
   tutor: AdminStageRequestTutorDetail;
   periods: StageDraftPeriodResponse[];
   referent: StageReferentResponse | null;
+  // Issue #154: most recent decision first; empty when the student has none.
+  previousMandatoryStages: AdminPreviousMandatoryStage[];
 }
 
 // Issue #151 (BR-08, ADR-0003, ADR-0033): the wire request/response for
