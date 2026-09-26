@@ -64,13 +64,15 @@ One Nest module per business domain, not per technical layer:
 
 ```
 apps/api/src/modules/
-  auth/
-  students/
-  referents/
-  stages/
-  organisms/        # HostOrganism + Tutor
-  admin/             # AdminSetting, OrganismStructureType, CSV export
-  files/
+  auth/             # signup, login, refresh, password reset (JWT)
+  students/         # StudentProfile
+  referents/        # ReferentProfile, ReferentAssignment (+ the admin's referent management)
+  stages/           # Stage requests: student/ and admin/ sides (see below)
+  organisms/        # HostOrganism + Tutor, OrganismStructureType
+  admin/            # admin review of student profiles + certificate queue; AdminSetting and the CSV export are not built yet
+  files/            # S3 object storage (provider only, no controller)
+  mailer/           # outgoing email (provider only, no controller)
+  health/           # liveness endpoint
 ```
 
 Each module follows the standard Nest shape:
@@ -85,6 +87,19 @@ stages/
   dto/
     create-stage.dto.ts
     update-stage.dto.ts
+```
+
+When a module outgrows a flat folder, split it into sub-folders by audience or responsibility, never by technical layer (no `controllers/`, `services/`). Nest doesn't care: a module is defined by its `@Module({ controllers, providers })`, not its folder, so the module stays one module and only import paths change. `stages/` is the reference:
+
+```
+stages/
+  stages.module.ts
+  stage-snapshot.schema.ts      # shared by both sub-folders, stays at the root
+  student/                      # StagesController + StagesService
+    stages.service.ts
+    stages.service.spec-helpers.ts
+    stages-submit.service.spec.ts   # a long service spec splits by method
+  admin/                        # AdminStageRequestsController + service + dto/
 ```
 
 **Business logic lives in services, never in controllers.** Controllers only translate HTTP ↔ service calls (extract params, call the service, shape the response). This is the standard Nest separation and it's what makes the service layer unit-testable without spinning up HTTP.
@@ -130,6 +145,8 @@ apps/web/src/features/
 ```
 
 Each feature owns its components, hooks, and API-calling functions. Shared, truly cross-feature UI (buttons, layout shell, form primitives) lives in `apps/web/src/components/`.
+
+When a feature folder gets hard to scan, split it into sub-folders named after the action they serve, as a bare verb (`list/`, `detail/`, `edit/`, `submit/`, `duplicate/`, `login/`), followed by its object when the verb alone would be ambiguous (`review-stages/`, `review-certificates/`, `assign-referent/`, `reset-password/`), never after a file type (`components/`, `hooks/`, `helpers/`). A file lives in the sub-folder of its only consumer; a file used by several sub-folders stays at the feature root (`api.ts`, `query-keys.ts`, shared display parts). A sub-folder's entry points (its pages) sit at its root, and what they alone use nests below them by responsibility (`edit/save/`, `edit/wizard/steps/`).
 
 ### Forms
 
@@ -181,7 +198,8 @@ Consumed via the workspace protocol (`workspace:*`), never via relative paths re
 | Variables / functions | camelCase | `computeSemester()` |
 | Nest DTO files | `*.dto.ts` | `create-stage.dto.ts` |
 | Nest guards/pipes/interceptors | `*.guard.ts`, `*.pipe.ts`, `*.interceptor.ts` | `roles.guard.ts` |
-| Jest specs (api) | `*.spec.ts`, colocated | `stages.service.spec.ts` |
+| Jest specs (api) | `*.spec.ts`, colocated; a long service spec splits by method as `<feature>-<method>.service.spec.ts`, like the e2e files | `stages.service.spec.ts`, `stages-submit.service.spec.ts` |
+| Shared unit-test fixtures (api) | `*.spec-helpers.ts`, colocated, excluded from the build and coverage | `stages.service.spec-helpers.ts` |
 | Vitest specs (web) | `*.test.tsx`, colocated, matching the file under test's base name | `StageForm.test.tsx`, `api-client.test.ts` |
 | Prisma models | PascalCase | `HostOrganism` |
 | Prisma fields | camelCase | `profileYear` |
