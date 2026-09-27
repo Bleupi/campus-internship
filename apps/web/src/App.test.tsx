@@ -247,7 +247,7 @@ describe("App — the query cache across session boundaries", () => {
     expect(screen.queryByText(/impossible de charger le profil/i)).not.toBeInTheDocument();
   });
 
-  it("drops the whole cache at logout, without refetching the ended session's queries", async () => {
+  it("signs the user out of the cache and drops the rest at logout, without refetching the ended session's queries", async () => {
     getMeMock.mockResolvedValue({ user: authenticatedUser });
     getProfileMock.mockResolvedValue(studentProfile("VALID"));
     logoutMock.mockResolvedValue(undefined);
@@ -261,7 +261,7 @@ describe("App — the query cache across session boundaries", () => {
     await user.click(screen.getByRole("button", { name: /déconnexion/i }));
 
     expect(await screen.findByRole("button", { name: /se connecter/i })).toBeInTheDocument();
-    expect(queryClient.getQueryData(CURRENT_USER_QUERY_KEY)).toBeUndefined();
+    expect(queryClient.getQueryData(CURRENT_USER_QUERY_KEY)).toBeNull();
     expect(queryClient.getQueryData(STUDENT_PROFILE_QUERY_KEY)).toBeUndefined();
     expect(getMeMock).toHaveBeenCalledTimes(getMeCalls);
     expect(getProfileMock).toHaveBeenCalledTimes(getProfileCalls);
