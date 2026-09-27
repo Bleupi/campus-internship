@@ -60,9 +60,14 @@ jobs:
           file: apps/web/Dockerfile
           push: true
           # VITE_* vars are baked in at build time (apps/web/Dockerfile) —
-          # the API's public URL, not a secret.
+          # the API's public URL and the feature flags, none of them secrets.
+          # Feature flags are repository variables (this job runs outside the
+          # `production` environment); an unset variable builds the flag off.
+          # Turn a flag on here only after its API counterpart is on, so the
+          # UI never calls routes that still 404 (ADR-0029).
           build-args: |
             VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL }}
+            VITE_FEATURE_STAGE_MANAGEMENT=${{ vars.VITE_FEATURE_STAGE_MANAGEMENT }}
           tags: ${{ env.REGISTRY }}/web:${{ github.sha }}
 
   deploy:
