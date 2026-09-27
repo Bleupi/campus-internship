@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
+import { CURRENT_USER_QUERY_KEY } from "./features/auth/query-keys";
 import { STUDENT_PROFILE_QUERY_KEY } from "./features/students/query-keys";
 
 // Pinned off: these tests cover the legacy dashboard routing, and must not
@@ -13,9 +14,10 @@ vi.mock("./lib/feature-flags", () => ({ isStageManagementEnabled: false }));
 
 const getMeMock = vi.fn();
 const loginMock = vi.fn();
+const logoutMock = vi.fn();
 vi.mock("./features/auth/api", () => ({
   getMe: (...args: unknown[]) => getMeMock(...args),
-  logout: vi.fn(),
+  logout: (...args: unknown[]) => logoutMock(...args),
   login: (...args: unknown[]) => loginMock(...args),
   signup: vi.fn(),
 }));
@@ -210,11 +212,12 @@ describe("App route protection — issue #42 admin certificate queue", () => {
   });
 });
 
-describe("App — logging in over a previous session's cache", () => {
+describe("App — the query cache across session boundaries", () => {
   beforeEach(() => {
     getMeMock.mockReset();
     getProfileMock.mockReset();
     loginMock.mockReset();
+    logoutMock.mockReset();
   });
 
   afterEach(() => {
@@ -242,5 +245,25 @@ describe("App — logging in over a previous session's cache", () => {
 
     expect(await screen.findByText(/tableau de bord \(à venir\)/i)).toBeInTheDocument();
     expect(screen.queryByText(/impossible de charger le profil/i)).not.toBeInTheDocument();
+  });
+
+  it("drops the whole cache at logout, without refetching the ended session's queries", async () => {
+    getMeMock.mockResolvedValue({ user: authenticatedUser });
+    getProfileMock.mockResolvedValue(studentProfile("VALID"));
+    logoutMock.mockResolvedValue(undefined);
+    const queryClient = createQueryClient();
+    const user = userEvent.setup();
+    renderApp("/dashboard", queryClient);
+    await screen.findByText(/tableau de bord \(à venir\)/i);
+    const getMeCalls = getMeMock.mock.calls.length;
+    const getProfileCalls = getProfileMock.mock.calls.length;
+
+    await user.click(screen.getByRole("button", { name: /déconnexion/i }));
+
+    expect(await screen.findByRole("button", { name: /se connecter/i })).toBeInTheDocument();
+    expect(queryClient.getQueryData(CURRENT_USER_QUERY_KEY)).toBeUndefined();
+    expect(queryClient.getQueryData(STUDENT_PROFILE_QUERY_KEY)).toBeUndefined();
+    expect(getMeMock).toHaveBeenCalledTimes(getMeCalls);
+    expect(getProfileMock).toHaveBeenCalledTimes(getProfileCalls);
   });
 });
