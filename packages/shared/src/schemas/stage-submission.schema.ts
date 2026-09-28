@@ -38,7 +38,7 @@ export function getSubmissionBlockers(
     );
   }
   if (!candidate.hasOrganism) blockers.push("Choisissez un organisme d'accueil.");
-  if (!candidate.hasTutor) blockers.push("Choisissez un tuteur.");
+  if (!candidate.hasTutor) blockers.push("Choisissez un tuteur professionnel.");
   if (isBlank(candidate.service)) blockers.push("Renseignez le service.");
   if (isBlank(candidate.projectType)) blockers.push("Renseignez le type de handicap concerné.");
   if (isBlank(candidate.motivation)) blockers.push("Renseignez votre motivation.");

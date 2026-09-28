@@ -1,1 +1,6 @@
-export const WIZARD_STEPS = ["Organisme & tuteur", "Périodes", "Détails", "Récapitulatif"];
+export const WIZARD_STEPS = [
+  "Organisme & tuteur professionnel",
+  "Périodes",
+  "Détails",
+  "Récapitulatif",
+];

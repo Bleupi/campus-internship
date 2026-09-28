@@ -32,7 +32,7 @@ export function ReferentChangeImpactDialog({
 }: ReferentChangeImpactDialogProps) {
   return (
     <Dialog open={request !== null} onClose={onCancel} aria-labelledby="impact-dialog-title">
-      <DialogTitle id="impact-dialog-title">Changer le référent</DialogTitle>
+      <DialogTitle id="impact-dialog-title">Changer l'enseignant référent</DialogTitle>
       <DialogContent>
         <DialogContentText>{request && impactMessage(request)}</DialogContentText>
       </DialogContent>

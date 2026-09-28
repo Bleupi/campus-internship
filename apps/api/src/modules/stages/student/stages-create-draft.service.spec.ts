@@ -204,7 +204,7 @@ describe("StagesService", () => {
 
       await expect(attempt).rejects.toBeInstanceOf(InternalServerErrorException);
       await expect(attempt).rejects.toThrow(
-        "Impossible de créer le tuteur. Le brouillon n'a pas été enregistré.",
+        "Impossible de créer le tuteur professionnel. Le brouillon n'a pas été enregistré.",
       );
       expect(prisma.stage.create).not.toHaveBeenCalled();
     });

@@ -52,7 +52,7 @@ export function AddReferentDialog({
       setServerError(
         error instanceof ApiError && error.status === 409
           ? "Cette adresse email appartient déjà à une personne d'un autre nom."
-          : "Impossible d'ajouter le référent, merci de réessayer.",
+          : "Impossible d'ajouter l'enseignant référent, merci de réessayer.",
       );
     }
   });
@@ -60,7 +60,7 @@ export function AddReferentDialog({
   return (
     <Dialog open onClose={onClose} maxWidth="xs" fullWidth>
       <form onSubmit={onSubmit} noValidate>
-        <DialogTitle>Ajouter un référent</DialogTitle>
+        <DialogTitle>Ajouter un enseignant référent</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             <Typography variant="body2" sx={{ color: "text.secondary" }}>

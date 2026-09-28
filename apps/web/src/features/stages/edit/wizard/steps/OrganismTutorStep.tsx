@@ -207,17 +207,19 @@ export function OrganismTutorStep({
         <>
           <Divider />
           <Stack spacing={1.5}>
-            <Typography variant="subtitle1">Tuteur de stage</Typography>
+            <Typography variant="subtitle1">Tuteur professionnel</Typography>
             {tutor === null && !creatingTutor && (
               <>
                 <Autocomplete
                   options={tutorOptions}
                   getOptionLabel={(option) => `${option.firstName} ${option.lastName}`}
-                  noOptionsText="Aucun tuteur pour cet organisme"
+                  noOptionsText="Aucun tuteur professionnel pour cet organisme"
                   onChange={(_, value) => {
                     if (value) selectExistingTutor(value);
                   }}
-                  renderInput={(params) => <TextField {...params} label="Sélectionner un tuteur" />}
+                  renderInput={(params) => (
+                    <TextField {...params} label="Sélectionner un tuteur professionnel" />
+                  )}
                 />
                 <Button
                   variant="outlined"
@@ -225,20 +227,20 @@ export function OrganismTutorStep({
                   onClick={() => onCreatingChange("tutor")}
                   sx={{ alignSelf: "flex-start" }}
                 >
-                  Créer un nouveau Tuteur
+                  Créer un nouveau tuteur professionnel
                 </Button>
               </>
             )}
             {creatingTutor && (
               <TutorForm
-                heading="Nouveau tuteur"
-                submitLabel="Valider ce nouveau tuteur"
+                heading="Nouveau tuteur professionnel"
+                submitLabel="Valider ce nouveau tuteur professionnel"
                 onSubmit={createTutor}
               />
             )}
             {editingTutor && (
               <TutorForm
-                heading="Modifier le tuteur"
+                heading="Modifier le tuteur professionnel"
                 submitLabel="Valider les modifications"
                 defaultValues={tutorFormDefaults}
                 onSubmit={editTutor}
@@ -257,7 +259,7 @@ export function OrganismTutorStep({
                 {tutor.mode === "new" && (
                   <Typography variant="body1">
                     {tutor.data.firstName} {tutor.data.lastName} ({tutor.data.jobTitle}, nouveau
-                    tuteur)
+                    tuteur professionnel)
                   </Typography>
                 )}
                 {tutor.mode === "edit" && (
@@ -272,13 +274,14 @@ export function OrganismTutorStep({
                     onClick={() => onCreatingChange("edit-tutor")}
                     sx={{ alignSelf: "flex-start" }}
                   >
-                    Modifier le tuteur
+                    Modifier le tuteur professionnel
                   </Button>
                 )}
                 {ownTutor && !draftRows.tutor.editable && (
                   <Typography variant="body2" color="text.secondary">
-                    Ce tuteur est utilisé par d'autres demandes, il ne peut plus être modifié. Pour
-                    corriger ses informations, changez de tuteur puis créez-en un nouveau.
+                    Ce tuteur professionnel est utilisé par d'autres demandes, il ne peut plus être
+                    modifié. Pour corriger ses informations, changez de tuteur professionnel puis
+                    créez-en un nouveau.
                   </Typography>
                 )}
                 <Button
@@ -286,7 +289,7 @@ export function OrganismTutorStep({
                   onClick={() => onChange(organism, null)}
                   sx={{ alignSelf: "flex-start" }}
                 >
-                  Changer de tuteur
+                  Changer de tuteur professionnel
                 </Button>
               </Stack>
             )}

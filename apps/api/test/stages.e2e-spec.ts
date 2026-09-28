@@ -242,7 +242,7 @@ describe("Stages draft creation (e2e)", () => {
       .expect(500);
 
     expect(response.body.message).toBe(
-      "Impossible de créer le tuteur. Le brouillon n'a pas été enregistré.",
+      "Impossible de créer le tuteur professionnel. Le brouillon n'a pas été enregistré.",
     );
     expect(await ownStageCount()).toBe(stagesBefore);
     expect(await prisma.hostOrganism.count({ where: { name: organismName } })).toBe(0);

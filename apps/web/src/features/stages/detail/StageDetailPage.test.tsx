@@ -172,6 +172,16 @@ describe("StageDetailPage (issue #114)", () => {
     expect(screen.queryByText("non assigné")).not.toBeInTheDocument();
   });
 
+  it("labels the tutor 'Tuteur professionnel' and the referent 'Enseignant référent'", async () => {
+    getStageMock.mockResolvedValue(stageDetail());
+    renderPage();
+
+    expect(await screen.findByText("Organisme & tuteur professionnel")).toBeInTheDocument();
+    expect(screen.getByText("Tuteur professionnel")).toBeInTheDocument();
+    expect(screen.getAllByText("Enseignant référent").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Référent")).not.toBeInTheDocument();
+  });
+
   it("shows the submission date once the request has been submitted, and none for a draft", async () => {
     getStageMock.mockResolvedValue(
       stageDetail({ status: "PENDING", submittedAt: "2025-09-01T08:00:00.000Z" }),
@@ -234,7 +244,7 @@ describe("StageDetailPage (issue #114)", () => {
       stageDetail({
         status: "REFUSED",
         refusalReason:
-          "- L'adresse de l'organisme est incomplète.\n- Le tuteur n'est pas enseignant en APA.",
+          "- L'adresse de l'organisme est incomplète.\n- Le tuteur professionnel n'est pas enseignant en APA.",
       }),
     );
     renderPage();

@@ -119,7 +119,7 @@ export function StageRequestDetail({ stageId }: { stageId: string }) {
             {detail.service}
           </RecapField>
         </Section>
-        <Section title="Tuteur">
+        <Section title="Tuteur professionnel">
           <RecapField label="Nom" labelVariant="body2">
             {`${detail.tutor.firstName} ${detail.tutor.lastName} (${detail.tutor.jobTitle})`}
             <SecondaryLine>{detail.tutor.email}</SecondaryLine>

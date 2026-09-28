@@ -3,7 +3,7 @@
 // final built string (refuseStageSchema, packages/shared).
 export const REFUSAL_REASONS = [
   "L'adresse de l'organisme est incomplète.",
-  "Le tuteur n'est pas enseignant en APA.",
+  "Le tuteur professionnel n'est pas enseignant en APA.",
   "Il y a deux projets de stage pour le même stage.",
 ] as const;
 

@@ -46,7 +46,7 @@ export function ReferentSelect({
         const { key, ...rest } = props as typeof props & { key: string };
         return isAddOption(option) ? (
           <Box component="li" key={key} {...rest} sx={{ fontWeight: 600, color: "primary.main" }}>
-            Ajouter un référent
+            Ajouter un enseignant référent
           </Box>
         ) : (
           <li key={key} {...rest}>
@@ -59,7 +59,9 @@ export function ReferentSelect({
         if (isAddOption(option)) onAddRequested();
         else onChange(option);
       }}
-      renderInput={(params) => <TextField {...params} placeholder="Choisir un référent" />}
+      renderInput={(params) => (
+        <TextField {...params} placeholder="Choisir un enseignant référent" />
+      )}
       sx={{ minWidth: 200 }}
     />
   );
