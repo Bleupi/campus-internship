@@ -49,6 +49,71 @@ describe("ReferentsService", () => {
     });
   });
 
+  describe("listAssignments — temporary referent → students overview", () => {
+    function assignment(id: string, firstName: string, lastName: string, promotion: string | null) {
+      return { student: { id, promotion, user: { firstName, lastName } } };
+    }
+
+    it("keeps non-archived referents and archived ones that still have assignments, sorted by last name", async () => {
+      prisma.referentProfile.findMany.mockResolvedValue([]);
+
+      await service.listAssignments();
+
+      expect(prisma.referentProfile.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { OR: [{ archived: false }, { assignments: { some: {} } }] },
+          orderBy: { user: { lastName: "asc" } },
+        }),
+      );
+    });
+
+    it("lists each assigned student once per referent, even across several (schoolYear, semester, mandatory) tuples", async () => {
+      prisma.referentProfile.findMany.mockResolvedValue([
+        {
+          id: "ref-1",
+          user: { firstName: "Réf", lastName: "Martin" },
+          assignments: [
+            assignment("stu-1", "Alice", "Dupont", "L2"),
+            assignment("stu-1", "Alice", "Dupont", "L2"),
+            assignment("stu-2", "Bob", "Aubert", null),
+          ],
+        },
+        { id: "ref-2", user: { firstName: "Réf", lastName: "Petit" }, assignments: [] },
+      ]);
+
+      await expect(service.listAssignments()).resolves.toEqual([
+        {
+          id: "ref-1",
+          firstName: "Réf",
+          lastName: "Martin",
+          students: [
+            { id: "stu-2", firstName: "Bob", lastName: "Aubert", promotion: null },
+            { id: "stu-1", firstName: "Alice", lastName: "Dupont", promotion: "L2" },
+          ],
+        },
+        { id: "ref-2", firstName: "Réf", lastName: "Petit", students: [] },
+      ]);
+    });
+
+    it("sorts students by last name then first name, ignoring case and accents", async () => {
+      prisma.referentProfile.findMany.mockResolvedValue([
+        {
+          id: "ref-1",
+          user: { firstName: "Réf", lastName: "Martin" },
+          assignments: [
+            assignment("stu-1", "Zoé", "Écrin", "L3"),
+            assignment("stu-2", "Anne", "ecrin", "L3"),
+            assignment("stu-3", "Léo", "Durand", "L2"),
+          ],
+        },
+      ]);
+
+      const [referent] = await service.listAssignments();
+
+      expect(referent!.students.map((s) => s.id)).toEqual(["stu-3", "stu-2", "stu-1"]);
+    });
+  });
+
   describe("assign — ADR-0014: upsert on the four-tuple as an in-place update", () => {
     const DTO = {
       studentId: "student-1",

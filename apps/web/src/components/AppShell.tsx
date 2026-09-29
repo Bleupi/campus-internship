@@ -20,6 +20,7 @@ import PendingActionsOutlinedIcon from "@mui/icons-material/PendingActionsOutlin
 import LogoutIcon from "@mui/icons-material/LogoutOutlined";
 import MenuIcon from "@mui/icons-material/MenuOutlined";
 import PersonOutlineOutlinedIcon from "@mui/icons-material/PersonOutlineOutlined";
+import SupervisorAccountOutlinedIcon from "@mui/icons-material/SupervisorAccountOutlined";
 import SpaceDashboardOutlinedIcon from "@mui/icons-material/SpaceDashboardOutlined";
 import type { ReactNode } from "react";
 import { useState } from "react";
@@ -74,6 +75,15 @@ const stageRequestsNavItem: NavItemConfig = {
   to: ROUTES.STAGE_REQUESTS,
   label: "Demandes à traiter",
   icon: <PendingActionsOutlinedIcon />,
+};
+
+// Temporary: read-only overview of which students each referent follows.
+// Same flag and role gating as the stage requests (the referents endpoints
+// are only registered with the stage management feature, ADR-0029).
+const referentAssignmentsNavItem: NavItemConfig = {
+  to: ROUTES.REFERENT_ASSIGNMENTS,
+  label: "Référents",
+  icon: <SupervisorAccountOutlinedIcon />,
 };
 
 // useMatch is the same matching react-router uses internally for NavLink's
@@ -163,7 +173,9 @@ export function AppShell() {
     isStageManagementEnabled && isStudent ? stagesNavItem : dashboardNavItem,
     profileNavItem,
     ...(isAdmin ? [adminNavItem] : []),
-    ...(isAdmin && isStageManagementEnabled ? [stageRequestsNavItem] : []),
+    ...(isAdmin && isStageManagementEnabled
+      ? [stageRequestsNavItem, referentAssignmentsNavItem]
+      : []),
   ];
 
   const handleLogout = () => {

@@ -4,6 +4,7 @@ import { blocksNavigation } from "shared";
 import { AppShell } from "./components/AppShell";
 import { CertificateQueuePage } from "./features/admin/review-certificates/CertificateQueuePage";
 import { StageRequestsPage } from "./features/admin/review-stages/StageRequestsPage";
+import { ReferentAssignmentsPage } from "./features/admin/view-referent-assignments/ReferentAssignmentsPage";
 import { ForgotPasswordPage } from "./features/auth/forgot-password/ForgotPasswordPage";
 import { LoginPage } from "./features/auth/login/LoginPage";
 import { ResetPasswordPage } from "./features/auth/reset-password/ResetPasswordPage";
@@ -104,7 +105,10 @@ export function App() {
             <Route element={<RequireAdmin />}>
               <Route path={ROUTES.CERTIFICATE_QUEUE} element={<CertificateQueuePage />} />
               {isStageManagementEnabled && (
-                <Route path={ROUTES.STAGE_REQUESTS} element={<StageRequestsPage />} />
+                <>
+                  <Route path={ROUTES.STAGE_REQUESTS} element={<StageRequestsPage />} />
+                  <Route path={ROUTES.REFERENT_ASSIGNMENTS} element={<ReferentAssignmentsPage />} />
+                </>
               )}
             </Route>
           </Route>

@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
 import { createReferentSchema, type CreateReferentRequest } from "shared";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { RolesGuard } from "../../common/guards/roles.guard";
@@ -14,6 +14,12 @@ import { ReferentsService } from "./referents.service";
 @Roles("ADMIN")
 export class AdminReferentsController {
   constructor(private readonly referentsService: ReferentsService) {}
+
+  // Temporary read-only overview: referent → assigned students.
+  @Get("assignments")
+  listAssignments() {
+    return this.referentsService.listAssignments();
+  }
 
   @Post()
   create(@Body(new ZodValidationPipe(createReferentSchema)) dto: CreateReferentRequest) {

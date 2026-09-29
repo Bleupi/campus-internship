@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type { Promotion } from "../enums/promotion.enum";
 import type { assignReferentSchema } from "../schemas/assign-referent.schema";
 import type { createReferentSchema } from "../schemas/create-referent.schema";
 
@@ -24,3 +25,18 @@ export type AssignReferentResponse = ReferentListItem;
 export type CreateReferentRequest = z.infer<typeof createReferentSchema>;
 
 export type CreateReferentResponse = ReferentListItem;
+
+// Temporary admin overview: each referent with every student assigned to them,
+// across all (schoolYear, semester, mandatory) tuples, each student listed once.
+export interface ReferentAssignedStudent {
+  id: string;
+  firstName: string;
+  lastName: string;
+  promotion: Promotion | null;
+}
+
+export interface ReferentAssignmentsItem extends ReferentListItem {
+  students: ReferentAssignedStudent[];
+}
+
+export type ReferentAssignmentsResponse = ReferentAssignmentsItem[];

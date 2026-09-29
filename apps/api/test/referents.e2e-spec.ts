@@ -4,7 +4,11 @@ import { Test } from "@nestjs/testing";
 import cookieParser from "cookie-parser";
 import request from "supertest";
 import * as bcrypt from "bcrypt";
-import type { CreateReferentResponse, ReferentListResponse } from "shared";
+import type {
+  CreateReferentResponse,
+  ReferentAssignmentsResponse,
+  ReferentListResponse,
+} from "shared";
 import { AppModule } from "../src/app.module";
 import { BCRYPT_ROUNDS } from "../src/common/security/bcrypt";
 import { PrismaService } from "../src/prisma/prisma.service";
@@ -263,6 +267,51 @@ describe("Referents (e2e) — issues #148, #150", () => {
         .set("Cookie", adminCookie)
         .send({ studentId: "not-a-uuid" })
         .expect(400);
+    });
+  });
+
+  describe("GET /admin/referents/assignments", () => {
+    it("lists each referent with their assigned students, each student once across tuples", async () => {
+      const student = await signupStudent("Assigné");
+      const referent = await seedReferent("Overview");
+      const idle = await seedReferent("Overview-Idle");
+      for (const semester of ["S1", "S2"] as const) {
+        await prisma.referentAssignment.create({
+          data: {
+            studentId: student.profileId,
+            schoolYear: "2099-2100",
+            semester,
+            mandatory: true,
+            referentId: referent.id,
+          },
+        });
+      }
+
+      const response = await request(app.getHttpServer())
+        .get("/admin/referents/assignments")
+        .set("Cookie", adminCookie)
+        .expect(200);
+
+      const body = response.body as ReferentAssignmentsResponse;
+      expect(body.find((r) => r.id === referent.id)).toEqual({
+        id: referent.id,
+        firstName: "Réf",
+        lastName: "Overview",
+        students: [
+          { id: student.profileId, firstName: "Étu", lastName: "Assigné", promotion: "L2" },
+        ],
+      });
+      expect(body.find((r) => r.id === idle.id)?.students).toEqual([]);
+    });
+
+    it("RBAC: a non-admin is rejected (403) and an anonymous caller is unauthorized (401)", async () => {
+      const student = await signupStudent();
+
+      await request(app.getHttpServer())
+        .get("/admin/referents/assignments")
+        .set("Cookie", cookieHeader({ access_token: student.token }))
+        .expect(403);
+      await request(app.getHttpServer()).get("/admin/referents/assignments").expect(401);
     });
   });
 

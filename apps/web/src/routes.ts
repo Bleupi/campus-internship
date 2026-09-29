@@ -3,6 +3,7 @@ export const ROUTES = {
   PROFILE: "/profile",
   CERTIFICATE_QUEUE: "/admin/certificate-queue",
   STAGE_REQUESTS: "/admin/stage-requests",
+  REFERENT_ASSIGNMENTS: "/admin/referent-assignments",
   STAGES: "/stages",
   STAGE_NEW: "/stages/new",
   STAGE_DETAIL: "/stages/:id",

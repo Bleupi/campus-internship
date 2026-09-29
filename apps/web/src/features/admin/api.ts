@@ -7,6 +7,7 @@ import type {
   CertificateQueueResponse,
   CreateReferentRequest,
   CreateReferentResponse,
+  ReferentAssignmentsResponse,
   ReferentListResponse,
   RefuseStageRequest,
   RefuseStageResponse,
@@ -54,6 +55,11 @@ export function getStageRequestDetail(id: string) {
 // picker's option list.
 export function getReferents() {
   return apiClient.get<ReferentListResponse>("/referents");
+}
+
+// Temporary overview: each referent with the students assigned to them.
+export function getReferentAssignments() {
+  return apiClient.get<ReferentAssignmentsResponse>("/admin/referents/assignments");
 }
 
 // Issue #148: upserts on the (studentId, schoolYear, semester, mandatory)

@@ -6,6 +6,8 @@ import type {
   AssignReferentResponse,
   CreateReferentRequest,
   CreateReferentResponse,
+  ReferentAssignedStudent,
+  ReferentAssignmentsResponse,
   ReferentListResponse,
 } from "shared";
 import { BCRYPT_ROUNDS } from "../../common/security/bcrypt";
@@ -25,6 +27,13 @@ function sameName(a: string, b: string): boolean {
   return a.localeCompare(b, "fr", { sensitivity: "base" }) === 0;
 }
 
+function byName(a: ReferentAssignedStudent, b: ReferentAssignedStudent): number {
+  return (
+    a.lastName.localeCompare(b.lastName, "fr", { sensitivity: "base" }) ||
+    a.firstName.localeCompare(b.firstName, "fr", { sensitivity: "base" })
+  );
+}
+
 @Injectable()
 export class ReferentsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -42,6 +51,48 @@ export class ReferentsService {
       firstName: referent.user.firstName,
       lastName: referent.user.lastName,
     }));
+  }
+
+  // Temporary admin overview: each referent with the students assigned to
+  // them. An archived referent still holding assignments stays visible so no
+  // assigned student drops off the page. A student assigned through several
+  // (schoolYear, semester, mandatory) tuples (ADR-0014) is listed once.
+  async listAssignments(): Promise<ReferentAssignmentsResponse> {
+    const referents = await this.prisma.referentProfile.findMany({
+      where: { OR: [{ archived: false }, { assignments: { some: {} } }] },
+      include: {
+        user: { select: { firstName: true, lastName: true } },
+        assignments: {
+          select: {
+            student: {
+              select: {
+                id: true,
+                promotion: true,
+                user: { select: { firstName: true, lastName: true } },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { user: { lastName: "asc" } },
+    });
+    return referents.map((referent) => {
+      const students = new Map<string, ReferentAssignedStudent>();
+      for (const { student } of referent.assignments) {
+        students.set(student.id, {
+          id: student.id,
+          firstName: student.user.firstName,
+          lastName: student.user.lastName,
+          promotion: student.promotion,
+        });
+      }
+      return {
+        id: referent.id,
+        firstName: referent.user.firstName,
+        lastName: referent.user.lastName,
+        students: [...students.values()].sort(byName),
+      };
+    });
   }
 
   // ADR-0031: a new email creates a REFERENT user and its profile; an email
