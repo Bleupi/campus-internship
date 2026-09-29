@@ -33,8 +33,8 @@ RUN pnpm --filter shared build
 ARG VITE_API_BASE_URL=http://localhost:3000
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 # Feature flags (ADR-0029) are build-time too: a flag only set on the running
-# container would never reach the bundle. Off unless the build passes "true".
-ARG VITE_FEATURE_STAGE_MANAGEMENT=false
+# container would never reach the bundle. On unless the build passes "false".
+ARG VITE_FEATURE_STAGE_MANAGEMENT=true
 ENV VITE_FEATURE_STAGE_MANAGEMENT=$VITE_FEATURE_STAGE_MANAGEMENT
 RUN pnpm --filter web build
 
