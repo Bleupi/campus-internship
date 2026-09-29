@@ -29,7 +29,7 @@ pnpm dev                                   # API on http://localhost:3000, web o
 
 Always invoke Prisma through `pnpm --filter api run prisma <subcommand>`: that script loads the root `.env` (and expands its `${POSTGRES_USER}`-style references) before calling the Prisma CLI, which a bare `prisma` / `exec prisma` does not.
 
-The stage-management feature is on by default (`FEATURE_STAGE_MANAGEMENT` / `VITE_FEATURE_STAGE_MANAGEMENT`, ADR-0029), as in production. Set both to `"false"` in `.env` to run the app without it.
+`.env.example` turns the stage-management feature on (`FEATURE_STAGE_MANAGEMENT` / `VITE_FEATURE_STAGE_MANAGEMENT`, ADR-0029), as in production. Set both to `"false"` in `.env` to run the app without it.
 
 ### Demo accounts
 
