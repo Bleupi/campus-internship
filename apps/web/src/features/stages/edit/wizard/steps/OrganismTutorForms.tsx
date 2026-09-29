@@ -28,18 +28,12 @@ function emptyToUndefined(value: string | null | undefined) {
 
 interface FormProps<T> {
   heading: string;
-  submitLabel: string;
   defaultValues?: T;
   onSubmit: (data: T) => void;
 }
 
 // Creates a new organism, or (with defaultValues) corrects the draft's own.
-export function OrganismForm({
-  heading,
-  submitLabel,
-  defaultValues,
-  onSubmit,
-}: FormProps<HostOrganismInput>) {
+export function OrganismForm({ heading, defaultValues, onSubmit }: FormProps<HostOrganismInput>) {
   const structureTypes = useStructureTypes();
   const {
     register,
@@ -99,20 +93,20 @@ export function OrganismForm({
           helperText={errors.city?.message}
         />
       </Stack>
-      <Button type="submit" variant="outlined" sx={{ alignSelf: "flex-start" }}>
-        {submitLabel}
+      <Button
+        type="submit"
+        variant="outlined"
+        aria-label="Valider l'organisme"
+        sx={{ alignSelf: "flex-start" }}
+      >
+        Valider
       </Button>
     </Stack>
   );
 }
 
 // Creates a new tutor, or (with defaultValues) corrects the draft's own.
-export function TutorForm({
-  heading,
-  submitLabel,
-  defaultValues,
-  onSubmit,
-}: FormProps<TutorInput>) {
+export function TutorForm({ heading, defaultValues, onSubmit }: FormProps<TutorInput>) {
   const {
     register,
     handleSubmit,
@@ -182,8 +176,13 @@ export function TutorForm({
           />
         )}
       />
-      <Button type="submit" variant="outlined" sx={{ alignSelf: "flex-start" }}>
-        {submitLabel}
+      <Button
+        type="submit"
+        variant="outlined"
+        aria-label="Valider le tuteur professionnel"
+        sx={{ alignSelf: "flex-start" }}
+      >
+        Valider
       </Button>
     </Stack>
   );

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Autocomplete, Button, Chip, Divider, Stack, TextField, Typography } from "@mui/material";
+import { Autocomplete, Button, Divider, Stack, TextField, Typography } from "@mui/material";
 import AddOutlined from "@mui/icons-material/AddOutlined";
 import EditOutlined from "@mui/icons-material/EditOutlined";
 import {
@@ -132,23 +132,17 @@ export function OrganismTutorStep({
               variant="outlined"
               startIcon={<AddOutlined />}
               onClick={() => onCreatingChange("organism")}
+              aria-label="Créer un organisme"
               sx={{ alignSelf: "flex-start" }}
             >
-              Créer un nouvel Organisme
+              Créer
             </Button>
           </>
         )}
-        {creatingOrganism && (
-          <OrganismForm
-            heading="Nouvel organisme"
-            submitLabel="Valider ce nouvel organisme"
-            onSubmit={createOrganism}
-          />
-        )}
+        {creatingOrganism && <OrganismForm heading="Nouvel organisme" onSubmit={createOrganism} />}
         {editingOrganism && (
           <OrganismForm
             heading="Modifier l'organisme"
-            submitLabel="Valider les modifications"
             defaultValues={organismFormDefaults}
             onSubmit={editOrganism}
           />
@@ -165,12 +159,7 @@ export function OrganismTutorStep({
             )}
             {organism.mode !== "existing" && (
               <>
-                <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                  <Typography variant="body1">{organism.data.name}</Typography>
-                  {organism.mode === "new" && (
-                    <Chip size="small" color="info" variant="outlined" label="nouvel organisme" />
-                  )}
-                </Stack>
+                <Typography variant="body1">{organism.data.name}</Typography>
                 <Typography variant="body2" color="text.secondary">
                   {formatOrganismAddress(organism.data)}
                 </Typography>
@@ -181,9 +170,10 @@ export function OrganismTutorStep({
                 size="small"
                 startIcon={<EditOutlined />}
                 onClick={() => onCreatingChange("edit-organism")}
+                aria-label="Modifier l'organisme"
                 sx={{ alignSelf: "flex-start" }}
               >
-                Modifier l'organisme
+                Modifier
               </Button>
             )}
             {ownOrganism && !draftRows.organism.editable && (
@@ -195,9 +185,10 @@ export function OrganismTutorStep({
             <Button
               size="small"
               onClick={() => onChange(null, null)}
+              aria-label="Changer d'organisme"
               sx={{ alignSelf: "flex-start" }}
             >
-              Changer d'organisme
+              Changer
             </Button>
           </Stack>
         )}
@@ -225,23 +216,19 @@ export function OrganismTutorStep({
                   variant="outlined"
                   startIcon={<AddOutlined />}
                   onClick={() => onCreatingChange("tutor")}
+                  aria-label="Créer un tuteur professionnel"
                   sx={{ alignSelf: "flex-start" }}
                 >
-                  Créer un nouveau tuteur professionnel
+                  Créer
                 </Button>
               </>
             )}
             {creatingTutor && (
-              <TutorForm
-                heading="Nouveau tuteur professionnel"
-                submitLabel="Valider ce nouveau tuteur professionnel"
-                onSubmit={createTutor}
-              />
+              <TutorForm heading="Nouveau tuteur professionnel" onSubmit={createTutor} />
             )}
             {editingTutor && (
               <TutorForm
                 heading="Modifier le tuteur professionnel"
-                submitLabel="Valider les modifications"
                 defaultValues={tutorFormDefaults}
                 onSubmit={editTutor}
               />
@@ -256,13 +243,7 @@ export function OrganismTutorStep({
                         {t.firstName} {t.lastName} ({t.jobTitle})
                       </Typography>
                     ))}
-                {tutor.mode === "new" && (
-                  <Typography variant="body1">
-                    {tutor.data.firstName} {tutor.data.lastName} ({tutor.data.jobTitle}, nouveau
-                    tuteur professionnel)
-                  </Typography>
-                )}
-                {tutor.mode === "edit" && (
+                {tutor.mode !== "existing" && (
                   <Typography variant="body1">
                     {tutor.data.firstName} {tutor.data.lastName} ({tutor.data.jobTitle})
                   </Typography>
@@ -272,9 +253,10 @@ export function OrganismTutorStep({
                     size="small"
                     startIcon={<EditOutlined />}
                     onClick={() => onCreatingChange("edit-tutor")}
+                    aria-label="Modifier le tuteur professionnel"
                     sx={{ alignSelf: "flex-start" }}
                   >
-                    Modifier le tuteur professionnel
+                    Modifier
                   </Button>
                 )}
                 {ownTutor && !draftRows.tutor.editable && (
@@ -287,9 +269,10 @@ export function OrganismTutorStep({
                 <Button
                   size="small"
                   onClick={() => onChange(organism, null)}
+                  aria-label="Changer de tuteur professionnel"
                   sx={{ alignSelf: "flex-start" }}
                 >
-                  Changer de tuteur professionnel
+                  Changer
                 </Button>
               </Stack>
             )}
