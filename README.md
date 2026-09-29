@@ -19,12 +19,29 @@ Internship request & validation system for a university ("gestion des stages"), 
 ## Getting started
 
 ```bash
-cp .env.example .env        # only JWT_SECRET needs a real value, e.g. `openssl rand -base64 48`
-pnpm install                # also sets up git hooks (Husky)
-docker compose up -d        # local Postgres + MinIO
-pnpm --filter api exec prisma migrate dev
-pnpm dev                    # runs apps/api and apps/web in parallel
+cp .env.example .env                       # then set JWT_SECRET, e.g. `openssl rand -base64 48`
+pnpm install                               # also generates the Prisma client and sets up git hooks (Husky)
+docker compose up -d                       # local Postgres (port 5433) + MinIO (port 9000)
+pnpm --filter shared build                 # the API and the seed import the compiled `shared` package
+pnpm --filter api run prisma migrate dev   # applies every migration, then runs the dev seed
+pnpm dev                                   # API on http://localhost:3000, web on http://localhost:5173
 ```
+
+Always invoke Prisma through `pnpm --filter api run prisma <subcommand>`: that script loads the root `.env` (and expands its `${POSTGRES_USER}`-style references) before calling the Prisma CLI, which a bare `prisma` / `exec prisma` does not.
+
+`.env.example` turns the stage-management feature on (`FEATURE_STAGE_MANAGEMENT` / `VITE_FEATURE_STAGE_MANAGEMENT`, ADR-0029), as in production. Set both to `"false"` in `.env` to run the app without it.
+
+### Demo accounts
+
+The dev seed (`pnpm --filter api run db:seed`, also run automatically by `migrate dev`) creates one admin account and about 20 student accounts, one set per profile status, all with the password `MotDePasseDemo2026!`. The full list is printed at the end of the seed. For example:
+
+| Account                       | Role / profile status                          |
+| ----------------------------- | ---------------------------------------------- |
+| `admin.demo@example.com`      | `ADMIN` only (admin side, no student profile)  |
+| `marion.faure@etu.u-paris.fr` | `STUDENT`, `VALID` (can submit stage requests) |
+| `amel.rahmani@etu.u-paris.fr` | `STUDENT`, `INCOMPLETE`                        |
+
+There is no signup flow for the `ADMIN` role (ADR-0025): outside local development, admin accounts are provisioned by hand. Don't grant `ADMIN` to a seeded student to try the admin side, that account would then carry two conflicting roles. Log in with the seeded admin account instead.
 
 ## Common commands
 
@@ -38,7 +55,8 @@ pnpm dev                    # runs apps/api and apps/web in parallel
 | `pnpm --filter api run test:e2e` | API e2e tests, on the dedicated `_test` database and `-test` bucket (created on first run, ADR-0030) |
 | `pnpm test:all` | Unit tests, then API e2e tests (needs `docker compose up -d`) |
 | `pnpm secrets:scan` | Full-history gitleaks scan |
-| `pnpm --filter api exec prisma migrate dev` | Apply/create a Prisma migration |
+| `pnpm --filter api run prisma migrate dev` | Apply/create a Prisma migration |
+| `pnpm --filter api run db:seed` | Reset the dev seed accounts |
 | `pnpm changeset` | Record a behaviour-changing change for release notes |
 
 ## Layout
