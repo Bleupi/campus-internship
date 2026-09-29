@@ -238,6 +238,8 @@ describe("App — the query cache across session boundaries", () => {
     getProfileMock.mockResolvedValue(studentProfile("VALID"));
     const user = userEvent.setup();
     renderApp("/login", queryClient);
+    expect(queryClient.getQueryState(STUDENT_PROFILE_QUERY_KEY)?.status).toBe("error");
+    expect(getProfileMock).not.toHaveBeenCalled();
 
     await user.type(screen.getByLabelText(/email/i), authenticatedUser.email);
     await user.type(screen.getByLabelText(/mot de passe/i), "whatever");
@@ -245,9 +247,13 @@ describe("App — the query cache across session boundaries", () => {
 
     expect(await screen.findByText(/tableau de bord \(à venir\)/i)).toBeInTheDocument();
     expect(screen.queryByText(/impossible de charger le profil/i)).not.toBeInTheDocument();
+    // Reached by fetching the profile anew, not by some other route around it.
+    expect(getProfileMock).toHaveBeenCalledTimes(1);
+    expect(queryClient.getQueryState(STUDENT_PROFILE_QUERY_KEY)?.status).toBe("success");
+    expect(queryClient.getQueryData(STUDENT_PROFILE_QUERY_KEY)).toEqual(studentProfile("VALID"));
   });
 
-  it("signs the user out of the cache and drops the rest at logout, without refetching the ended session's queries", async () => {
+  async function logOutFromDashboard() {
     getMeMock.mockResolvedValue({ user: authenticatedUser });
     getProfileMock.mockResolvedValue(studentProfile("VALID"));
     logoutMock.mockResolvedValue(undefined);
@@ -255,15 +261,27 @@ describe("App — the query cache across session boundaries", () => {
     const user = userEvent.setup();
     renderApp("/dashboard", queryClient);
     await screen.findByText(/tableau de bord \(à venir\)/i);
-    const getMeCalls = getMeMock.mock.calls.length;
-    const getProfileCalls = getProfileMock.mock.calls.length;
+    const callsBeforeLogout = {
+      getMe: getMeMock.mock.calls.length,
+      getProfile: getProfileMock.mock.calls.length,
+    };
 
     await user.click(screen.getByRole("button", { name: /déconnexion/i }));
+    await screen.findByRole("button", { name: /se connecter/i });
+    return { queryClient, callsBeforeLogout };
+  }
 
-    expect(await screen.findByRole("button", { name: /se connecter/i })).toBeInTheDocument();
+  it("keeps the current user as null and drops every other query at logout", async () => {
+    const { queryClient } = await logOutFromDashboard();
+
     expect(queryClient.getQueryData(CURRENT_USER_QUERY_KEY)).toBeNull();
     expect(queryClient.getQueryData(STUDENT_PROFILE_QUERY_KEY)).toBeUndefined();
-    expect(getMeMock).toHaveBeenCalledTimes(getMeCalls);
-    expect(getProfileMock).toHaveBeenCalledTimes(getProfileCalls);
+  });
+
+  it("doesn't refetch the ended session's user or profile at logout", async () => {
+    const { callsBeforeLogout } = await logOutFromDashboard();
+
+    expect(getMeMock).toHaveBeenCalledTimes(callsBeforeLogout.getMe);
+    expect(getProfileMock).toHaveBeenCalledTimes(callsBeforeLogout.getProfile);
   });
 });
