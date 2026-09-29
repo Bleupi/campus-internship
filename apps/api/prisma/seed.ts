@@ -3,6 +3,9 @@
 // the FileObject rows that status implies, so the admin cert-validation
 // queue (#41/#42) and the student profile flow (#9/#10/#12) have something
 // real to look at locally without walking through signup/upload by hand.
+// Plus one ADMIN-only account to review them with: there is no admin signup
+// (ADR-0025), and granting ADMIN to a seeded student would give that account
+// two conflicting roles.
 //
 // Idempotent: re-running deletes and recreates the fixed set of seed emails
 // below (cascade removes their StudentProfile/FileObject/RefreshToken rows)
@@ -42,6 +45,10 @@ const BUCKET = requireEnv("S3_BUCKET");
 // satisfies signupSchema's min(18); not a real credential, this is local-only
 // seed data (never committed with a live meaning beyond a dev/CI database).
 const SEED_PASSWORD = "MotDePasseDemo2026!";
+
+// Deliberately outside STUDENT_EMAIL_DOMAIN: personnel accounts aren't tied
+// to any institutional domain (ADR-0025).
+const SEED_ADMIN = { email: "admin.demo@example.com", firstName: "Admin", lastName: "Démo" };
 
 const CURRENT_YEAR = getCurrentSchoolYear();
 const PREVIOUS_YEAR = shiftSchoolYear(CURRENT_YEAR, -1);
@@ -342,6 +349,20 @@ async function seedStudent(student: SeedStudent): Promise<void> {
   }
 }
 
+// ADMIN only, no StudentProfile: the account a local reviewer logs in with to
+// see the admin side. Same delete-then-create idempotency as seedStudent (an
+// admin owns no Stage, so there's no non-cascading FK to clear first).
+async function seedAdmin(): Promise<void> {
+  await prisma.user.deleteMany({ where: { email: SEED_ADMIN.email } });
+  await prisma.user.create({
+    data: {
+      ...SEED_ADMIN,
+      passwordHash: await bcrypt.hash(SEED_PASSWORD, BCRYPT_ROUNDS),
+      roles: ["ADMIN"],
+    },
+  });
+}
+
 // Upsert-by-unique-label is idempotent the same way seedStudent's
 // deleteMany-then-create is, and simpler here since there's no dependent
 // row to cascade-clean first. Labels outside the current list are deleted so
@@ -361,11 +382,13 @@ async function main(): Promise<void> {
   await ensureBucket();
   await seedStructureTypes();
 
+  await seedAdmin();
   for (const student of STUDENTS) {
     await seedStudent(student);
   }
 
   console.log(`Seeded ${STRUCTURE_TYPE_LABELS.length} organism structure types.\n`);
+  console.log(`Seeded 1 admin account (password: ${SEED_PASSWORD}):\n  - ${SEED_ADMIN.email}\n`);
   console.log(`Seeded ${STUDENTS.length} student accounts (password: ${SEED_PASSWORD}):\n`);
   const byStatus = new Map<string, string[]>();
   for (const s of STUDENTS) {

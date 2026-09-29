@@ -33,21 +33,15 @@ Always invoke Prisma through `pnpm --filter api run prisma <subcommand>`: that s
 
 ### Demo accounts
 
-The dev seed (`pnpm --filter api run db:seed`, also run automatically by `migrate dev`) creates about 20 student accounts, one set per profile status, all with the password `MotDePasseDemo2026!`. The full list is printed at the end of the seed. For example:
+The dev seed (`pnpm --filter api run db:seed`, also run automatically by `migrate dev`) creates one admin account and about 20 student accounts, one set per profile status, all with the password `MotDePasseDemo2026!`. The full list is printed at the end of the seed. For example:
 
-| Account                       | Profile status                      |
-| ----------------------------- | ----------------------------------- |
-| `marion.faure@etu.u-paris.fr` | `VALID` (can submit stage requests) |
-| `amel.rahmani@etu.u-paris.fr` | `INCOMPLETE`                        |
+| Account                       | Role / profile status                          |
+| ----------------------------- | ---------------------------------------------- |
+| `admin.demo@example.com`      | `ADMIN` only (admin side, no student profile)  |
+| `marion.faure@etu.u-paris.fr` | `STUDENT`, `VALID` (can submit stage requests) |
+| `amel.rahmani@etu.u-paris.fr` | `STUDENT`, `INCOMPLETE`                        |
 
-There is no signup flow for the `ADMIN` role (ADR-0025). To try the admin side locally, grant it to a seeded account:
-
-```bash
-docker compose exec postgres psql -U stages -d stages \
-  -c "UPDATE \"User\" SET roles = array_append(roles, 'ADMIN') WHERE email = 'amel.rahmani@etu.u-paris.fr';"
-```
-
-Then log in again with that account.
+There is no signup flow for the `ADMIN` role (ADR-0025): outside local development, admin accounts are provisioned by hand. Don't grant `ADMIN` to a seeded student to try the admin side, that account would then carry two conflicting roles. Log in with the seeded admin account instead.
 
 ## Common commands
 
