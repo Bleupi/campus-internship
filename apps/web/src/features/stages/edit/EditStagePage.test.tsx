@@ -115,7 +115,7 @@ async function nextStep(user: User) {
   await user.click(screen.getByRole("button", { name: /suivant/i }));
 }
 
-// Organisme & tuteur -> Périodes -> Détails -> Récapitulatif, touching nothing.
+// Organisme & tuteur professionnel -> Périodes -> Détails -> Récapitulatif, touching nothing.
 async function walkToRecap(user: User) {
   await screen.findByText("Hôpital Cochin");
   await nextStep(user);
@@ -377,8 +377,10 @@ describe("EditStagePage (issue #116)", () => {
 
       await screen.findByText("Hôpital Cochin");
 
-      expect(screen.getByRole("button", { name: /modifier l'organisme/i })).toBeVisible();
-      expect(await screen.findByRole("button", { name: /modifier le tuteur/i })).toBeVisible();
+      expect(screen.getByRole("button", { name: "Modifier l'organisme" })).toBeVisible();
+      expect(
+        await screen.findByRole("button", { name: "Modifier le tuteur professionnel" }),
+      ).toBeVisible();
     });
 
     it("sends an in-place edit of the organism, keeping the tutor, once its form is validated", async () => {
@@ -386,12 +388,12 @@ describe("EditStagePage (issue #116)", () => {
       renderPage();
 
       await screen.findByText("Hôpital Cochin");
-      await user.click(screen.getByRole("button", { name: /modifier l'organisme/i }));
+      await user.click(screen.getByRole("button", { name: "Modifier l'organisme" }));
       const name = screen.getByLabelText(/nom de l'organisme/i);
       expect(name).toHaveValue("Hôpital Cochin");
       await user.clear(name);
       await user.type(name, "Hôpital Necker");
-      await user.click(screen.getByRole("button", { name: /valider les modifications/i }));
+      await user.click(screen.getByRole("button", { name: "Valider l'organisme" }));
 
       expect(await screen.findByText("Hôpital Necker")).toBeVisible();
       await nextStep(user);
@@ -411,12 +413,14 @@ describe("EditStagePage (issue #116)", () => {
       renderPage();
 
       await screen.findByText("Hôpital Cochin");
-      await user.click(await screen.findByRole("button", { name: /modifier le tuteur/i }));
+      await user.click(
+        await screen.findByRole("button", { name: "Modifier le tuteur professionnel" }),
+      );
       const jobTitle = screen.getByLabelText(/fonction/i);
       expect(jobTitle).toHaveValue("Médecin");
       await user.clear(jobTitle);
       await user.type(jobTitle, "Cheffe de service");
-      await user.click(screen.getByRole("button", { name: /valider les modifications/i }));
+      await user.click(screen.getByRole("button", { name: "Valider le tuteur professionnel" }));
 
       await nextStep(user);
       await nextStep(user);
@@ -435,9 +439,9 @@ describe("EditStagePage (issue #116)", () => {
       renderPage();
 
       await screen.findByText("Hôpital Cochin");
-      await user.click(screen.getByRole("button", { name: /modifier l'organisme/i }));
+      await user.click(screen.getByRole("button", { name: "Modifier l'organisme" }));
       await user.clear(screen.getByLabelText(/nom de l'organisme/i));
-      await user.click(screen.getByRole("button", { name: /valider les modifications/i }));
+      await user.click(screen.getByRole("button", { name: "Valider l'organisme" }));
 
       expect(await screen.findByText(/le nom de l'organisme est requis/i)).toBeVisible();
     });
@@ -447,7 +451,7 @@ describe("EditStagePage (issue #116)", () => {
       renderPage();
 
       await screen.findByText("Hôpital Cochin");
-      await user.click(screen.getByRole("button", { name: /modifier l'organisme/i }));
+      await user.click(screen.getByRole("button", { name: "Modifier l'organisme" }));
       await user.click(screen.getByRole("button", { name: /précédent/i }));
 
       expect(screen.queryByLabelText(/nom de l'organisme/i)).toBeNull();
@@ -460,12 +464,12 @@ describe("EditStagePage (issue #116)", () => {
 
       await screen.findByText("Hôpital Cochin");
 
-      expect(screen.queryByRole("button", { name: /modifier l'organisme/i })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Modifier l'organisme" })).toBeNull();
       expect(screen.getByText(/utilisé par d'autres demandes/i)).toBeVisible();
 
       // The way out is the same inline-creation sub-step as for a new draft.
-      await userEvent.setup().click(screen.getByRole("button", { name: /changer d'organisme/i }));
-      expect(screen.getByRole("button", { name: /créer un nouvel organisme/i })).toBeVisible();
+      await userEvent.setup().click(screen.getByRole("button", { name: "Changer d'organisme" }));
+      expect(screen.getByRole("button", { name: "Créer un organisme" })).toBeVisible();
     });
 
     it("steers to creating a new tutor, with no edit button, once the tutor is frozen", async () => {
@@ -475,8 +479,10 @@ describe("EditStagePage (issue #116)", () => {
       await screen.findByText("Hôpital Cochin");
 
       await screen.findByText(/marie curie/i);
-      expect(screen.queryByRole("button", { name: /modifier le tuteur/i })).toBeNull();
-      expect(screen.getByText(/ce tuteur est utilisé par d'autres demandes/i)).toBeVisible();
+      expect(screen.queryByRole("button", { name: "Modifier le tuteur professionnel" })).toBeNull();
+      expect(
+        screen.getByText(/ce tuteur professionnel est utilisé par d'autres demandes/i),
+      ).toBeVisible();
     });
 
     it("explains a frozen row refused by the server (a race) with the server's own message", async () => {

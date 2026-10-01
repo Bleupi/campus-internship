@@ -225,7 +225,7 @@ describe("StageRequestsPage — issue #146", () => {
     expect(label).toHaveTextContent("Ancien type supprimé");
   });
 
-  it("BR-03: tabs Toutes / Sans référent / Prêtes à valider show their counts and filter the rows", async () => {
+  it("BR-03: tabs Toutes / Sans enseignant référent / Prêtes à valider show their counts and filter the rows", async () => {
     const user = userEvent.setup();
     getStageRequestsMock.mockResolvedValue([
       request({
@@ -247,10 +247,10 @@ describe("StageRequestsPage — issue #146", () => {
     renderPage();
 
     expect(await screen.findByRole("tab", { name: /toutes.*3/i })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /sans référent.*1/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /sans enseignant référent.*1/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /prêtes à valider.*2/i })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: /sans référent/i }));
+    await user.click(screen.getByRole("tab", { name: /sans enseignant référent/i }));
     expect(bodyRows()).toHaveLength(1);
     expect(screen.getByText("Bob Durand")).toBeInTheDocument();
 
@@ -307,7 +307,7 @@ describe("StageRequestsPage — issue #146", () => {
     renderPage();
     await screen.findByText("Alice Martin");
 
-    await user.click(screen.getByRole("tab", { name: /sans référent/i }));
+    await user.click(screen.getByRole("tab", { name: /sans enseignant référent/i }));
     await user.type(screen.getByRole("searchbox", { name: /rechercher/i }), "martin");
 
     expect(screen.getByText(/aucune demande ne correspond/i)).toBeInTheDocument();
@@ -366,7 +366,7 @@ describe("StageRequestsPage — issue #146", () => {
       await user.click(await screen.findByRole("option", { name: "Claire Bernard" }));
 
       expect(
-        await screen.findByText("Impossible d'assigner le référent, merci de réessayer."),
+        await screen.findByText("Impossible d'assigner l'enseignant référent, merci de réessayer."),
       ).toBeInTheDocument();
     });
 
@@ -405,7 +405,7 @@ describe("StageRequestsPage — issue #146", () => {
 
       await pickReferent(user);
 
-      const dialog = await screen.findByRole("dialog", { name: "Changer le référent" });
+      const dialog = await screen.findByRole("dialog", { name: "Changer l'enseignant référent" });
       expect(
         within(dialog).getByText(
           "Ce changement s'applique aussi à 2 autres demandes en cours de l'étudiant Alice Martin.",
@@ -426,7 +426,7 @@ describe("StageRequestsPage — issue #146", () => {
 
       await pickReferent(user);
 
-      const dialog = await screen.findByRole("dialog", { name: "Changer le référent" });
+      const dialog = await screen.findByRole("dialog", { name: "Changer l'enseignant référent" });
       expect(
         within(dialog).getByText(
           "Ce changement s'applique aussi à 1 autre demande en cours de l'étudiant Alice Martin.",
@@ -444,7 +444,7 @@ describe("StageRequestsPage — issue #146", () => {
       renderPage();
 
       await pickReferent(user);
-      const dialog = await screen.findByRole("dialog", { name: "Changer le référent" });
+      const dialog = await screen.findByRole("dialog", { name: "Changer l'enseignant référent" });
       await user.click(within(dialog).getByRole("button", { name: "Annuler" }));
 
       await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
@@ -475,14 +475,16 @@ describe("StageRequestsPage — issue #146", () => {
 
       const row = (await screen.findByText("Alice Martin")).closest("tr")!;
       await user.click(within(row).getByRole("combobox"));
-      await user.click(await screen.findByRole("option", { name: "Ajouter un référent" }));
-      const form = await screen.findByRole("dialog", { name: "Ajouter un référent" });
+      await user.click(
+        await screen.findByRole("option", { name: "Ajouter un enseignant référent" }),
+      );
+      const form = await screen.findByRole("dialog", { name: "Ajouter un enseignant référent" });
       await user.type(within(form).getByLabelText("Prénom"), "Paul");
       await user.type(within(form).getByLabelText("Nom"), "Durand");
       await user.type(within(form).getByLabelText("Email"), "paul.durand@example.org");
       await user.click(within(form).getByRole("button", { name: "Ajouter" }));
 
-      const dialog = await screen.findByRole("dialog", { name: "Changer le référent" });
+      const dialog = await screen.findByRole("dialog", { name: "Changer l'enseignant référent" });
       expect(assignReferentMock).not.toHaveBeenCalled();
       await user.click(within(dialog).getByRole("button", { name: "Confirmer" }));
 
@@ -496,8 +498,10 @@ describe("StageRequestsPage — issue #146", () => {
     async function openAddDialog(user: ReturnType<typeof userEvent.setup>) {
       const row = (await screen.findByText("Alice Martin")).closest("tr")!;
       await user.click(within(row).getByRole("combobox"));
-      await user.click(await screen.findByRole("option", { name: "Ajouter un référent" }));
-      return screen.findByRole("dialog", { name: "Ajouter un référent" });
+      await user.click(
+        await screen.findByRole("option", { name: "Ajouter un enseignant référent" }),
+      );
+      return screen.findByRole("dialog", { name: "Ajouter un enseignant référent" });
     }
 
     it("the picker offers an 'add a referent' option that opens a first name / last name / email form for the current request", async () => {
@@ -598,7 +602,9 @@ describe("StageRequestsPage — issue #146", () => {
       await user.click(within(dialog).getByRole("button", { name: "Ajouter" }));
 
       expect(
-        await within(dialog).findByText("Impossible d'ajouter le référent, merci de réessayer."),
+        await within(dialog).findByText(
+          "Impossible d'ajouter l'enseignant référent, merci de réessayer.",
+        ),
       ).toBeInTheDocument();
       expect(assignReferentMock).not.toHaveBeenCalled();
     });
@@ -637,7 +643,7 @@ describe("StageRequestsPage — issue #146", () => {
       await user.click(within(dialog).getByRole("button", { name: "Ajouter" }));
 
       expect(
-        await screen.findByText("Impossible d'assigner le référent, merci de réessayer."),
+        await screen.findByText("Impossible d'assigner l'enseignant référent, merci de réessayer."),
       ).toBeInTheDocument();
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });

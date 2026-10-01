@@ -505,7 +505,7 @@ export class AdminStageRequestsService {
     );
     const assignment = await this.findAssignedReferentOrThrow(
       stage,
-      "Un référent doit être assigné avant de refuser cette demande",
+      "Un enseignant référent doit être assigné avant de refuser cette demande",
     );
     const { organism, tutor, student, service, projectType, motivation } = stage;
 
@@ -565,7 +565,7 @@ export class AdminStageRequestsService {
     );
     const assignment = await this.findAssignedReferentOrThrow(
       stage,
-      "Un référent doit être assigné avant de valider cette demande",
+      "Un enseignant référent doit être assigné avant de valider cette demande",
     );
     const { organism, tutor, student, service, projectType, motivation } = stage;
 

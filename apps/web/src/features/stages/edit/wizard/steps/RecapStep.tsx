@@ -54,7 +54,7 @@ export function RecapStep({
         Récapitulatif
       </Typography>
 
-      <RecapSection title="Organisme & tuteur">
+      <RecapSection title="Organisme & tuteur professionnel">
         {organism && (
           <RecapField label="Organisme">
             {organism.name}
@@ -62,7 +62,7 @@ export function RecapStep({
           </RecapField>
         )}
         {tutor && (
-          <RecapField label="Tuteur">
+          <RecapField label="Tuteur professionnel">
             {`${tutor.firstName} ${tutor.lastName} (${tutor.jobTitle})`}
             <SecondaryLine>{formatTutorContact(tutor)}</SecondaryLine>
           </RecapField>

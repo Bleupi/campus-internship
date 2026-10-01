@@ -40,9 +40,10 @@ import { ValidateStageButton } from "./validate/ValidateStageButton";
 
 // The expanded detail row's colSpan is derived from this, so the two can
 // never drift apart (the last, unlabelled column holds the expand toggle).
-const COLUMNS = ["Étudiant", "Organisme", "Période", "Demande", "Référent", ""];
+const COLUMNS = ["Étudiant", "Organisme", "Période", "Demande", "Enseignant référent", ""];
 const CONFLICT_TOAST_MESSAGE = "Cette demande a été modifiée entre-temps. Rechargez la page.";
-const NO_REFERENT_HINT_REFUSE = "Assignez d'abord un référent pour pouvoir refuser cette demande";
+const NO_REFERENT_HINT_REFUSE =
+  "Assignez d'abord un enseignant référent pour pouvoir refuser cette demande";
 
 type TabKey = "all" | "withoutReferent" | "ready";
 
@@ -54,7 +55,11 @@ const TABS: {
   matches: (request: AdminStageRequestListItem) => boolean;
 }[] = [
   { key: "all", label: "Toutes", matches: () => true },
-  { key: "withoutReferent", label: "Sans référent", matches: (request) => !hasReferent(request) },
+  {
+    key: "withoutReferent",
+    label: "Sans enseignant référent",
+    matches: (request) => !hasReferent(request),
+  },
   // A referent is the only thing the admin may still be missing to decide
   // (BR-03): the student already had to complete everything else to submit.
   { key: "ready", label: "Prêtes à valider", matches: hasReferent },
@@ -174,7 +179,7 @@ export function StageRequestsPage() {
           already closed when the assignment of the new referent fails. */}
       {assignReferent.isError && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => assignReferent.reset()}>
-          Impossible d'assigner le référent, merci de réessayer.
+          Impossible d'assigner l'enseignant référent, merci de réessayer.
         </Alert>
       )}
 

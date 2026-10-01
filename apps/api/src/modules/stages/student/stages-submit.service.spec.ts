@@ -108,7 +108,7 @@ describe("StagesService", () => {
 
     it.each([
       ["organism", { organism: null, organismId: null }, /organisme/i],
-      ["tutor", { tutor: null, tutorId: null }, /tuteur/i],
+      ["tutor", { tutor: null, tutorId: null }, /tuteur professionnel/i],
       ["service", { service: null }, /service/i],
       ["project type", { projectType: null }, /handicap/i],
       ["motivation", { motivation: null }, /motivation/i],

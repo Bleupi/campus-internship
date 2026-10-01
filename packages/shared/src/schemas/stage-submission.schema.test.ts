@@ -40,7 +40,7 @@ describe("getSubmissionBlockers (issue #115)", () => {
 
   it.each([
     ["organism", { hasOrganism: false }, /organisme/i],
-    ["tutor", { hasTutor: false }, /tuteur/i],
+    ["tutor", { hasTutor: false }, /tuteur professionnel/i],
     ["service", { service: null }, /service/i],
     ["project type", { projectType: null }, /handicap/i],
     ["motivation", { motivation: null }, /motivation/i],

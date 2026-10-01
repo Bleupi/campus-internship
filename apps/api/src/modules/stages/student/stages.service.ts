@@ -601,16 +601,20 @@ export class StagesService {
       return this.resolveTutor(tx, tutor, organismId);
     }
     if (tutor.id !== stage.tutorId) {
-      throw new BadRequestException("Seul le tuteur de cette demande peut être modifié");
+      throw new BadRequestException(
+        "Seul le tuteur professionnel de cette demande peut être modifié",
+      );
     }
     const owned = await tx.tutor.findFirst({ where: { id: tutor.id, organismId } });
     if (!owned) {
-      throw new BadRequestException("Le tuteur sélectionné n'appartient pas à cet organisme");
+      throw new BadRequestException(
+        "Le tuteur professionnel sélectionné n'appartient pas à cet organisme",
+      );
     }
     if (await this.isFrozen(tx, { tutorId: tutor.id }, stage.studentId)) {
       throw stageConflict(
         STAGE_CONFLICT_CODES.ROW_FROZEN,
-        "Ce tuteur est utilisé par d'autres demandes: créez-en un nouveau plutôt que de le modifier.",
+        "Ce tuteur professionnel est utilisé par d'autres demandes: créez-en un nouveau plutôt que de le modifier.",
       );
     }
     const updated = await tx.tutor.update({ where: { id: tutor.id }, data: tutor.data });
@@ -663,7 +667,9 @@ export class StagesService {
     if (tutor.mode === "existing") {
       const found = await tx.tutor.findFirst({ where: { id: tutor.id, organismId } });
       if (!found) {
-        throw new BadRequestException("Le tuteur sélectionné n'appartient pas à cet organisme");
+        throw new BadRequestException(
+          "Le tuteur professionnel sélectionné n'appartient pas à cet organisme",
+        );
       }
       return found.id;
     }
@@ -677,7 +683,7 @@ export class StagesService {
         error instanceof Error ? error.stack : error,
       );
       throw new InternalServerErrorException(
-        "Impossible de créer le tuteur. Le brouillon n'a pas été enregistré.",
+        "Impossible de créer le tuteur professionnel. Le brouillon n'a pas été enregistré.",
       );
     }
   }

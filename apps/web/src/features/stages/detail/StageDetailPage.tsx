@@ -74,12 +74,12 @@ export function StageDetailPage() {
             </Alert>
           )}
 
-          <RecapSection title="Organisme & tuteur">
+          <RecapSection title="Organisme & tuteur professionnel">
             <RecapField label="Organisme">
               {stage.organism.name}
               <SecondaryLine>{formatOrganismAddress(stage.organism)}</SecondaryLine>
             </RecapField>
-            <RecapField label="Tuteur">
+            <RecapField label="Tuteur professionnel">
               {`${stage.tutor.firstName} ${stage.tutor.lastName} (${stage.tutor.jobTitle})`}
               <SecondaryLine>{formatTutorContact(stage.tutor)}</SecondaryLine>
             </RecapField>
@@ -112,8 +112,8 @@ export function StageDetailPage() {
             </RecapField>
           </RecapSection>
 
-          <RecapSection title="Référent">
-            <RecapField label="Référent">{referentLabel(stage)}</RecapField>
+          <RecapSection title="Enseignant référent">
+            <RecapField label="Enseignant référent">{referentLabel(stage)}</RecapField>
           </RecapSection>
 
           {stage.status === "DRAFT" && <DraftActionsSection stage={stage} />}
