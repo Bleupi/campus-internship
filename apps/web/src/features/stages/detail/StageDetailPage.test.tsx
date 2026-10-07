@@ -178,7 +178,7 @@ describe("StageDetailPage (issue #114)", () => {
 
     expect(await screen.findByText("Organisme & tuteur professionnel")).toBeInTheDocument();
     expect(screen.getByText("Tuteur professionnel")).toBeInTheDocument();
-    expect(screen.getAllByText("Enseignant référent").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Enseignant référent")).toHaveLength(2);
     expect(screen.queryByText("Référent")).not.toBeInTheDocument();
   });
 
