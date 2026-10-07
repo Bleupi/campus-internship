@@ -1,8 +1,11 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
+import { CURRENT_USER_QUERY_KEY } from "./features/auth/query-keys";
+import { STUDENT_PROFILE_QUERY_KEY } from "./features/students/query-keys";
 
 // Pinned off: these tests cover the legacy dashboard routing, and must not
 // depend on the VITE_FEATURE_STAGE_MANAGEMENT value of the local .env (the flag-on
@@ -10,10 +13,12 @@ import { App } from "./App";
 vi.mock("./lib/feature-flags", () => ({ isStageManagementEnabled: false }));
 
 const getMeMock = vi.fn();
+const loginMock = vi.fn();
+const logoutMock = vi.fn();
 vi.mock("./features/auth/api", () => ({
   getMe: (...args: unknown[]) => getMeMock(...args),
-  logout: vi.fn(),
-  login: vi.fn(),
+  logout: (...args: unknown[]) => logoutMock(...args),
+  login: (...args: unknown[]) => loginMock(...args),
   signup: vi.fn(),
 }));
 
@@ -49,8 +54,11 @@ function studentProfile(profileStatus: string) {
   };
 }
 
-function renderApp(initialPath: string) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function createQueryClient() {
+  return new QueryClient({ defaultOptions: { queries: { retry: false } } });
+}
+
+function renderApp(initialPath: string, queryClient = createQueryClient()) {
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[initialPath]}>
@@ -201,5 +209,79 @@ describe("App route protection — issue #42 admin certificate queue", () => {
     expect(
       await screen.findByRole("heading", { name: /certificats à valider/i }),
     ).toBeInTheDocument();
+  });
+});
+
+describe("App — the query cache across session boundaries", () => {
+  beforeEach(() => {
+    getMeMock.mockReset();
+    getProfileMock.mockReset();
+    loginMock.mockReset();
+    logoutMock.mockReset();
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("loads the profile afresh at login instead of replaying the dead session's fetch error", async () => {
+    // The previous session expired with the tab open: a background refetch of
+    // the profile hit a 401 the refresh couldn't recover, leaving the query
+    // errored — while the admin validated the profile in the meantime.
+    const queryClient = createQueryClient();
+    await queryClient.prefetchQuery({
+      queryKey: STUDENT_PROFILE_QUERY_KEY,
+      queryFn: () => Promise.reject(new Error("session expired")),
+    });
+    getMeMock.mockResolvedValue({ user: authenticatedUser });
+    loginMock.mockResolvedValue({ user: authenticatedUser, profileStatus: "VALID" });
+    getProfileMock.mockResolvedValue(studentProfile("VALID"));
+    const user = userEvent.setup();
+    renderApp("/login", queryClient);
+    expect(queryClient.getQueryState(STUDENT_PROFILE_QUERY_KEY)?.status).toBe("error");
+    expect(getProfileMock).not.toHaveBeenCalled();
+
+    await user.type(screen.getByLabelText(/email/i), authenticatedUser.email);
+    await user.type(screen.getByLabelText(/mot de passe/i), "whatever");
+    await user.click(screen.getByRole("button", { name: /se connecter/i }));
+
+    expect(await screen.findByText(/tableau de bord \(à venir\)/i)).toBeInTheDocument();
+    expect(screen.queryByText(/impossible de charger le profil/i)).not.toBeInTheDocument();
+    // Reached by fetching the profile anew, not by some other route around it.
+    expect(getProfileMock).toHaveBeenCalledTimes(1);
+    expect(queryClient.getQueryState(STUDENT_PROFILE_QUERY_KEY)?.status).toBe("success");
+    expect(queryClient.getQueryData(STUDENT_PROFILE_QUERY_KEY)).toEqual(studentProfile("VALID"));
+  });
+
+  async function logOutFromDashboard() {
+    getMeMock.mockResolvedValue({ user: authenticatedUser });
+    getProfileMock.mockResolvedValue(studentProfile("VALID"));
+    logoutMock.mockResolvedValue(undefined);
+    const queryClient = createQueryClient();
+    const user = userEvent.setup();
+    renderApp("/dashboard", queryClient);
+    await screen.findByText(/tableau de bord \(à venir\)/i);
+    const callsBeforeLogout = {
+      getMe: getMeMock.mock.calls.length,
+      getProfile: getProfileMock.mock.calls.length,
+    };
+
+    await user.click(screen.getByRole("button", { name: /déconnexion/i }));
+    await screen.findByRole("button", { name: /se connecter/i });
+    return { queryClient, callsBeforeLogout };
+  }
+
+  it("keeps the current user as null and drops every other query at logout", async () => {
+    const { queryClient } = await logOutFromDashboard();
+
+    expect(queryClient.getQueryData(CURRENT_USER_QUERY_KEY)).toBeNull();
+    expect(queryClient.getQueryData(STUDENT_PROFILE_QUERY_KEY)).toBeUndefined();
+  });
+
+  it("doesn't refetch the ended session's user or profile at logout", async () => {
+    const { callsBeforeLogout } = await logOutFromDashboard();
+
+    expect(getMeMock).toHaveBeenCalledTimes(callsBeforeLogout.getMe);
+    expect(getProfileMock).toHaveBeenCalledTimes(callsBeforeLogout.getProfile);
   });
 });
