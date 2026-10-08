@@ -60,7 +60,7 @@ async function openOrganismPicker(user: ReturnType<typeof userEvent.setup>) {
 }
 
 async function pickCreateNewOrganism(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole("button", { name: /créer un nouvel organisme/i }));
+  await user.click(screen.getByRole("button", { name: "Créer un organisme" }));
 }
 
 async function fillNewOrganismForm(user: ReturnType<typeof userEvent.setup>) {
@@ -70,7 +70,7 @@ async function fillNewOrganismForm(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText(/adresse/i), "1 rue Test");
   await user.type(screen.getByLabelText(/code postal/i), "69000");
   await user.type(screen.getByLabelText(/ville/i), "Lyon");
-  await user.click(screen.getByRole("button", { name: /valider ce nouvel organisme/i }));
+  await user.click(screen.getByRole("button", { name: "Valider l'organisme" }));
 }
 
 async function fillNewTutorForm(user: ReturnType<typeof userEvent.setup>, phone?: string) {
@@ -79,7 +79,7 @@ async function fillNewTutorForm(user: ReturnType<typeof userEvent.setup>, phone?
   await user.type(screen.getByLabelText(/^email$/i), "k.belkacem@example.org");
   await user.type(screen.getByLabelText(/fonction/i), "Directeur");
   if (phone) await user.type(screen.getByLabelText(/^téléphone/i), phone);
-  await user.click(screen.getByRole("button", { name: /valider ce nouveau tuteur/i }));
+  await user.click(screen.getByRole("button", { name: "Valider le tuteur professionnel" }));
 }
 
 async function resolveOrganismAndTutorInline(
@@ -89,7 +89,7 @@ async function resolveOrganismAndTutorInline(
   await pickCreateNewOrganism(user);
   await fillNewOrganismForm(user);
 
-  await user.click(await screen.findByRole("button", { name: /créer un nouveau tuteur/i }));
+  await user.click(await screen.findByRole("button", { name: "Créer un tuteur professionnel" }));
   await fillNewTutorForm(user, tutorPhone);
 }
 
@@ -166,8 +166,8 @@ describe("NewStagePage", () => {
     expect(screen.queryByLabelText(/nom de l'organisme/i)).toBeNull();
     expect(screen.queryByLabelText(/code postal/i)).toBeNull();
     // No tutors yet for this organism — this must not be an error state, just
-    // an empty picker with only "Nouveau tuteur" available.
-    expect(screen.getByLabelText(/sélectionner un tuteur/i)).toBeInTheDocument();
+    // an empty picker with only "Nouveau tuteur professionnel" available.
+    expect(screen.getByLabelText(/sélectionner un tuteur professionnel/i)).toBeInTheDocument();
   });
 
   it("prompts to type a character before searching, then says 'Aucun résultat' once a search finds nothing", async () => {
@@ -197,7 +197,7 @@ describe("NewStagePage", () => {
 
     await user.clear(postalCode);
     await user.type(postalCode, "690");
-    await user.click(screen.getByRole("button", { name: /valider ce nouvel organisme/i }));
+    await user.click(screen.getByRole("button", { name: "Valider l'organisme" }));
 
     expect(await screen.findByText("Le code postal doit contenir 5 chiffres")).toBeInTheDocument();
   });
@@ -225,13 +225,13 @@ describe("NewStagePage", () => {
 
     await pickCreateNewOrganism(user);
     await fillNewOrganismForm(user);
-    await user.click(await screen.findByRole("button", { name: /créer un nouveau tuteur/i }));
+    await user.click(await screen.findByRole("button", { name: "Créer un tuteur professionnel" }));
     expect(screen.getByLabelText(/^prénom$/i)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /précédent/i }));
 
     expect(screen.queryByLabelText(/^prénom$/i)).toBeNull();
-    expect(screen.getByLabelText(/sélectionner un tuteur/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/sélectionner un tuteur professionnel/i)).toBeInTheDocument();
     expect(screen.getByText(/Fondation OVE/)).toBeInTheDocument();
   });
 
@@ -241,10 +241,10 @@ describe("NewStagePage", () => {
 
     await resolveOrganismAndTutorInline(user);
 
-    expect(
-      await screen.findByText(/Karim Belkacem \(Directeur, nouveau tuteur\)/i),
-    ).toBeInTheDocument();
-    // Still on step 1 (Organisme & tuteur) — "Suivant" is now enabled.
+    expect(await screen.findByText(/Karim Belkacem \(Directeur\)/i)).toBeInTheDocument();
+    expect(screen.queryByText(/nouvel organisme/i)).toBeNull();
+    expect(screen.queryByText(/nouveau tuteur/i)).toBeNull();
+    // Still on step 1 (Organisme & tuteur professionnel) — "Suivant" is now enabled.
     expect(screen.getByRole("button", { name: /suivant/i })).toBeEnabled();
   });
 
@@ -333,7 +333,7 @@ describe("NewStagePage", () => {
 
   it.each([
     ["organism", "Impossible de créer l'organisme. Le brouillon n'a pas été enregistré."],
-    ["tutor", "Impossible de créer le tuteur. Le brouillon n'a pas été enregistré."],
+    ["tutor", "Impossible de créer le tuteur professionnel. Le brouillon n'a pas été enregistré."],
   ])(
     "keeps the student on the recap with the generic save error when the API can't create the new %s",
     async (_entity, serverMessage) => {
@@ -360,15 +360,17 @@ describe("NewStagePage", () => {
 
     await openOrganismPicker(user);
     expect(await screen.findByText(/taper un caractère/i)).toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: /créer un nouvel organisme/i })).toBeNull();
-    expect(screen.getByRole("button", { name: /créer un nouvel organisme/i })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Créer un organisme" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Créer un organisme" })).toBeInTheDocument();
 
     await pickCreateNewOrganism(user);
     await fillNewOrganismForm(user);
 
-    await user.click(await screen.findByLabelText(/sélectionner un tuteur/i));
-    expect(screen.queryByRole("option", { name: /créer un nouveau tuteur/i })).toBeNull();
-    expect(screen.getByRole("button", { name: /créer un nouveau tuteur/i })).toBeInTheDocument();
+    await user.click(await screen.findByLabelText(/sélectionner un tuteur professionnel/i));
+    expect(screen.queryByRole("option", { name: "Créer un tuteur professionnel" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Créer un tuteur professionnel" }),
+    ).toBeInTheDocument();
   });
 
   it("submits acceptsPhoneContact: true when the inline tutor form's switch is turned on", async () => {
@@ -378,7 +380,7 @@ describe("NewStagePage", () => {
 
     await pickCreateNewOrganism(user);
     await fillNewOrganismForm(user);
-    await user.click(await screen.findByRole("button", { name: /créer un nouveau tuteur/i }));
+    await user.click(await screen.findByRole("button", { name: "Créer un tuteur professionnel" }));
     await user.click(screen.getByLabelText(/accepte d'être contacté par téléphone/i));
     await fillNewTutorForm(user);
     await goToDetailsStep(user);

@@ -47,7 +47,7 @@ export class OrganismsService {
     // Only the organism's own existence is checked here. A freshly created
     // organism with zero tutors yet is a perfectly normal state, not an
     // error — the response just comes back with an empty `tutors` array,
-    // and the frontend renders only the "Nouveau tuteur" option.
+    // and the frontend only offers to create a tutor.
     if (!organism) {
       throw new NotFoundException("Organisme introuvable");
     }

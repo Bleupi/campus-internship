@@ -4,7 +4,8 @@ import type { AdminStageRequestListItem } from "shared";
 import { ApiError } from "../../../../lib/api-client";
 import { useValidateStageRequest } from "./useValidateStageRequest";
 
-const NO_REFERENT_HINT = "Assignez d'abord un référent pour pouvoir valider cette demande";
+const NO_REFERENT_HINT =
+  "Assignez d'abord un enseignant référent pour pouvoir valider cette demande";
 
 interface ValidateStageButtonProps {
   request: AdminStageRequestListItem;
