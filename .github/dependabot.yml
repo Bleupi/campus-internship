@@ -100,3 +100,17 @@ updates:
           - "*"
     labels:
       - "dependencies"
+
+  # actionlint, built from source in CI (.github/tools/go.mod, ADR-0035).
+  - package-ecosystem: "gomod"
+    directory: "/.github/tools"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    groups:
+      ci-tools:
+        patterns:
+          - "*"
+    labels:
+      - "dependencies"
