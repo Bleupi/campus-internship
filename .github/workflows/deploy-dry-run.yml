@@ -1,0 +1,57 @@
+name: Deploy dry run (temporary, not for merge)
+
+# Runs deploy.yml's steps on both runner versions without any credential:
+# builds both images without pushing, installs the Scaleway CLI unauthenticated.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Deploy dry run (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-26.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build API image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: false
+          tags: dry-run/api:${{ github.sha }}
+
+      - name: Build web image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: false
+          build-args: |
+            VITE_API_BASE_URL=https://example.invalid
+            VITE_FEATURE_STAGE_MANAGEMENT=false
+          tags: dry-run/web:${{ github.sha }}
+
+      - name: Install Scaleway CLI
+        uses: scaleway/action-scw@2e34a1eb35cf3cac627f24643a101fea269cbd83 # v0.0.3
+        with:
+          version: v2.61.0
+
+      - name: Tools the deploy steps call
+        run: |
+          scw version
+          scw container container list --help >/dev/null
+          scw container container update --help >/dev/null
+          jq --version
+          echo '[{"name":"campus-internship-api-prod","id":"x"}]' \
+            | jq -r '.[] | select(.name == "campus-internship-api-prod") | .id'

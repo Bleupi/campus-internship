@@ -22,7 +22,7 @@ jobs:
     # has to report on every PR, or a PR that doesn't touch .github/ would
     # wait on it forever. Its `name:` is what main's required checks match.
     name: Lint workflows (actionlint, zizmor)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -65,7 +65,7 @@ jobs:
 
   validate:
     name: Lint, typecheck, build, unit tests, e2e
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
 
     services:
       # Service images are pinned by digest (ADR-0035): Dependabot doesn't
@@ -181,7 +181,7 @@ jobs:
 
   container-smoke-test:
     name: Build container images and smoke-test the API image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
 
     # Same Postgres/MinIO shape as the validate job above (#22) — this job
     # runs as a separate GitHub Actions job (its own fresh runner), so
