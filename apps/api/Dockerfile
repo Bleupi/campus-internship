@@ -4,7 +4,7 @@
 # root, not apps/api — this needs packages/shared too (ADR-0010's workspace
 # layout). See the root .dockerignore for what's excluded from that context.
 
-FROM node:24-alpine AS base
+FROM node:25-alpine AS base
 # Pin the exact pnpm version pnpm-lock.yaml was generated with (matches the
 # root package.json's "packageManager"), not whatever corepack defaults to.
 RUN corepack enable && corepack prepare pnpm@11.5.1 --activate
@@ -57,7 +57,7 @@ RUN pnpm --filter api exec prisma generate
 # -----------------------------------------------------------------------------
 # runtime: compiled output + prod-only node_modules, nothing else.
 # -----------------------------------------------------------------------------
-FROM node:24-alpine AS runtime
+FROM node:25-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /repo
 COPY --from=prod-deps --chown=node:node /repo/node_modules ./node_modules
