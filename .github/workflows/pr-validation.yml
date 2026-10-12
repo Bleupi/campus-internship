@@ -55,8 +55,8 @@ jobs:
     services:
       # Service images are pinned by digest (ADR-0035): Dependabot doesn't
       # read `services:` images in workflow files, so these digests are
-      # refreshed by hand. `docker buildx imagetools inspect <image:tag>`
-      # prints the current one.
+      # refreshed by hand, in both jobs of this file at once.
+      # `docker buildx imagetools inspect <image:tag>` prints the current one.
       postgres:
         image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
         env:

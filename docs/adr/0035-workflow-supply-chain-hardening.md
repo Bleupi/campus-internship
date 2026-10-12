@@ -25,7 +25,7 @@ Two ecosystems join the npm ones from ADR-0028:
 - `github-actions` (bumps the SHA and its version comment), all updates in one weekly group;
 - `docker` for the base images of `apps/api/Dockerfile` and `apps/web/Dockerfile`, one weekly group.
 
-Every block, npm included, sets `cooldown: default-days: 7`: a version update is proposed only once the release is a week old, so a compromised release has time to be found and pulled first. GitHub's Dependabot options reference states that `cooldown` applies to version updates only, never to security updates, so fixes for a known advisory are not delayed.
+Every block, npm included, sets `cooldown: default-days: 7`: a version update is proposed only once the release is a week old, so a compromised release has time to be found and pulled first. `default-days` covers major updates too, not only minor and patch: a major bump is never urgent, and the `docker` ecosystem only supports `default-days` anyway, so one setting reads the same in every block. GitHub's Dependabot options reference states that `cooldown` applies to version updates only, never to security updates, so fixes for a known advisory are not delayed.
 
 ### 3. actionlint and zizmor gate every PR
 
@@ -37,9 +37,15 @@ A `lint-workflows` job in `pr-validation.yml` (display name `Lint workflows (act
 The first pass leaves no unexplained finding. Each one was fixed, except two suppressions written next to the code they cover:
 
 - actionlint's "unexpected key `command`" on the MinIO services (`.github/actionlint.yaml`): `services.<id>.command` is documented by GitHub, actionlint 1.7.12 predates it, and the MinIO image needs it to start.
-- zizmor's `secrets-outside-env` on the registry login in `deploy.yml`: that job pushes images before the production approval, so its credential can't live in the `production` environment. #216 decides which key it uses.
+- zizmor's `secrets-outside-env` on the registry login in `deploy.yml`: the login runs before the production approval by design. Credential scoping per job is #216, which revisits this suppression.
 
-zizmor's `auditor` persona (which shows the findings the default persona hides) was also run once and is clean apart from that second suppression. CI runs the default persona.
+zizmor's `auditor` persona shows 7 findings the default persona hides. They were reviewed once:
+
+- `template-injection` × 4 (`${{ env.REGISTRY }}` and `${{ github.sha }}` inside the two deploy `run:` scripts): fixed by reading `$REGISTRY` and `$GITHUB_SHA` from the shell environment instead.
+- `unpinned-images` × 2 (`postgres:16-alpine`, tagged but not digest-pinned): fixed by the digest pinning above.
+- `secrets-outside-env` × 1: the suppression above.
+
+CI runs the default persona.
 
 ### 4. `actions/checkout` does not persist Git credentials
 
@@ -49,6 +55,7 @@ Every checkout sets `persist-credentials: false`. No step pushes or fetches afte
 
 - The workflows run exactly the code that was reviewed. Changing an action or image version is a reviewed PR, from Dependabot or by hand.
 - Dependabot doesn't read `services:` images in workflow files (its `github-actions` ecosystem only parses `uses:`, and its `docker` ecosystem only reads YAML that looks like a Kubernetes or Helm manifest). The two service digests are refreshed by hand; the workflow comment says how. A stale CI test image is a low-cost failure: it only affects what the tests run against, never what is deployed.
+- The Dockerfiles' base images stay referenced by tag (`node:24-alpine`, `nginx:1.27-alpine`): Dependabot proposes tag bumps for them, not digest refreshes. Pinning them is out of this ADR's scope, which covers what the workflows run.
 - The tools' own pins follow the same split: zizmor-action is bumped by Dependabot, but the `version:` input and the actionlint image digest are bumped by hand.
 - New findings from a tool upgrade fail the PR that brings the upgrade, which is where they belong.
 - Same caveat as ADR-0028: the required check is matched by the job's `name:`. Renaming it without updating `main`'s rules leaves every PR waiting on a check that never reports.

@@ -45,9 +45,9 @@ jobs:
         with:
           registry: rg.fr-par.scw.cloud
           username: nologin
-          # zizmor's secrets-outside-env: this job pushes images before the
-          # production approval, so its registry credential can't live in
-          # that environment. #216 sets which key it uses.
+          # zizmor's secrets-outside-env: the registry login runs before the
+          # production approval by design. Credential scoping per job is
+          # #216, which revisits this suppression.
           password: ${{ secrets.SCW_SECRET_KEY }} # zizmor: ignore[secrets-outside-env]
 
       - name: Build and push API image
