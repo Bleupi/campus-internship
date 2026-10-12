@@ -38,3 +38,4 @@ Every structuring decision is recorded here as an ADR. Format: lightweight [MADR
 | [0032](0032-derived-organism-tutor-freeze.md) | The freeze of a host organism / tutor is derived, not stored | Accepted |
 | [0033](0033-stage-snapshot-v1-shape-and-read-path.md) | Stage snapshot v1: its shape and read path | Accepted |
 | [0034](0034-e2e-database-per-worker.md) | E2E tests get one database per Jest worker | Accepted |
+| [0035](0035-workflow-supply-chain-hardening.md) | Workflow supply-chain hardening: SHA/digest pinning, Dependabot cooldown, actionlint + zizmor | Accepted |

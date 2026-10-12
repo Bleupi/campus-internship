@@ -17,13 +17,48 @@ permissions:
   contents: read
 
 jobs:
+  lint-workflows:
+    # Checks .github/ itself (ADR-0035). No path filter: a required check
+    # has to report on every PR, or a PR that doesn't touch .github/ would
+    # wait on it forever. Its `name:` is what main's required checks match.
+    name: Lint workflows (actionlint, zizmor)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: actionlint
+        # Official image, pinned by digest; it bundles shellcheck, which
+        # actionlint runs on every `run:` script. Config and its justified
+        # ignores: .github/actionlint.yaml.
+        run: |
+          docker run --rm -v "$PWD:/repo" --workdir /repo \
+            rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 \
+            -color
+
+      - name: zizmor
+        # The action maps `version` to a digest-pinned zizmor image, so the
+        # SHA-pinned action plus an exact version pins the tool. Results go
+        # to annotations, not code scanning, which needs a write permission.
+        # Online audits use the job's read-only token.
+        uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        with:
+          version: 1.30.1
+          advanced-security: false
+          annotations: true
+
   validate:
     name: Lint, typecheck, build, unit tests, e2e
     runs-on: ubuntu-latest
 
     services:
+      # Service images are pinned by digest (ADR-0035): Dependabot doesn't
+      # read `services:` images in workflow files, so these digests are
+      # refreshed by hand. `docker buildx imagetools inspect <image:tag>`
+      # prints the current one.
       postgres:
-        image: postgres:16-alpine
+        image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
         env:
           POSTGRES_USER: stages
           POSTGRES_PASSWORD: stages
@@ -46,8 +81,9 @@ jobs:
         # in September 2026 (both now 401 — reads like a credentials issue
         # but the images are simply no longer public).
         # cgr.dev/chainguard/minio is a free, daily-rebuilt build of the same
-        # binary (same `server` CLI and env vars); only `latest` is free.
-        image: cgr.dev/chainguard/minio:latest
+        # binary (same `server` CLI and env vars); only `latest` is free,
+        # hence the digest pinning the tag down.
+        image: cgr.dev/chainguard/minio:latest@sha256:dc455cdd4db6e390b1b26514f15ff37681a777bf8dab41aac445a0259f751e56
         command: server /data --console-address ":9001"
         env:
           MINIO_ROOT_USER: minioadmin
@@ -57,9 +93,13 @@ jobs:
           - 9001:9001
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: pnpm/setup@v2 # also installs Node.js; supersedes pnpm/action-setup for pnpm v11+ (packageManager field)
+      # Also installs Node.js; supersedes pnpm/action-setup for pnpm v11+
+      # (packageManager field).
+      - uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0
         with:
           runtime: node@24
           cache: true
@@ -101,7 +141,7 @@ jobs:
         # to already exist. AWS CLI is preinstalled on ubuntu-latest runners.
         run: |
           ready=false
-          for i in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             curl -fsS http://localhost:9000/minio/health/live && { ready=true; break; }
             sleep 2
           done
@@ -134,7 +174,7 @@ jobs:
     # equivalent pair for the API container to run against.
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
         env:
           POSTGRES_USER: stages
           POSTGRES_PASSWORD: stages
@@ -147,7 +187,7 @@ jobs:
       minio:
         # Chainguard's build, not MinIO's own images — see the other minio
         # service above for why.
-        image: cgr.dev/chainguard/minio:latest
+        image: cgr.dev/chainguard/minio:latest@sha256:dc455cdd4db6e390b1b26514f15ff37681a777bf8dab41aac445a0259f751e56
         command: server /data --console-address ":9001"
         env:
           MINIO_ROOT_USER: minioadmin
@@ -157,7 +197,9 @@ jobs:
           - 9001:9001
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Build API image
         # Context is the repo root (see apps/api/Dockerfile's header comment)
@@ -176,7 +218,7 @@ jobs:
         # the container will fail to start unless the bucket already exists.
         run: |
           ready=false
-          for i in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             curl -fsS http://localhost:9000/minio/health/live && { ready=true; break; }
             sleep 2
           done
@@ -229,7 +271,7 @@ jobs:
           trap cleanup EXIT
 
           ready=false
-          for i in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             if curl -fsS http://localhost:3000/health; then
               ready=true
               break

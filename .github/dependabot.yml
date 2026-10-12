@@ -1,10 +1,16 @@
 version: 2
 
+# Every version update waits out a 7-day cooldown, so a malicious release
+# has time to be pulled before it is proposed. Security updates ignore
+# `cooldown` and are never delayed (ADR-0035).
+
 updates:
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     groups:
       minor-and-patch:
         applies-to: version-updates
@@ -19,6 +25,8 @@ updates:
     directory: "/apps/api"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     groups:
       minor-and-patch:
         applies-to: version-updates
@@ -33,6 +41,8 @@ updates:
     directory: "/apps/web"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     groups:
       minor-and-patch:
         applies-to: version-updates
@@ -47,6 +57,8 @@ updates:
     directory: "/packages/shared"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     groups:
       minor-and-patch:
         applies-to: version-updates
@@ -56,3 +68,35 @@ updates:
     labels:
       - "dependencies"
       - "scope:shared"
+
+  # Actions pinned by commit SHA (ADR-0035): Dependabot bumps the SHA and
+  # the version comment next to it.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    labels:
+      - "dependencies"
+
+  # Base images of the two Dockerfiles. Workflow `services:` images aren't
+  # covered by any ecosystem; their digests are refreshed by hand.
+  - package-ecosystem: "docker"
+    directories:
+      - "/apps/api"
+      - "/apps/web"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    groups:
+      docker:
+        patterns:
+          - "*"
+    labels:
+      - "dependencies"

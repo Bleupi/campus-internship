@@ -30,23 +30,28 @@ jobs:
     name: Build and push images to Scaleway Container Registry
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: docker/setup-buildx-action@v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       # nologin + the CI/CD IAM Application's secret key (docs/Ressources.md
       # #7) is Scaleway's documented Container Registry auth — not a
       # database credential, and this Application has no database or
       # bucket-creation rights (ADR-0022).
       - name: Log in to Scaleway Container Registry
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: rg.fr-par.scw.cloud
           username: nologin
-          password: ${{ secrets.SCW_SECRET_KEY }}
+          # zizmor's secrets-outside-env: this job pushes images before the
+          # production approval, so its registry credential can't live in
+          # that environment. #216 sets which key it uses.
+          password: ${{ secrets.SCW_SECRET_KEY }} # zizmor: ignore[secrets-outside-env]
 
       - name: Build and push API image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: apps/api/Dockerfile
@@ -54,7 +59,7 @@ jobs:
           tags: ${{ env.REGISTRY }}/api:${{ github.sha }}
 
       - name: Build and push web image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: apps/web/Dockerfile
@@ -82,7 +87,7 @@ jobs:
     environment: production
     steps:
       - name: Install Scaleway CLI
-        uses: scaleway/action-scw@v0
+        uses: scaleway/action-scw@2e34a1eb35cf3cac627f24643a101fea269cbd83 # v0.0.3
         with:
           save-config: true
           version: v2.61.0
@@ -104,7 +109,7 @@ jobs:
             exit 1
           fi
           scw container container update "$container_id" region="$SCW_DEFAULT_REGION" \
-            image="${{ env.REGISTRY }}/api:${{ github.sha }}"
+            image="$REGISTRY/api:$GITHUB_SHA"
 
       - name: Deploy web container
         run: |
@@ -115,4 +120,4 @@ jobs:
             exit 1
           fi
           scw container container update "$container_id" region="$SCW_DEFAULT_REGION" \
-            image="${{ env.REGISTRY }}/web:${{ github.sha }}"
+            image="$REGISTRY/web:$GITHUB_SHA"
