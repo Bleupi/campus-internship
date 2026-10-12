@@ -31,10 +31,11 @@ Every structuring decision is recorded here as an ADR. Format: lightweight [MADR
 | [0025](0025-personnel-account-provisioning.md) | Personnel (ADMIN/REFERENT) accounts: provisioned out-of-band, no institutional email domain | Accepted |
 | [0026](0026-scaleway-transactional-email.md) | Email provider: Scaleway Transactional Email | Accepted |
 | [0027](0027-forgot-password-mechanism.md) | Forgot/reset password: anti-enumeration, token model, and concurrency | Accepted |
-| [0028](0028-dependency-vulnerability-automation.md) | Dependency-vulnerability remediation & branch-protection automation | Accepted |
+| [0028](0028-dependency-vulnerability-automation.md) | Dependency-vulnerability remediation & branch-protection automation | Accepted (§3 review count superseded by 0036) |
 | [0029](0029-feature-flag-module-gating.md) | Feature flags via conditional module registration, not a guard | Accepted |
 | [0030](0030-e2e-dedicated-database-and-bucket.md) | E2E tests run against a dedicated database and bucket | Accepted (amended by 0034) |
 | [0031](0031-referent-creation-from-admin-ui.md) | Referent accounts can be created from the admin UI | Accepted |
 | [0032](0032-derived-organism-tutor-freeze.md) | The freeze of a host organism / tutor is derived, not stored | Accepted |
 | [0033](0033-stage-snapshot-v1-shape-and-read-path.md) | Stage snapshot v1: its shape and read path | Accepted |
 | [0034](0034-e2e-database-per-worker.md) | E2E tests get one database per Jest worker | Accepted |
+| [0036](0036-review-ruleset-admin-pr-bypass.md) | Review required for non-admin writers, admin bypass through PRs only | Accepted |
