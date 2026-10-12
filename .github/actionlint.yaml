@@ -1,0 +1,9 @@
+paths:
+  .github/workflows/pr-validation.yml:
+    ignore:
+      # `services.<id>.command` is a documented workflow key (GitHub's
+      # workflow syntax reference, next to `entrypoint`) that actionlint
+      # 1.7.12 doesn't know yet. The MinIO services need it: their image has
+      # no default command, and e2e tests only pass when MinIO is up.
+      # Drop this once an actionlint release accepts the key.
+      - 'unexpected key "command" for "services" section'
