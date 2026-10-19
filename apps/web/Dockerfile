@@ -5,7 +5,7 @@
 # needs packages/shared too (ADR-0010's workspace layout). See the root
 # .dockerignore for what's excluded from that context.
 
-FROM node:24-alpine AS base
+FROM node:25-alpine AS base
 RUN corepack enable && corepack prepare pnpm@11.5.1 --activate
 WORKDIR /repo
 
@@ -38,7 +38,7 @@ ARG VITE_FEATURE_STAGE_MANAGEMENT=false
 ENV VITE_FEATURE_STAGE_MANAGEMENT=$VITE_FEATURE_STAGE_MANAGEMENT
 RUN pnpm --filter web build
 
-FROM nginx:1.27-alpine AS runtime
+FROM nginx:1.29-alpine AS runtime
 COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /repo/apps/web/dist /usr/share/nginx/html
 EXPOSE 80
