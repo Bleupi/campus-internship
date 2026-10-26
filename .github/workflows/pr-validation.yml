@@ -58,7 +58,7 @@ jobs:
         # and the action's Dependabot updates bring new zizmor releases.
         # Results go to annotations, not code scanning, which needs a write
         # permission. Online audits use the job's read-only token.
-        uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        uses: zizmorcore/zizmor-action@85b2b9fb8e3325e7a23d7d0a9d7ba5ae0f999e3e # v0.7.1
         with:
           advanced-security: false
           annotations: true
@@ -114,7 +114,7 @@ jobs:
 
       # Also installs Node.js; supersedes pnpm/action-setup for pnpm v11+
       # (packageManager field).
-      - uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0
+      - uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
         with:
           runtime: node@24
           cache: true
